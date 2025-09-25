@@ -1,35 +1,76 @@
-# WISP Proxy Package
+# WISP Ultimate Transparent Proxy
 
-Contents:
-- `proxy.html` — single-file client UI that connects directly to `wss://wisp.mercurywork.shop/`. Choose payload templates or send raw messages.
-- `server.js` — a minimal Node/Express HTTP → WebSocket bridge. POST `/fetch` with JSON `{ "url": "...", "template": "fetch_action" }`.
-- `package.json` — dependencies and start script.
+This repository hosts a **fully client-side, transparent proxy** using WISP (`wss://wisp.mercurywork.shop/`) for GitHub Pages. It can proxy almost any website, including:  
 
-## How to use the client (proxy.html)
-1. Open `proxy.html` in a browser (or host on GitHub Pages).
-2. Click **Connect** to establish a WebSocket with `wss://wisp.mercurywork.shop/`.
-3. Choose a template or `Raw` and send a message. If the server returns HTML or base64-encoded HTML in `body`/`body_b64`, the UI will offer to open it.
+- GET/POST forms  
+- AJAX/fetch/XHR requests  
+- WebSockets (even dynamically created)  
+- Inline and external CSS (`url(...)` and `@import`)  
+- All static resources (images, scripts, videos, audio, iframes)  
+- Inline and dynamically generated JavaScript URLs  
 
-## How to use the bridge (server.js)
-1. Install Node 18+ (recommended).
-2. In the package directory:
-   ```bash
-   npm install
-   node server.js
-   ```
-3. Send a POST request:
-   ```bash
-   curl -X POST http://localhost:3000/fetch -H "Content-Type: application/json" \
-     -d '{"url":"https://example.com","template":"fetch_action"}'
-   ```
-4. The server will open a WebSocket to `WISP_URL` (env var) and forward the chosen payload. Response is returned to the HTTP client.
+---
 
-## Security & Legal
-- This is a template. Don't use it to access content you are not authorized to access or to violate terms of service.
-- Add input validation, rate limiting, and authentication before deploying publicly.
-- Consider CORS and HTTPS for production.
+## Getting Started
 
-## Customization
-- Change `WISP_URL` by setting the `WISP_URL` environment variable when running `server.js`.
-- Adjust payload formats in `server.js` → `buildPayload()` to match your upstream's protocol.
+Follow these steps to deploy the proxy on GitHub Pages:
 
+1. **Clone or download this repository**:
+
+```bash
+git clone https://github.com/<your-username>/<repository-name>.git
+```
+
+2. **Remove any unnecessary files**:  
+   - Delete `package.json` or `server.js` if present — GitHub Pages only serves static files.  
+
+3. **Push the repository to GitHub** (if you cloned locally):
+
+```bash
+cd <repository-name>
+git add .
+git commit -m "Initial WISP proxy setup"
+git push origin main
+```
+
+4. **Enable GitHub Pages**:  
+   - Go to your repository on GitHub → **Settings → Pages**.  
+   - Under **Source**, select your branch (`main` or `master`) and folder `/root`.  
+   - Click **Save**.  
+
+5. **Open the proxy**:  
+   - After a few moments, GitHub Pages will provide a URL like:
+
+```
+https://<your-username>.github.io/<repository-name>/
+```
+
+   - Open it in your browser. Enter the URL of the site you want to access and click **Go**.  
+
+---
+
+## Repository Structure
+
+```
+my-wisp-proxy/
+│
+├─ index.html       ← The complete WISP proxy HTML (client-side only)
+├─ README.md        ← This file
+└─ (optional assets)
+```
+
+> Only `index.html` is required. All functionality is client-side; no Node.js backend is needed.
+
+---
+
+## Notes
+
+- All network requests are routed through the WISP WebSocket server (`wss://wisp.mercurywork.shop/`).  
+- Works with dynamic pages, SPAs, WebSockets, and CSS/JS resources.  
+- Some extremely dynamic or protected sites may require minor tweaks.  
+
+---
+
+## License
+
+This repository is open for personal or educational use. Redistribution and modification are allowed under MIT license terms.
