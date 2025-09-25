@@ -1,300 +1,219 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8"/>
-  <title>Mini Proxy Browser — Full resource proxy</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <style>
-    body { margin:0; font-family:system-ui, -apple-system, "Segoe UI", Roboto, Arial; background:#0b1220; color:#e6eef8; }
-    #bar { display:flex; padding:8px; gap:8px; background:#071029; align-items:center; }
-    #url { flex:1; padding:8px 10px; border-radius:6px; border:1px solid #1f2a44; background:#071029; color:inherit; }
-    button { padding:8px 12px; border-radius:6px; border:0; background:#2b9df4; color:#022; font-weight:700; cursor:pointer; }
-    #frame { width:100%; height:calc(100vh - 56px); border:none; background:white; display:block; }
-    .small { font-size:0.85rem; color:#9fb1d6 }
-  </style>
+<meta charset="utf-8"/>
+<title>WISP Ultimate Transparent Proxy with CSS @import</title>
+<style>
+body { margin:0; font-family:sans-serif; background:#111; color:#eee; }
+#bar { display:flex; padding:6px; background:#222; }
+#url { flex:1; padding:6px; border:none; border-radius:4px; }
+#go { margin-left:6px; padding:6px 12px; border:none; background:#4cafef; color:#fff; border-radius:4px; cursor:pointer; }
+#viewer { width:100%; height:calc(100vh - 42px); border:none; background:white; }
+</style>
 </head>
 <body>
-  <div id="bar">
-    <input id="url" placeholder="https://example.com" />
-    <button id="go">Go</button>
-    <div class="small" style="margin-left:8px">Bridge: <span id="bridgeHost">http://localhost:3000</span></div>
-  </div>
-  <iframe id="frame" sandbox="allow-scripts allow-forms allow-same-origin"></iframe>
+<div id="bar">
+<input id="url" type="text" placeholder="https://example.com"/>
+<button id="go">Go</button>
+</div>
+<iframe id="viewer" sandbox="allow-scripts allow-forms allow-same-origin"></iframe>
 
 <script>
 (() => {
-  // === CONFIG ===
-  const BRIDGE_BASE = (window.location.hostname === 'localhost') ? 'http://localhost:3000' : 'https://your-bridge-host.example'; 
-  // update above if your bridge is elsewhere. The client uses the bridge for resource fetches.
-  document.getElementById('bridgeHost').textContent = BRIDGE_BASE;
+const WISP_URL="wss://wisp.mercurywork.shop/";
+let ws;
+const urlBox=document.getElementById("url");
+const goBtn=document.getElementById("go");
+const viewer=document.getElementById("viewer");
 
-  const urlBox = document.getElementById('url');
-  const goBtn = document.getElementById('go');
-  const frame = document.getElementById('frame');
+const COOKIE_KEY="wisp_proxy_cookies_multi";
+let cookieStore=JSON.parse(localStorage.getItem(COOKIE_KEY)||"{}");
+function saveCookies(){ localStorage.setItem(COOKIE_KEY,JSON.stringify(cookieStore)); }
 
-  // Helper: normalize urls relative to a base
-  function resolveUrl(href, base) {
-    try { return new URL(href, base).href; }
-    catch (e) { return href; }
-  }
+function connect(cb){
+  if(ws && ws.readyState===WebSocket.OPEN) return cb();
+  ws=new WebSocket(WISP_URL);
+  ws.onopen=()=>cb();
+  ws.onmessage=ev=>handleResponse(ev.data);
+}
 
-  // Fetch via bridge endpoint. Returns a Blob URL that can be assigned to src/href.
-  async function fetchResourceBlobUrl(resourceUrl) {
-    // Use the bridge endpoint /resource?url=...
-    const enc = encodeURIComponent(resourceUrl);
-    const resp = await fetch(`${BRIDGE_BASE}/resource?url=${enc}`, { method: 'GET' });
-    if (!resp.ok) throw new Error('Bridge resource error: ' + resp.status);
-    const contentType = resp.headers.get('content-type') || '';
-    const buf = await resp.arrayBuffer();
-    const blob = new Blob([buf], { type: contentType || undefined });
-    return URL.createObjectURL(blob);
-  }
+const pendingRequests={};
+let requestCounter=0;
 
-  // Fetch HTML page via bridge (reuses /fetch which returns HTML or JSON)
-  async function fetchPageHtml(targetUrl) {
-    const resp = await fetch(`${BRIDGE_BASE}/fetch`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: targetUrl, template: 'fetch_action' })
+function sendFetch(target,options={}) {
+  return new Promise(resolve=>{
+    connect(()=>{
+      const urlObj=new URL(target);
+      const domain=urlObj.hostname;
+      const cookies=cookieStore[domain]||{};
+      const cookieHeader=Object.entries(cookies).map(([k,v])=>`${k}=${v}`).join('; ');
+
+      const id=requestCounter++;
+      pendingRequests[id]=resolve;
+
+      const payload={id, action:"fetch", url:target, method:options.method||"GET",
+        headers:{...options.headers,"Cookie":cookieHeader||undefined}, body:options.body||null};
+      ws.send(JSON.stringify(payload));
     });
-    if (!resp.ok) throw new Error('Bridge fetch error: ' + resp.status);
-    // pref: try JSON first (if server returns JSON with body/body_b64), otherwise text
-    const ct = resp.headers.get('content-type') || '';
-    if (ct.includes('application/json')) {
-      const j = await resp.json();
-      if (j.parsed && j.parsed.body) return j.parsed.body;
-      if (j.parsed && j.parsed.body_b64) return atob(j.parsed.body_b64);
-      // fallback to raw string if present
-      if (j.raw) return j.raw;
-      // else last resort: text
-      return await resp.text();
-    } else {
-      return await resp.text();
-    }
-  }
-
-  // Rewrite resource URLs inside the document to proxy through the bridge.
-  // Rewrites: img[src], img[srcset], script[src], link[rel=stylesheet][href], audio/video sources, source[src/srcset], iframe[src].
-  // Also fixes CSS url(...) inside style tags and style attributes.
-  async function rewriteAndProxyResources(doc, baseUrl) {
-    const promises = [];
-
-    // helper to proxy attribute (attr) on element
-    function proxyAttr(el, attr, makeUrl = (v) => v) {
-      const val = el.getAttribute(attr);
-      if (!val) return;
-      const resolved = resolveUrl(val, baseUrl);
-      const p = fetchResourceBlobUrl(resolved)
-        .then(blobUrl => el.setAttribute(attr, blobUrl))
-        .catch(err => {
-          // keep original on error, and log
-          console.warn('Failed proxying', resolved, err);
-        });
-      promises.push(p);
-    }
-
-    // plain src attributes
-    doc.querySelectorAll('[src]').forEach(el => {
-      const tag = el.tagName.toLowerCase();
-      // do not proxy data: or blob:
-      const v = el.getAttribute('src') || '';
-      if (v.startsWith('data:') || v.startsWith('blob:')) return;
-      proxyAttr(el, 'src');
-    });
-
-    // srcset attributes (images, source)
-    doc.querySelectorAll('[srcset]').forEach(el => {
-      const raw = el.getAttribute('srcset');
-      if (!raw) return;
-      // split on commas, each part "url [descriptor]"
-      const parts = raw.split(',').map(s => s.trim()).filter(Boolean);
-      const partPromises = parts.map(async (part) => {
-        const [urlPart, desc] = part.split(/\s+/, 2);
-        if (urlPart.startsWith('data:') || urlPart.startsWith('blob:')) return urlPart + (desc ? ' ' + desc : '');
-        const resolved = resolveUrl(urlPart, baseUrl);
-        try {
-          const blob = await fetchResourceBlobUrl(resolved);
-          return blob + (desc ? ' ' + desc : '');
-        } catch (e) {
-          console.warn('srcset proxy failed', resolved, e);
-          return urlPart + (desc ? ' ' + desc : '');
-        }
-      });
-      const p = Promise.all(partPromises).then(results => el.setAttribute('srcset', results.join(', ')));
-      promises.push(p);
-    });
-
-    // stylesheets <link rel="stylesheet">
-    doc.querySelectorAll('link[rel~="stylesheet"][href]').forEach(link => {
-      const href = link.getAttribute('href');
-      if (!href) return;
-      const resolved = resolveUrl(href, baseUrl);
-      const p = fetchResourceBlobUrl(resolved).then(blobUrl => {
-        // fetch the CSS content via the blob URL, then rewrite url(...) inside CSS to proxied blob URLs
-        return fetch(blobUrl).then(r => r.text()).then(async cssText => {
-          // rewrite url(...) occurrences
-          const rewritten = await rewriteCssUrls(cssText, baseUrl);
-          // create a new blob URL with rewritten CSS
-          const cssBlob = new Blob([rewritten], { type: 'text/css' });
-          const cssBlobUrl = URL.createObjectURL(cssBlob);
-          // replace the link with a new link to blob css
-          const newLink = doc.createElement('link');
-          newLink.rel = 'stylesheet';
-          newLink.href = cssBlobUrl;
-          link.parentNode.replaceChild(newLink, link);
-        });
-      }).catch(err => console.warn('Failed stylesheet proxy', resolved, err));
-      promises.push(p);
-    });
-
-    // style tags: rewrite url(...) in textContent
-    doc.querySelectorAll('style').forEach(styleEl => {
-      const cssText = styleEl.textContent || '';
-      const p = rewriteCssUrls(cssText, baseUrl).then(rewritten => { styleEl.textContent = rewritten; });
-      promises.push(p);
-    });
-
-    // inline style attributes: style="background:url(...)" -> rewrite
-    doc.querySelectorAll('[style]').forEach(el => {
-      const s = el.getAttribute('style') || '';
-      if (!s.includes('url(')) return;
-      const p = rewriteCssUrls(s, baseUrl).then(rewritten => el.setAttribute('style', rewritten));
-      promises.push(p);
-    });
-
-    // scripts with external src: proxy them into blob URLs so they execute from proxied content
-    doc.querySelectorAll('script[src]').forEach(script => {
-      const src = script.getAttribute('src');
-      if (!src) return;
-      const resolved = resolveUrl(src, baseUrl);
-      const p = fetchResourceBlobUrl(resolved).then(blobUrl => {
-        // replace src with blob URL
-        script.setAttribute('src', blobUrl);
-      }).catch(err => console.warn('Script proxy failed', resolved, err));
-      promises.push(p);
-    });
-
-    // iframes: replace src with proxied blob, but note many sites will break
-    doc.querySelectorAll('iframe[src]').forEach(iframe => {
-      const src = iframe.getAttribute('src');
-      if (!src) return;
-      const resolved = resolveUrl(src, baseUrl);
-      const p = fetchResourceBlobUrl(resolved).then(blobUrl => iframe.setAttribute('src', blobUrl)).catch(err => console.warn('iframe proxy failed', resolved, err));
-      promises.push(p);
-    });
-
-    // wait for all proxies to finish
-    await Promise.all(promises);
-  }
-
-  // Find all url(...) occurrences in CSS text and replace each resource with a blob URL obtained from the bridge
-  async function rewriteCssUrls(cssText, baseUrl) {
-    // regex to match url(...) capturing the inside
-    const urlRegex = /url\(\s*(['"]?)(.*?)\1\s*\)/g;
-    const tasks = [];
-    let match;
-    const replacements = [];
-    while ((match = urlRegex.exec(cssText)) !== null) {
-      const full = match[0];
-      const inner = match[2];
-      // skip data:, blob:, about: etc
-      if (/^data:|^blob:|^about:|^chrome:|^\/\//i.test(inner)) {
-        replacements.push({ from: full, to: full });
-        continue;
-      }
-      const resolved = resolveUrl(inner, baseUrl);
-      const task = fetchResourceBlobUrl(resolved)
-        .then(blobUrl => ({ from: full, to: `url("${blobUrl}")` }))
-        .catch(err => {
-          console.warn('CSS asset proxy failed', resolved, err);
-          return { from: full, to: full };
-        });
-      tasks.push(task);
-    }
-    const results = await Promise.all(tasks);
-    let out = cssText;
-    results.forEach(r => { out = out.split(r.from).join(r.to); });
-    return out;
-  }
-
-  // After injecting HTML into iframe, intercept clicks and form submissions and load via proxy
-  function interceptNavigation(doc, baseUrl) {
-    // intercept all anchor clicks
-    doc.querySelectorAll('a[href]').forEach(a => {
-      a.addEventListener('click', (ev) => {
-        const href = a.getAttribute('href');
-        if (!href) return;
-        const resolved = resolveUrl(href, baseUrl);
-        ev.preventDefault();
-        urlBox.value = resolved;
-        loadUrl(resolved);
-      });
-    });
-
-    // intercept forms (GET and POST)
-    doc.querySelectorAll('form').forEach(form => {
-      form.addEventListener('submit', (ev) => {
-        ev.preventDefault();
-        const method = (form.method || 'GET').toUpperCase();
-        const action = resolveUrl(form.action || baseUrl, baseUrl);
-        const formData = new FormData(form);
-        if (method === 'GET') {
-          const qs = new URLSearchParams(formData).toString();
-          const full = action + (action.includes('?') ? '&' : '?') + qs;
-          urlBox.value = full;
-          loadUrl(full);
-        } else {
-          // for POST forms, we can create a POST wrapper request to bridge: /resource?url=... with method POST and body
-          // For simplicity we'll assemble fetch to /formproxy which posts to bridge; implement in bridge if needed.
-          // Fallback: open action directly in new tab
-          const tmp = window.open();
-          tmp.document.write('<p>POST forms are not proxied by default. Implement /formproxy in the bridge to enable POST-through-proxy.</p>');
-        }
-      });
-    });
-  }
-
-  // Main: fetch page, inject into iframe, rewrite resources, intercept nav
-  async function loadUrl(targetUrl) {
-    try {
-      const html = await fetchPageHtml(targetUrl);
-      const doc = frame.contentDocument || frame.contentWindow.document;
-      doc.open();
-      doc.write(html);
-      doc.close();
-
-      // create a base element in iframe so relative URLs resolve correctly
-      let baseEl = doc.querySelector('base');
-      if (!baseEl) {
-        baseEl = doc.createElement('base');
-        doc.head && doc.head.insertBefore(baseEl, doc.head.firstChild);
-      }
-      baseEl.href = targetUrl;
-
-      // rewrite & proxy resources
-      await rewriteAndProxyResources(doc, targetUrl);
-
-      // intercept navigation within the proxied page
-      interceptNavigation(doc, targetUrl);
-    } catch (e) {
-      alert('Failed to load: ' + e.message);
-      console.error(e);
-    }
-  }
-
-  // UI wiring
-  goBtn.addEventListener('click', () => {
-    const value = urlBox.value.trim();
-    if (!value) return alert('Enter full URL (https://...)');
-    loadUrl(value);
   });
+}
 
-  // optional: allow Enter key
-  urlBox.addEventListener('keydown', (e) => { if (e.key === 'Enter') goBtn.click(); });
+function handleResponse(data){
+  let obj={};
+  try{ obj=JSON.parse(data); }catch(e){ return; }
 
-  // quick start: focus input
-  urlBox.focus();
+  if(obj.cookies){
+    const urlObj=new URL(urlBox.value);
+    cookieStore[urlObj.hostname]={...(cookieStore[urlObj.hostname]||{}), ...obj.cookies};
+    saveCookies();
+  }
 
+  if(obj.id!==undefined && pendingRequests[obj.id]){
+    let body=obj.body||(obj.body_b64?atob(obj.body_b64):"");
+    pendingRequests[obj.id](body);
+    delete pendingRequests[obj.id];
+    return;
+  }
+
+  if(obj.body){
+    const doc=viewer.contentDocument || viewer.contentWindow.document;
+    doc.open();
+    doc.write(obj.body);
+    doc.close();
+
+    rewriteResources(doc);
+    interceptLinks(doc);
+    injectXHRFetchOverrides(doc);
+    overrideDynamicElementCreation(doc);
+    overrideInlineScripts(doc);
+    overrideWebSocket(doc);
+    overrideDynamicWebSocketInScripts(doc);
+    rewriteCSSUrls(doc,true);
+  }
+}
+
+function rewriteResources(doc){
+  const baseUrl=new URL(urlBox.value);
+  const attrs=[{tag:'img',attr:'src'},{tag:'script',attr:'src'},{tag:'link',attr:'href'},
+               {tag:'iframe',attr:'src'},{tag:'video',attr:'src'},{tag:'audio',attr:'src'}];
+  attrs.forEach(({tag,attr})=>{
+    doc.querySelectorAll(`${tag}[${attr}]`).forEach(el=>{
+      let orig=el.getAttribute(attr);
+      if(!orig) return;
+      el.setAttribute(attr,new URL(orig,baseUrl).href);
+    });
+  });
+}
+
+function interceptLinks(doc){
+  doc.querySelectorAll("a[href]").forEach(a=>{
+    a.addEventListener("click",e=>{
+      e.preventDefault();
+      const newUrl=new URL(a.getAttribute("href"),urlBox.value).href;
+      urlBox.value=newUrl; sendFetch(newUrl);
+    });
+  });
+  doc.querySelectorAll("form").forEach(form=>{
+    form.addEventListener("submit",e=>{
+      e.preventDefault();
+      const action=new URL(form.action||urlBox.value,urlBox.value).href;
+      const method=(form.method||"GET").toUpperCase();
+      const formData=new FormData(form);
+      const qs=new URLSearchParams(formData).toString();
+      if(method==="GET"){ let fullUrl=action; if(qs) fullUrl+=(action.includes("?")?"&":"?")+qs;
+        urlBox.value=fullUrl; sendFetch(fullUrl,{method:"GET"});}
+      else if(method==="POST"){ urlBox.value=action; sendFetch(action,{method:"POST",
+        headers:{"Content-Type":"application/x-www-form-urlencoded"},body:qs}); }
+    });
+  });
+}
+
+function injectXHRFetchOverrides(doc){
+  const win=viewer.contentWindow; if(!win) return;
+  win.fetch=async(input,init={})=>{
+    let url=typeof input==="string"?input:input.url;
+    let options={...init,method:init.method||"GET"};
+    const responseText=await sendFetch(new URL(url,new URL(urlBox.value)).href,options);
+    return new Response(responseText,{status:200,statusText:"OK"});
+  };
+  const OriginalXHR=win.XMLHttpRequest;
+  function ProxyXHR(){
+    const xhr=new OriginalXHR(); 
+    const open=xhr.open;
+    xhr.open=function(method,url,async=true,...rest){ this._method=method; this._url=new URL(url,new URL(urlBox.value)).href; return open.call(this,method,url,async,...rest); };
+    const send=xhr.send;
+    xhr.send=function(body){ sendFetch(this._url,{method:this._method,body}).then(resp=>{ if(typeof this.onload==="function") this.onload({target:{responseText:resp}}); }); };
+    return xhr;
+  }
+  win.XMLHttpRequest=ProxyXHR;
+}
+
+function overrideDynamicElementCreation(doc){
+  const win=viewer.contentWindow; if(!win) return;
+  const originalCreate=doc.createElement.bind(doc);
+  doc.createElement=(tagName)=>{
+    const el=originalCreate(tagName); const baseUrl=new URL(urlBox.value);
+    const observeAttr=(attr)=>{ const originalSet=el.setAttribute.bind(el); el.setAttribute=(name,value)=>{ if(name===attr && value) value=new URL(value,baseUrl).href; return originalSet(name,value); }; };
+    if(['img','script','iframe','video','audio'].includes(tagName.toLowerCase())) observeAttr('src');
+    if(tagName.toLowerCase()==='link') observeAttr('href');
+    if(tagName.toLowerCase()==='style') rewriteStyleElement(el, baseUrl);
+    return el;
+  };
+}
+
+function rewriteStyleElement(styleEl, baseUrl){
+  styleEl.textContent = styleEl.textContent
+    .replace(/url\(([^)]+)\)/g,(m,url)=>`url(${new URL(url.replace(/["']/g,''), baseUrl).href})`)
+    .replace(/@import\s+['"]([^'"]+)['"]/g,(m,url)=>`@import "${new URL(url, baseUrl).href}"`)
+    .replace(/@import\s+url\(([^)]+)\)/g,(m,url)=>`@import url(${new URL(url.replace(/["']/g,''), baseUrl).href})`);
+}
+
+function rewriteCSSUrls(doc,includeInline=true){
+  const baseUrl=new URL(urlBox.value);
+  // Rewrite <style> blocks
+  doc.querySelectorAll('style').forEach(styleEl=>rewriteStyleElement(styleEl, baseUrl));
+  if(includeInline){
+    doc.querySelectorAll('[style]').forEach(el=>{
+      el.style.cssText = el.style.cssText.replace(/url\(([^)]+)\)/g,(m,url)=>`url(${new URL(url.replace(/["']/g,''), baseUrl).href})`);
+    });
+  }
+}
+
+function overrideInlineScripts(doc){
+  const win=viewer.contentWindow; if(!win) return;
+  const originalEval=win.eval;
+  win.eval=function(code){ code=code.replace(/(["'])(https?:\/\/[^"']+)["']/g,(m,q,url)=>q+new URL(url,new URL(urlBox.value)).href+q); return originalEval(code); };
+  const originalFunction=win.Function;
+  win.Function=function(...args){ const body=args.pop(); const newBody=body.replace(/(["'])(https?:\/\/[^"']+)["']/g,(m,q,url)=>q+new URL(url,new URL(urlBox.value)).href+q); return originalFunction(...args,newBody); };
+}
+
+function overrideWebSocket(doc){
+  const win=viewer.contentWindow; if(!win) return;
+  const OriginalWS=win.WebSocket;
+  win.WebSocket=function(url,protocols){
+    const absUrl=new URL(url,new URL(urlBox.value)).href;
+    const wsProxy=new OriginalWS(WISP_URL, protocols);
+    wsProxy.send = (data)=>{ wsProxy.send(JSON.stringify({action:"ws", target:absUrl, data})); };
+    return wsProxy;
+  };
+}
+
+function overrideDynamicWebSocketInScripts(doc){
+  const win=viewer.contentWindow; if(!win) return;
+  const originalEval=win.eval;
+  win.eval=function(code){
+    code=code.replace(/new\s+WebSocket\s*\(\s*['"]([^'"]+)['"]/g,(m,url)=>`new WebSocket('${new URL(url,new URL(urlBox.value)).href}')`);
+    return originalEval(code);
+  };
+  const originalFunction=win.Function;
+  win.Function=function(...args){
+    const body=args.pop();
+    const newBody=body.replace(/new\s+WebSocket\s*\(\s*['"]([^'"]+)['"]/g,(m,url)=>`new WebSocket('${new URL(url,new URL(urlBox.value)).href}')`);
+    return originalFunction(...args,newBody);
+  };
+}
+
+goBtn.addEventListener("click",()=>{ const target=urlBox.value.trim(); if(!target.startsWith("http")) return alert("Enter full URL"); sendFetch(target); });
 })();
 </script>
 </body>
