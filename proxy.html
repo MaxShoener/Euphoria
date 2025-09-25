@@ -1,188 +1,299 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Wisp WS Proxy UI — wss://wisp.mercurywork.shop/</title>
+  <meta charset="utf-8"/>
+  <title>Mini Proxy Browser — Full resource proxy</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <style>
-    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial; margin: 18px; background:#f7fafc; color:#0f172a; }
-    .card { background:white; border-radius:12px; padding:12px; box-shadow:0 6px 18px rgba(10,20,40,0.06); margin-bottom:12px; }
-    input[type=text], textarea, select { width:100%; padding:8px 10px; margin-top:6px; border-radius:8px; border:1px solid #e2e8f0; font-family:inherit; font-size:0.95rem; }
-    button { padding:8px 12px; border-radius:8px; border:0; background:#2563eb; color:white; font-weight:600; cursor:pointer; }
-    button.secondary { background:#94a3b8; color:white; }
-    pre { background:#0b1220; color:#f8fafc; padding:12px; border-radius:8px; overflow:auto; max-height:360px; }
-    .small { font-size:0.85rem; color:#334155; }
+    body { margin:0; font-family:system-ui, -apple-system, "Segoe UI", Roboto, Arial; background:#0b1220; color:#e6eef8; }
+    #bar { display:flex; padding:8px; gap:8px; background:#071029; align-items:center; }
+    #url { flex:1; padding:8px 10px; border-radius:6px; border:1px solid #1f2a44; background:#071029; color:inherit; }
+    button { padding:8px 12px; border-radius:6px; border:0; background:#2b9df4; color:#022; font-weight:700; cursor:pointer; }
+    #frame { width:100%; height:calc(100vh - 56px); border:none; background:white; display:block; }
+    .small { font-size:0.85rem; color:#9fb1d6 }
   </style>
 </head>
 <body>
-  <header>
-    <h1>Wisp WS Proxy UI</h1>
-    <div class="small">Connects to: <code id="wispUrl">wss://wisp.mercurywork.shop/</code></div>
-  </header>
-
-  <section class="card">
-    <div style="display:flex;justify-content:space-between;align-items:center;">
-      <div>
-        <div id="wsStatus">Disconnected</div>
-        <div class="small" id="lastEvent">No events yet.</div>
-      </div>
-      <div style="display:flex;gap:8px;">
-        <button id="connectBtn">Connect</button>
-        <button id="disconnectBtn" class="secondary" disabled>Disconnect</button>
-      </div>
-    </div>
-  </section>
-
-  <section class="card">
-    <label for="protocolSelect">Choose client-side payload template</label>
-    <select id="protocolSelect">
-      <option value="fetch_action">{"action":"fetch","url":"..."}</option>
-      <option value="httpreq">{"type":"http-request","method":"GET","url":"..."}</option>
-      <option value="fetch_v2">{"cmd":"fetch","target":"...","opts":{}}</option>
-      <option value="raw">Raw text (you provide)</option>
-    </select>
-
-    <label for="targetUrl">Target URL (for server fetch)</label>
-    <input id="targetUrl" type="text" placeholder="https://example.com/path" />
-
-    <div style="margin-top:8px;">
-      <button id="fetchBtn">Send using template</button>
-      <button id="sendRawBtn" class="secondary">Send raw from textarea</button>
-    </div>
-
-    <label for="rawSend" style="margin-top:8px;">Raw message (for 'raw' template or manual sends)</label>
-    <textarea id="rawSend" rows="4" placeholder='{"hello":"world"}'></textarea>
-
-    <p class="small">This UI provides several payload templates. If your WISP server expects a different schema, choose "Raw" and paste the exact message. For server-driven protocols, adapt the templates in the JS below.</p>
-  </section>
-
-  <section class="card">
-    <label>Incoming messages (latest first)</label>
-    <pre id="log">/* messages will appear here */</pre>
-    <div style="display:flex;gap:8px;margin-top:8px;">
-      <button id="clearLog" class="secondary">Clear</button>
-      <button id="copyLog" class="secondary">Copy</button>
-      <button id="openHtml" class="secondary" disabled>Open last HTML</button>
-    </div>
-  </section>
+  <div id="bar">
+    <input id="url" placeholder="https://example.com" />
+    <button id="go">Go</button>
+    <div class="small" style="margin-left:8px">Bridge: <span id="bridgeHost">http://localhost:3000</span></div>
+  </div>
+  <iframe id="frame" sandbox="allow-scripts allow-forms allow-same-origin"></iframe>
 
 <script>
-(function(){
-  const WISP_URL = "wss://wisp.mercurywork.shop/";
-  let ws = null;
-  let lastHtmlUrl = null;
+(() => {
+  // === CONFIG ===
+  const BRIDGE_BASE = (window.location.hostname === 'localhost') ? 'http://localhost:3000' : 'https://your-bridge-host.example'; 
+  // update above if your bridge is elsewhere. The client uses the bridge for resource fetches.
+  document.getElementById('bridgeHost').textContent = BRIDGE_BASE;
 
-  const el = (id) => document.getElementById(id);
-  el('wispUrl').textContent = WISP_URL;
-  const status = el('wsStatus');
-  const lastEvent = el('lastEvent');
-  const log = el('log');
+  const urlBox = document.getElementById('url');
+  const goBtn = document.getElementById('go');
+  const frame = document.getElementById('frame');
 
-  function append(msg){
-    const time = new Date().toISOString();
-    log.textContent = time + " — " + msg + "\\n\\n" + log.textContent;
+  // Helper: normalize urls relative to a base
+  function resolveUrl(href, base) {
+    try { return new URL(href, base).href; }
+    catch (e) { return href; }
   }
 
-  function connect(){
-    if (ws) { append('Already connected'); return; }
-    status.textContent = 'Connecting...';
-    append('Connecting to ' + WISP_URL);
-    try {
-      ws = new WebSocket(WISP_URL);
-    } catch (e) {
-      append('WS create error: ' + e);
-      status.textContent = 'Error';
-      ws = null;
-      return;
+  // Fetch via bridge endpoint. Returns a Blob URL that can be assigned to src/href.
+  async function fetchResourceBlobUrl(resourceUrl) {
+    // Use the bridge endpoint /resource?url=...
+    const enc = encodeURIComponent(resourceUrl);
+    const resp = await fetch(`${BRIDGE_BASE}/resource?url=${enc}`, { method: 'GET' });
+    if (!resp.ok) throw new Error('Bridge resource error: ' + resp.status);
+    const contentType = resp.headers.get('content-type') || '';
+    const buf = await resp.arrayBuffer();
+    const blob = new Blob([buf], { type: contentType || undefined });
+    return URL.createObjectURL(blob);
+  }
+
+  // Fetch HTML page via bridge (reuses /fetch which returns HTML or JSON)
+  async function fetchPageHtml(targetUrl) {
+    const resp = await fetch(`${BRIDGE_BASE}/fetch`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: targetUrl, template: 'fetch_action' })
+    });
+    if (!resp.ok) throw new Error('Bridge fetch error: ' + resp.status);
+    // pref: try JSON first (if server returns JSON with body/body_b64), otherwise text
+    const ct = resp.headers.get('content-type') || '';
+    if (ct.includes('application/json')) {
+      const j = await resp.json();
+      if (j.parsed && j.parsed.body) return j.parsed.body;
+      if (j.parsed && j.parsed.body_b64) return atob(j.parsed.body_b64);
+      // fallback to raw string if present
+      if (j.raw) return j.raw;
+      // else last resort: text
+      return await resp.text();
+    } else {
+      return await resp.text();
     }
-    ws.onopen = () => {
-      status.textContent = 'Connected';
-      lastEvent.textContent = 'Opened at ' + new Date().toLocaleString();
-      append('WebSocket open');
-    };
-    ws.onmessage = (ev) => {
-      const data = ev.data;
-      append('IN: ' + (typeof data === 'string' ? data : '[binary]'));
-      // auto-detect HTML payloads
-      if (typeof data === 'string' && data.trim().startsWith('<')) {
-        createHtmlPreview(data);
-      } else {
+  }
+
+  // Rewrite resource URLs inside the document to proxy through the bridge.
+  // Rewrites: img[src], img[srcset], script[src], link[rel=stylesheet][href], audio/video sources, source[src/srcset], iframe[src].
+  // Also fixes CSS url(...) inside style tags and style attributes.
+  async function rewriteAndProxyResources(doc, baseUrl) {
+    const promises = [];
+
+    // helper to proxy attribute (attr) on element
+    function proxyAttr(el, attr, makeUrl = (v) => v) {
+      const val = el.getAttribute(attr);
+      if (!val) return;
+      const resolved = resolveUrl(val, baseUrl);
+      const p = fetchResourceBlobUrl(resolved)
+        .then(blobUrl => el.setAttribute(attr, blobUrl))
+        .catch(err => {
+          // keep original on error, and log
+          console.warn('Failed proxying', resolved, err);
+        });
+      promises.push(p);
+    }
+
+    // plain src attributes
+    doc.querySelectorAll('[src]').forEach(el => {
+      const tag = el.tagName.toLowerCase();
+      // do not proxy data: or blob:
+      const v = el.getAttribute('src') || '';
+      if (v.startsWith('data:') || v.startsWith('blob:')) return;
+      proxyAttr(el, 'src');
+    });
+
+    // srcset attributes (images, source)
+    doc.querySelectorAll('[srcset]').forEach(el => {
+      const raw = el.getAttribute('srcset');
+      if (!raw) return;
+      // split on commas, each part "url [descriptor]"
+      const parts = raw.split(',').map(s => s.trim()).filter(Boolean);
+      const partPromises = parts.map(async (part) => {
+        const [urlPart, desc] = part.split(/\s+/, 2);
+        if (urlPart.startsWith('data:') || urlPart.startsWith('blob:')) return urlPart + (desc ? ' ' + desc : '');
+        const resolved = resolveUrl(urlPart, baseUrl);
         try {
-          const obj = JSON.parse(data);
-          // common pattern: {type:'response', body:'<html>...</html>'} or body_b64
-          if (obj && (obj.body || obj.body_b64)) {
-            const html = obj.body || (obj.body_b64 ? atob(obj.body_b64) : null);
-            if (html) createHtmlPreview(html);
-          }
-        } catch(e){
-          // not json
+          const blob = await fetchResourceBlobUrl(resolved);
+          return blob + (desc ? ' ' + desc : '');
+        } catch (e) {
+          console.warn('srcset proxy failed', resolved, e);
+          return urlPart + (desc ? ' ' + desc : '');
         }
+      });
+      const p = Promise.all(partPromises).then(results => el.setAttribute('srcset', results.join(', ')));
+      promises.push(p);
+    });
+
+    // stylesheets <link rel="stylesheet">
+    doc.querySelectorAll('link[rel~="stylesheet"][href]').forEach(link => {
+      const href = link.getAttribute('href');
+      if (!href) return;
+      const resolved = resolveUrl(href, baseUrl);
+      const p = fetchResourceBlobUrl(resolved).then(blobUrl => {
+        // fetch the CSS content via the blob URL, then rewrite url(...) inside CSS to proxied blob URLs
+        return fetch(blobUrl).then(r => r.text()).then(async cssText => {
+          // rewrite url(...) occurrences
+          const rewritten = await rewriteCssUrls(cssText, baseUrl);
+          // create a new blob URL with rewritten CSS
+          const cssBlob = new Blob([rewritten], { type: 'text/css' });
+          const cssBlobUrl = URL.createObjectURL(cssBlob);
+          // replace the link with a new link to blob css
+          const newLink = doc.createElement('link');
+          newLink.rel = 'stylesheet';
+          newLink.href = cssBlobUrl;
+          link.parentNode.replaceChild(newLink, link);
+        });
+      }).catch(err => console.warn('Failed stylesheet proxy', resolved, err));
+      promises.push(p);
+    });
+
+    // style tags: rewrite url(...) in textContent
+    doc.querySelectorAll('style').forEach(styleEl => {
+      const cssText = styleEl.textContent || '';
+      const p = rewriteCssUrls(cssText, baseUrl).then(rewritten => { styleEl.textContent = rewritten; });
+      promises.push(p);
+    });
+
+    // inline style attributes: style="background:url(...)" -> rewrite
+    doc.querySelectorAll('[style]').forEach(el => {
+      const s = el.getAttribute('style') || '';
+      if (!s.includes('url(')) return;
+      const p = rewriteCssUrls(s, baseUrl).then(rewritten => el.setAttribute('style', rewritten));
+      promises.push(p);
+    });
+
+    // scripts with external src: proxy them into blob URLs so they execute from proxied content
+    doc.querySelectorAll('script[src]').forEach(script => {
+      const src = script.getAttribute('src');
+      if (!src) return;
+      const resolved = resolveUrl(src, baseUrl);
+      const p = fetchResourceBlobUrl(resolved).then(blobUrl => {
+        // replace src with blob URL
+        script.setAttribute('src', blobUrl);
+      }).catch(err => console.warn('Script proxy failed', resolved, err));
+      promises.push(p);
+    });
+
+    // iframes: replace src with proxied blob, but note many sites will break
+    doc.querySelectorAll('iframe[src]').forEach(iframe => {
+      const src = iframe.getAttribute('src');
+      if (!src) return;
+      const resolved = resolveUrl(src, baseUrl);
+      const p = fetchResourceBlobUrl(resolved).then(blobUrl => iframe.setAttribute('src', blobUrl)).catch(err => console.warn('iframe proxy failed', resolved, err));
+      promises.push(p);
+    });
+
+    // wait for all proxies to finish
+    await Promise.all(promises);
+  }
+
+  // Find all url(...) occurrences in CSS text and replace each resource with a blob URL obtained from the bridge
+  async function rewriteCssUrls(cssText, baseUrl) {
+    // regex to match url(...) capturing the inside
+    const urlRegex = /url\(\s*(['"]?)(.*?)\1\s*\)/g;
+    const tasks = [];
+    let match;
+    const replacements = [];
+    while ((match = urlRegex.exec(cssText)) !== null) {
+      const full = match[0];
+      const inner = match[2];
+      // skip data:, blob:, about: etc
+      if (/^data:|^blob:|^about:|^chrome:|^\/\//i.test(inner)) {
+        replacements.push({ from: full, to: full });
+        continue;
       }
-    };
-    ws.onclose = (ev) => {
-      status.textContent = 'Disconnected';
-      lastEvent.textContent = 'Closed at ' + new Date().toLocaleString();
-      append('WebSocket closed code=' + ev.code);
-      ws = null;
-    };
-    ws.onerror = (ev) => {
-      append('WebSocket error');
-      status.textContent = 'Error';
-      console.error(ev);
-    };
-  }
-
-  function disconnect(){
-    if (!ws) { append('Not connected'); return; }
-    ws.close(1000, 'client disconnect');
-    ws = null;
-    status.textContent = 'Disconnecting';
-  }
-
-  function sendPayload(payloadText){
-    if (!ws || ws.readyState !== WebSocket.OPEN) { append('WebSocket not open'); return; }
-    try {
-      ws.send(payloadText);
-      append('OUT: ' + payloadText);
-    } catch (e) {
-      append('Send failed: ' + e);
+      const resolved = resolveUrl(inner, baseUrl);
+      const task = fetchResourceBlobUrl(resolved)
+        .then(blobUrl => ({ from: full, to: `url("${blobUrl}")` }))
+        .catch(err => {
+          console.warn('CSS asset proxy failed', resolved, err);
+          return { from: full, to: full };
+        });
+      tasks.push(task);
     }
+    const results = await Promise.all(tasks);
+    let out = cssText;
+    results.forEach(r => { out = out.split(r.from).join(r.to); });
+    return out;
   }
 
-  function createHtmlPreview(html){
-    if (lastHtmlUrl) { URL.revokeObjectURL(lastHtmlUrl); lastHtmlUrl = null; }
-    const blob = new Blob([html], {type:'text/html'});
-    lastHtmlUrl = URL.createObjectURL(blob);
-    el('openHtml').disabled = false;
-    el('openHtml').onclick = () => window.open(lastHtmlUrl, '_blank');
-    append('HTML preview available (click "Open last HTML")');
+  // After injecting HTML into iframe, intercept clicks and form submissions and load via proxy
+  function interceptNavigation(doc, baseUrl) {
+    // intercept all anchor clicks
+    doc.querySelectorAll('a[href]').forEach(a => {
+      a.addEventListener('click', (ev) => {
+        const href = a.getAttribute('href');
+        if (!href) return;
+        const resolved = resolveUrl(href, baseUrl);
+        ev.preventDefault();
+        urlBox.value = resolved;
+        loadUrl(resolved);
+      });
+    });
+
+    // intercept forms (GET and POST)
+    doc.querySelectorAll('form').forEach(form => {
+      form.addEventListener('submit', (ev) => {
+        ev.preventDefault();
+        const method = (form.method || 'GET').toUpperCase();
+        const action = resolveUrl(form.action || baseUrl, baseUrl);
+        const formData = new FormData(form);
+        if (method === 'GET') {
+          const qs = new URLSearchParams(formData).toString();
+          const full = action + (action.includes('?') ? '&' : '?') + qs;
+          urlBox.value = full;
+          loadUrl(full);
+        } else {
+          // for POST forms, we can create a POST wrapper request to bridge: /resource?url=... with method POST and body
+          // For simplicity we'll assemble fetch to /formproxy which posts to bridge; implement in bridge if needed.
+          // Fallback: open action directly in new tab
+          const tmp = window.open();
+          tmp.document.write('<p>POST forms are not proxied by default. Implement /formproxy in the bridge to enable POST-through-proxy.</p>');
+        }
+      });
+    });
+  }
+
+  // Main: fetch page, inject into iframe, rewrite resources, intercept nav
+  async function loadUrl(targetUrl) {
+    try {
+      const html = await fetchPageHtml(targetUrl);
+      const doc = frame.contentDocument || frame.contentWindow.document;
+      doc.open();
+      doc.write(html);
+      doc.close();
+
+      // create a base element in iframe so relative URLs resolve correctly
+      let baseEl = doc.querySelector('base');
+      if (!baseEl) {
+        baseEl = doc.createElement('base');
+        doc.head && doc.head.insertBefore(baseEl, doc.head.firstChild);
+      }
+      baseEl.href = targetUrl;
+
+      // rewrite & proxy resources
+      await rewriteAndProxyResources(doc, targetUrl);
+
+      // intercept navigation within the proxied page
+      interceptNavigation(doc, targetUrl);
+    } catch (e) {
+      alert('Failed to load: ' + e.message);
+      console.error(e);
+    }
   }
 
   // UI wiring
-  el('connectBtn').addEventListener('click', connect);
-  el('disconnectBtn').addEventListener('click', disconnect);
-  el('clearLog').addEventListener('click', () => log.textContent = '');
-  el('copyLog').addEventListener('click', async () => {
-    try { await navigator.clipboard.writeText(log.textContent); append('Log copied to clipboard'); } catch (e){ append('Copy failed: ' + e); }
+  goBtn.addEventListener('click', () => {
+    const value = urlBox.value.trim();
+    if (!value) return alert('Enter full URL (https://...)');
+    loadUrl(value);
   });
 
-  el('fetchBtn').addEventListener('click', () => {
-    const tmpl = el('protocolSelect').value;
-    const url = el('targetUrl').value.trim();
-    if (!url) { append('Please enter a target URL'); return; }
-    let payload;
-    if (tmpl === 'fetch_action') payload = JSON.stringify({action:'fetch', url: url});
-    else if (tmpl === 'httpreq') payload = JSON.stringify({type:'http-request', method:'GET', url: url});
-    else if (tmpl === 'fetch_v2') payload = JSON.stringify({cmd:'fetch', target:url, opts:{}});
-    else payload = url;
-    sendPayload(payload);
-  });
+  // optional: allow Enter key
+  urlBox.addEventListener('keydown', (e) => { if (e.key === 'Enter') goBtn.click(); });
 
-  el('sendRawBtn').addEventListener('click', () => {
-    const text = el('rawSend').value;
-    if (!text) { append('Enter raw message'); return; }
-    sendPayload(text);
-  });
+  // quick start: focus input
+  urlBox.focus();
 
 })();
 </script>
