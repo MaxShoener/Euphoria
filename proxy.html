@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Wisp WS Proxy UI — wss://wisp.mercurywork.shop/</title>
+  <style>
+    body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial; margin: 18px; background:#f7fafc; color:#0f172a; }
+    .card { background:white; border-radius:12px; padding:12px; box-shadow:0 6px 18px rgba(10,20,40,0.06); margin-bottom:12px; }
+    input[type=text], textarea, select { width:100%; padding:8px 10px; margin-top:6px; border-radius:8px; border:1px solid #e2e8f0; font-family:inherit; font-size:0.95rem; }
+    button { padding:8px 12px; border-radius:8px; border:0; background:#2563eb; color:white; font-weight:600; cursor:pointer; }
+    button.secondary { background:#94a3b8; color:white; }
+    pre { background:#0b1220; color:#f8fafc; padding:12px; border-radius:8px; overflow:auto; max-height:360px; }
+    .small { font-size:0.85rem; color:#334155; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Wisp WS Proxy UI</h1>
+    <div class="small">Connects to: <code id="wispUrl">wss://wisp.mercurywork.shop/</code></div>
+  </header>
+
+  <section class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <div id="wsStatus">Disconnected</div>
+        <div class="small" id="lastEvent">No events yet.</div>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button id="connectBtn">Connect</button>
+        <button id="disconnectBtn" class="secondary" disabled>Disconnect</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <label for="protocolSelect">Choose client-side payload template</label>
+    <select id="protocolSelect">
+      <option value="fetch_action">{"action":"fetch","url":"..."}</option>
+      <option value="httpreq">{"type":"http-request","method":"GET","url":"..."}</option>
+      <option value="fetch_v2">{"cmd":"fetch","target":"...","opts":{}}</option>
+      <option value="raw">Raw text (you provide)</option>
+    </select>
+
+    <label for="targetUrl">Target URL (for server fetch)</label>
+    <input id="targetUrl" type="text" placeholder="https://example.com/path" />
+
+    <div style="margin-top:8px;">
+      <button id="fetchBtn">Send using template</button>
+      <button id="sendRawBtn" class="secondary">Send raw from textarea</button>
+    </div>
+
+    <label for="rawSend" style="margin-top:8px;">Raw message (for 'raw' template or manual sends)</label>
+    <textarea id="rawSend" rows="4" placeholder='{"hello":"world"}'></textarea>
+
+    <p class="small">This UI provides several payload templates. If your WISP server expects a different schema, choose "Raw" and paste the exact message. For server-driven protocols, adapt the templates in the JS below.</p>
+  </section>
+
+  <section class="card">
+    <label>Incoming messages (latest first)</label>
+    <pre id="log">/* messages will appear here */</pre>
+    <div style="display:flex;gap:8px;margin-top:8px;">
+      <button id="clearLog" class="secondary">Clear</button>
+      <button id="copyLog" class="secondary">Copy</button>
+      <button id="openHtml" class="secondary" disabled>Open last HTML</button>
+    </div>
+  </section>
+
+<script>
+(function(){
+  const WISP_URL = "wss://wisp.mercurywork.shop/";
+  let ws = null;
+  let lastHtmlUrl = null;
+
+  const el = (id) => document.getElementById(id);
+  el('wispUrl').textContent = WISP_URL;
+  const status = el('wsStatus');
+  const lastEvent = el('lastEvent');
+  const log = el('log');
+
+  function append(msg){
+    const time = new Date().toISOString();
+    log.textContent = time + " — " + msg + "\\n\\n" + log.textContent;
+  }
+
+  function connect(){
+    if (ws) { append('Already connected'); return; }
+    status.textContent = 'Connecting...';
+    append('Connecting to ' + WISP_URL);
+    try {
+      ws = new WebSocket(WISP_URL);
+    } catch (e) {
+      append('WS create error: ' + e);
+      status.textContent = 'Error';
+      ws = null;
+      return;
+    }
+    ws.onopen = () => {
+      status.textContent = 'Connected';
+      lastEvent.textContent = 'Opened at ' + new Date().toLocaleString();
+      append('WebSocket open');
+    };
+    ws.onmessage = (ev) => {
+      const data = ev.data;
+      append('IN: ' + (typeof data === 'string' ? data : '[binary]'));
+      // auto-detect HTML payloads
+      if (typeof data === 'string' && data.trim().startsWith('<')) {
+        createHtmlPreview(data);
+      } else {
+        try {
+          const obj = JSON.parse(data);
+          // common pattern: {type:'response', body:'<html>...</html>'} or body_b64
+          if (obj && (obj.body || obj.body_b64)) {
+            const html = obj.body || (obj.body_b64 ? atob(obj.body_b64) : null);
+            if (html) createHtmlPreview(html);
+          }
+        } catch(e){
+          // not json
+        }
+      }
+    };
+    ws.onclose = (ev) => {
+      status.textContent = 'Disconnected';
+      lastEvent.textContent = 'Closed at ' + new Date().toLocaleString();
+      append('WebSocket closed code=' + ev.code);
+      ws = null;
+    };
+    ws.onerror = (ev) => {
+      append('WebSocket error');
+      status.textContent = 'Error';
+      console.error(ev);
+    };
+  }
+
+  function disconnect(){
+    if (!ws) { append('Not connected'); return; }
+    ws.close(1000, 'client disconnect');
+    ws = null;
+    status.textContent = 'Disconnecting';
+  }
+
+  function sendPayload(payloadText){
+    if (!ws || ws.readyState !== WebSocket.OPEN) { append('WebSocket not open'); return; }
+    try {
+      ws.send(payloadText);
+      append('OUT: ' + payloadText);
+    } catch (e) {
+      append('Send failed: ' + e);
+    }
+  }
+
+  function createHtmlPreview(html){
+    if (lastHtmlUrl) { URL.revokeObjectURL(lastHtmlUrl); lastHtmlUrl = null; }
+    const blob = new Blob([html], {type:'text/html'});
+    lastHtmlUrl = URL.createObjectURL(blob);
+    el('openHtml').disabled = false;
+    el('openHtml').onclick = () => window.open(lastHtmlUrl, '_blank');
+    append('HTML preview available (click "Open last HTML")');
+  }
+
+  // UI wiring
+  el('connectBtn').addEventListener('click', connect);
+  el('disconnectBtn').addEventListener('click', disconnect);
+  el('clearLog').addEventListener('click', () => log.textContent = '');
+  el('copyLog').addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(log.textContent); append('Log copied to clipboard'); } catch (e){ append('Copy failed: ' + e); }
+  });
+
+  el('fetchBtn').addEventListener('click', () => {
+    const tmpl = el('protocolSelect').value;
+    const url = el('targetUrl').value.trim();
+    if (!url) { append('Please enter a target URL'); return; }
+    let payload;
+    if (tmpl === 'fetch_action') payload = JSON.stringify({action:'fetch', url: url});
+    else if (tmpl === 'httpreq') payload = JSON.stringify({type:'http-request', method:'GET', url: url});
+    else if (tmpl === 'fetch_v2') payload = JSON.stringify({cmd:'fetch', target:url, opts:{}});
+    else payload = url;
+    sendPayload(payload);
+  });
+
+  el('sendRawBtn').addEventListener('click', () => {
+    const text = el('rawSend').value;
+    if (!text) { append('Enter raw message'); return; }
+    sendPayload(text);
+  });
+
+})();
+</script>
+</body>
+</html>
