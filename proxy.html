@@ -1,8 +1,8 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8"/>
-<title>Temporary Direct Fetch Proxy</title>
+<meta charset="UTF-8">
+<title>WISP Proxy</title>
 <style>
 body { margin:0; font-family:sans-serif; background:#111; color:#eee; }
 #bar { display:flex; padding:6px; background:#222; }
@@ -13,47 +13,179 @@ body { margin:0; font-family:sans-serif; background:#111; color:#eee; }
 </head>
 <body>
 <div id="bar">
-<input id="url" type="text" placeholder="https://example.com"/>
+<input id="url" type="text" placeholder="https://example.com">
 <button id="go">Go</button>
 </div>
-<iframe id="viewer"></iframe>
+<iframe id="viewer" sandbox="allow-scripts allow-forms allow-same-origin"></iframe>
 
 <script>
+(() => {
+const WISP_URL = "wss://wisp.mercurywork.shop/";
+let ws;
 const urlBox = document.getElementById("url");
 const goBtn = document.getElementById("go");
 const viewer = document.getElementById("viewer");
 
-// Function to fetch and load site directly (for testing only)
-async function loadSite(url) {
-    try {
-        // Add https:// if missing
-        if (!url.startsWith("http")) url = "https://" + url;
+const pendingRequests = {};
+let requestCounter = 0;
 
-        const response = await fetch(url);
-        const html = await response.text();
-        const doc = viewer.contentDocument || viewer.contentWindow.document;
-        doc.open();
-        doc.write(html);
-        doc.close();
-    } catch (e) {
-        alert("Failed to load site (likely CORS restriction): " + e);
-    }
+function connect(cb){
+  if(ws && ws.readyState === WebSocket.OPEN) return cb();
+  ws = new WebSocket(WISP_URL);
+  ws.onopen = () => cb();
+  ws.onmessage = ev => handleResponse(ev.data);
+  ws.onerror = e => console.error("WebSocket error:", e);
+  ws.onclose = () => console.log("WebSocket closed");
 }
 
-// Go button click
-goBtn.addEventListener("click", () => {
-    const target = urlBox.value.trim();
-    if (!target) return alert("Enter a URL");
-    loadSite(target);
+function sendFetch(target, options={}) {
+  return new Promise(resolve => {
+    connect(() => {
+      const id = requestCounter++;
+      pendingRequests[id] = resolve;
+      const payload = {
+        id,
+        action: "fetch",
+        url: target,
+        method: options.method || "GET",
+        headers: options.headers || {},
+        body: options.body || null
+      };
+      ws.send(JSON.stringify(payload));
+    });
+  });
+}
+
+function handleResponse(data){
+  let obj;
+  try { obj = JSON.parse(data); } catch(e){ return; }
+  if(obj.id !== undefined && pendingRequests[obj.id]){
+    let body = obj.body || (obj.body_b64 ? atob(obj.body_b64) : "");
+    const doc = viewer.contentDocument || viewer.contentWindow.document;
+    doc.open();
+    doc.write(body);
+    doc.close();
+    rewriteResources(doc);
+    interceptLinks(doc);
+    injectXHRFetchOverrides(doc);
+    overrideDynamicElements(doc);
+    pendingRequests[obj.id]();
+    delete pendingRequests[obj.id];
+  }
+}
+
+function rewriteResources(doc){
+  const baseUrl = new URL(urlBox.value);
+  const tags = [
+    {tag:'img',attr:'src'},
+    {tag:'script',attr:'src'},
+    {tag:'link',attr:'href'},
+    {tag:'iframe',attr:'src'},
+    {tag:'video',attr:'src'},
+    {tag:'audio',attr:'src'}
+  ];
+  tags.forEach(({tag,attr})=>{
+    doc.querySelectorAll(`${tag}[${attr}]`).forEach(el=>{
+      let val = el.getAttribute(attr);
+      if(!val) return;
+      el.setAttribute(attr,new URL(val,baseUrl).href);
+    });
+  });
+}
+
+function interceptLinks(doc){
+  doc.querySelectorAll("a[href]").forEach(a=>{
+    a.addEventListener("click", e=>{
+      e.preventDefault();
+      const newUrl = new URL(a.getAttribute("href"), urlBox.value).href;
+      urlBox.value = newUrl;
+      sendFetch(newUrl);
+    });
+  });
+  doc.querySelectorAll("form").forEach(form=>{
+    form.addEventListener("submit", e=>{
+      e.preventDefault();
+      const action = new URL(form.action||urlBox.value, urlBox.value).href;
+      const method = (form.method||"GET").toUpperCase();
+      const data = new FormData(form);
+      const qs = new URLSearchParams(data).toString();
+      if(method === "GET"){
+        const fullUrl = action + (action.includes("?") ? "&" : "?") + qs;
+        urlBox.value = fullUrl;
+        sendFetch(fullUrl);
+      } else {
+        urlBox.value = action;
+        sendFetch(action, {method:"POST", headers:{"Content-Type":"application/x-www-form-urlencoded"}, body: qs});
+      }
+    });
+  });
+}
+
+function injectXHRFetchOverrides(doc){
+  const win = viewer.contentWindow;
+  if(!win) return;
+  // fetch override
+  win.fetch = async (input, init={})=>{
+    let url = typeof input==="string"?input:input.url;
+    const options = {...init, method:init.method||"GET"};
+    const respText = await sendFetch(new URL(url,new URL(urlBox.value)).href, options);
+    return new Response(respText, {status:200, statusText:"OK"});
+  };
+  // XHR override
+  const OriginalXHR = win.XMLHttpRequest;
+  function ProxyXHR(){
+    const xhr = new OriginalXHR();
+    const oldOpen = xhr.open;
+    xhr.open = function(method,url,...args){
+      this._method = method;
+      this._url = new URL(url,new URL(urlBox.value)).href;
+      return oldOpen.apply(this,[method,url,...args]);
+    };
+    const oldSend = xhr.send;
+    xhr.send = function(body){
+      sendFetch(this._url,{method:this._method, body}).then(res=>{
+        if(typeof this.onload==="function") this.onload({target:{responseText:res}});
+      });
+    };
+    return xhr;
+  }
+  win.XMLHttpRequest = ProxyXHR;
+}
+
+function overrideDynamicElements(doc){
+  const originalCreate = doc.createElement.bind(doc);
+  doc.createElement = function(tagName){
+    const el = originalCreate(tagName);
+    const baseUrl = new URL(urlBox.value);
+    ['img','script','iframe','video','audio'].includes(tagName.toLowerCase()) && overrideAttr(el,'src',baseUrl);
+    tagName.toLowerCase() === 'link' && overrideAttr(el,'href',baseUrl);
+    return el;
+  };
+  function overrideAttr(el,attr,base){
+    const oldSet = el.setAttribute.bind(el);
+    el.setAttribute = function(name,val){
+      if(name===attr && val) val = new URL(val,base).href;
+      return oldSet(name,val);
+    };
+  }
+}
+
+// Go button
+goBtn.addEventListener("click", ()=>{
+  const target = urlBox.value.trim();
+  if(!target.startsWith("http")) return alert("Enter full URL with http/https");
+  sendFetch(target);
 });
 
-// Enter key triggers Go
-urlBox.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-        e.preventDefault();
-        goBtn.click();
-    }
+// Enter key
+urlBox.addEventListener("keydown", e=>{
+  if(e.key==="Enter"){
+    e.preventDefault();
+    goBtn.click();
+  }
 });
+
+})();
 </script>
 </body>
 </html>
