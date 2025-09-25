@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
-<title>WISP Ultimate Transparent Proxy with CSS @import</title>
+<title>WISP Ultimate Proxy</title>
 <style>
 body { margin:0; font-family:sans-serif; background:#111; color:#eee; }
 #bar { display:flex; padding:6px; background:#222; }
@@ -170,7 +170,6 @@ function rewriteStyleElement(styleEl, baseUrl){
 
 function rewriteCSSUrls(doc,includeInline=true){
   const baseUrl=new URL(urlBox.value);
-  // Rewrite <style> blocks
   doc.querySelectorAll('style').forEach(styleEl=>rewriteStyleElement(styleEl, baseUrl));
   if(includeInline){
     doc.querySelectorAll('[style]').forEach(el=>{
@@ -213,7 +212,16 @@ function overrideDynamicWebSocketInScripts(doc){
   };
 }
 
+// Go button
 goBtn.addEventListener("click",()=>{ const target=urlBox.value.trim(); if(!target.startsWith("http")) return alert("Enter full URL"); sendFetch(target); });
+
+// Enter key
+urlBox.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+        e.preventDefault();
+        goBtn.click();
+    }
+});
 })();
 </script>
 </body>
