@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
-<title>WISP Ultimate Proxy</title>
+<title>Temporary Direct Fetch Proxy</title>
 <style>
 body { margin:0; font-family:sans-serif; background:#111; color:#eee; }
 #bar { display:flex; padding:6px; background:#222; }
@@ -16,213 +16,44 @@ body { margin:0; font-family:sans-serif; background:#111; color:#eee; }
 <input id="url" type="text" placeholder="https://example.com"/>
 <button id="go">Go</button>
 </div>
-<iframe id="viewer" sandbox="allow-scripts allow-forms allow-same-origin"></iframe>
+<iframe id="viewer"></iframe>
 
 <script>
-(() => {
-const WISP_URL="wss://wisp.mercurywork.shop/";
-let ws;
-const urlBox=document.getElementById("url");
-const goBtn=document.getElementById("go");
-const viewer=document.getElementById("viewer");
+const urlBox = document.getElementById("url");
+const goBtn = document.getElementById("go");
+const viewer = document.getElementById("viewer");
 
-const COOKIE_KEY="wisp_proxy_cookies_multi";
-let cookieStore=JSON.parse(localStorage.getItem(COOKIE_KEY)||"{}");
-function saveCookies(){ localStorage.setItem(COOKIE_KEY,JSON.stringify(cookieStore)); }
+// Function to fetch and load site directly (for testing only)
+async function loadSite(url) {
+    try {
+        // Add https:// if missing
+        if (!url.startsWith("http")) url = "https://" + url;
 
-function connect(cb){
-  if(ws && ws.readyState===WebSocket.OPEN) return cb();
-  ws=new WebSocket(WISP_URL);
-  ws.onopen=()=>cb();
-  ws.onmessage=ev=>handleResponse(ev.data);
+        const response = await fetch(url);
+        const html = await response.text();
+        const doc = viewer.contentDocument || viewer.contentWindow.document;
+        doc.open();
+        doc.write(html);
+        doc.close();
+    } catch (e) {
+        alert("Failed to load site (likely CORS restriction): " + e);
+    }
 }
 
-const pendingRequests={};
-let requestCounter=0;
+// Go button click
+goBtn.addEventListener("click", () => {
+    const target = urlBox.value.trim();
+    if (!target) return alert("Enter a URL");
+    loadSite(target);
+});
 
-function sendFetch(target,options={}) {
-  return new Promise(resolve=>{
-    connect(()=>{
-      const urlObj=new URL(target);
-      const domain=urlObj.hostname;
-      const cookies=cookieStore[domain]||{};
-      const cookieHeader=Object.entries(cookies).map(([k,v])=>`${k}=${v}`).join('; ');
-
-      const id=requestCounter++;
-      pendingRequests[id]=resolve;
-
-      const payload={id, action:"fetch", url:target, method:options.method||"GET",
-        headers:{...options.headers,"Cookie":cookieHeader||undefined}, body:options.body||null};
-      ws.send(JSON.stringify(payload));
-    });
-  });
-}
-
-function handleResponse(data){
-  let obj={};
-  try{ obj=JSON.parse(data); }catch(e){ return; }
-
-  if(obj.cookies){
-    const urlObj=new URL(urlBox.value);
-    cookieStore[urlObj.hostname]={...(cookieStore[urlObj.hostname]||{}), ...obj.cookies};
-    saveCookies();
-  }
-
-  if(obj.id!==undefined && pendingRequests[obj.id]){
-    let body=obj.body||(obj.body_b64?atob(obj.body_b64):"");
-    pendingRequests[obj.id](body);
-    delete pendingRequests[obj.id];
-    return;
-  }
-
-  if(obj.body){
-    const doc=viewer.contentDocument || viewer.contentWindow.document;
-    doc.open();
-    doc.write(obj.body);
-    doc.close();
-
-    rewriteResources(doc);
-    interceptLinks(doc);
-    injectXHRFetchOverrides(doc);
-    overrideDynamicElementCreation(doc);
-    overrideInlineScripts(doc);
-    overrideWebSocket(doc);
-    overrideDynamicWebSocketInScripts(doc);
-    rewriteCSSUrls(doc,true);
-  }
-}
-
-function rewriteResources(doc){
-  const baseUrl=new URL(urlBox.value);
-  const attrs=[{tag:'img',attr:'src'},{tag:'script',attr:'src'},{tag:'link',attr:'href'},
-               {tag:'iframe',attr:'src'},{tag:'video',attr:'src'},{tag:'audio',attr:'src'}];
-  attrs.forEach(({tag,attr})=>{
-    doc.querySelectorAll(`${tag}[${attr}]`).forEach(el=>{
-      let orig=el.getAttribute(attr);
-      if(!orig) return;
-      el.setAttribute(attr,new URL(orig,baseUrl).href);
-    });
-  });
-}
-
-function interceptLinks(doc){
-  doc.querySelectorAll("a[href]").forEach(a=>{
-    a.addEventListener("click",e=>{
-      e.preventDefault();
-      const newUrl=new URL(a.getAttribute("href"),urlBox.value).href;
-      urlBox.value=newUrl; sendFetch(newUrl);
-    });
-  });
-  doc.querySelectorAll("form").forEach(form=>{
-    form.addEventListener("submit",e=>{
-      e.preventDefault();
-      const action=new URL(form.action||urlBox.value,urlBox.value).href;
-      const method=(form.method||"GET").toUpperCase();
-      const formData=new FormData(form);
-      const qs=new URLSearchParams(formData).toString();
-      if(method==="GET"){ let fullUrl=action; if(qs) fullUrl+=(action.includes("?")?"&":"?")+qs;
-        urlBox.value=fullUrl; sendFetch(fullUrl,{method:"GET"});}
-      else if(method==="POST"){ urlBox.value=action; sendFetch(action,{method:"POST",
-        headers:{"Content-Type":"application/x-www-form-urlencoded"},body:qs}); }
-    });
-  });
-}
-
-function injectXHRFetchOverrides(doc){
-  const win=viewer.contentWindow; if(!win) return;
-  win.fetch=async(input,init={})=>{
-    let url=typeof input==="string"?input:input.url;
-    let options={...init,method:init.method||"GET"};
-    const responseText=await sendFetch(new URL(url,new URL(urlBox.value)).href,options);
-    return new Response(responseText,{status:200,statusText:"OK"});
-  };
-  const OriginalXHR=win.XMLHttpRequest;
-  function ProxyXHR(){
-    const xhr=new OriginalXHR(); 
-    const open=xhr.open;
-    xhr.open=function(method,url,async=true,...rest){ this._method=method; this._url=new URL(url,new URL(urlBox.value)).href; return open.call(this,method,url,async,...rest); };
-    const send=xhr.send;
-    xhr.send=function(body){ sendFetch(this._url,{method:this._method,body}).then(resp=>{ if(typeof this.onload==="function") this.onload({target:{responseText:resp}}); }); };
-    return xhr;
-  }
-  win.XMLHttpRequest=ProxyXHR;
-}
-
-function overrideDynamicElementCreation(doc){
-  const win=viewer.contentWindow; if(!win) return;
-  const originalCreate=doc.createElement.bind(doc);
-  doc.createElement=(tagName)=>{
-    const el=originalCreate(tagName); const baseUrl=new URL(urlBox.value);
-    const observeAttr=(attr)=>{ const originalSet=el.setAttribute.bind(el); el.setAttribute=(name,value)=>{ if(name===attr && value) value=new URL(value,baseUrl).href; return originalSet(name,value); }; };
-    if(['img','script','iframe','video','audio'].includes(tagName.toLowerCase())) observeAttr('src');
-    if(tagName.toLowerCase()==='link') observeAttr('href');
-    if(tagName.toLowerCase()==='style') rewriteStyleElement(el, baseUrl);
-    return el;
-  };
-}
-
-function rewriteStyleElement(styleEl, baseUrl){
-  styleEl.textContent = styleEl.textContent
-    .replace(/url\(([^)]+)\)/g,(m,url)=>`url(${new URL(url.replace(/["']/g,''), baseUrl).href})`)
-    .replace(/@import\s+['"]([^'"]+)['"]/g,(m,url)=>`@import "${new URL(url, baseUrl).href}"`)
-    .replace(/@import\s+url\(([^)]+)\)/g,(m,url)=>`@import url(${new URL(url.replace(/["']/g,''), baseUrl).href})`);
-}
-
-function rewriteCSSUrls(doc,includeInline=true){
-  const baseUrl=new URL(urlBox.value);
-  doc.querySelectorAll('style').forEach(styleEl=>rewriteStyleElement(styleEl, baseUrl));
-  if(includeInline){
-    doc.querySelectorAll('[style]').forEach(el=>{
-      el.style.cssText = el.style.cssText.replace(/url\(([^)]+)\)/g,(m,url)=>`url(${new URL(url.replace(/["']/g,''), baseUrl).href})`);
-    });
-  }
-}
-
-function overrideInlineScripts(doc){
-  const win=viewer.contentWindow; if(!win) return;
-  const originalEval=win.eval;
-  win.eval=function(code){ code=code.replace(/(["'])(https?:\/\/[^"']+)["']/g,(m,q,url)=>q+new URL(url,new URL(urlBox.value)).href+q); return originalEval(code); };
-  const originalFunction=win.Function;
-  win.Function=function(...args){ const body=args.pop(); const newBody=body.replace(/(["'])(https?:\/\/[^"']+)["']/g,(m,q,url)=>q+new URL(url,new URL(urlBox.value)).href+q); return originalFunction(...args,newBody); };
-}
-
-function overrideWebSocket(doc){
-  const win=viewer.contentWindow; if(!win) return;
-  const OriginalWS=win.WebSocket;
-  win.WebSocket=function(url,protocols){
-    const absUrl=new URL(url,new URL(urlBox.value)).href;
-    const wsProxy=new OriginalWS(WISP_URL, protocols);
-    wsProxy.send = (data)=>{ wsProxy.send(JSON.stringify({action:"ws", target:absUrl, data})); };
-    return wsProxy;
-  };
-}
-
-function overrideDynamicWebSocketInScripts(doc){
-  const win=viewer.contentWindow; if(!win) return;
-  const originalEval=win.eval;
-  win.eval=function(code){
-    code=code.replace(/new\s+WebSocket\s*\(\s*['"]([^'"]+)['"]/g,(m,url)=>`new WebSocket('${new URL(url,new URL(urlBox.value)).href}')`);
-    return originalEval(code);
-  };
-  const originalFunction=win.Function;
-  win.Function=function(...args){
-    const body=args.pop();
-    const newBody=body.replace(/new\s+WebSocket\s*\(\s*['"]([^'"]+)['"]/g,(m,url)=>`new WebSocket('${new URL(url,new URL(urlBox.value)).href}')`);
-    return originalFunction(...args,newBody);
-  };
-}
-
-// Go button
-goBtn.addEventListener("click",()=>{ const target=urlBox.value.trim(); if(!target.startsWith("http")) return alert("Enter full URL"); sendFetch(target); });
-
-// Enter key
+// Enter key triggers Go
 urlBox.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
         e.preventDefault();
         goBtn.click();
     }
 });
-})();
 </script>
 </body>
 </html>
