@@ -8,7 +8,7 @@
   header { background:#222; color:#fff; display:flex; align-items:center; padding:10px; gap:10px; }
   input { flex:1; padding:8px; font-size:14px; }
   button { padding:8px 12px; cursor:pointer; background:#4CAF50; border:none; color:#fff; }
-  iframe { flex:1; border:none; width:100%; }
+  #frame { flex:1; overflow:auto; }
 </style>
 </head>
 <body>
@@ -17,10 +17,10 @@
   <button onclick="loadSite()">Go</button>
 </header>
 
-<iframe id="frame"></iframe>
+<div id="frame"></div>
 
 <script>
-const PROXY = "https://wisp-server-ufj9.onrender.com/proxy?url="; // Updated proxy URL
+const PROXY = "https://wisp-server-ufj9.onrender.com/proxy?url="; // your proxy URL
 const urlBox = document.getElementById("url");
 const frame = document.getElementById("frame");
 
@@ -28,12 +28,14 @@ function loadSite(url) {
   url = url || urlBox.value.trim();
   if (!/^https?:\/\//i.test(url)) url = "https://" + url;
   urlBox.value = url;
-  frame.src = PROXY + encodeURIComponent(url);
+
+  fetch(PROXY + encodeURIComponent(url))
+    .then(r => r.text())
+    .then(html => { frame.innerHTML = html })
+    .catch(err => { frame.innerHTML = `<p style="color:red">Error: ${err.message}</p>` });
 }
 
-urlBox.addEventListener("keypress", e => {
-  if (e.key === "Enter") loadSite();
-});
+urlBox.addEventListener("keypress", e => { if (e.key === "Enter") loadSite(); });
 </script>
 </body>
 </html>
