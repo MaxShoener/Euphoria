@@ -2,96 +2,31 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Euphoria</title>
+  <title>Euphoria Proxy</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 0;
-      padding: 0;
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-    }
-
-    header {
-      background-color: #2b2b2b;
-      color: white;
-      padding: 1rem;
-      text-align: center;
-      font-size: 1.5rem;
-    }
-
-    #controls {
-      display: flex;
-      padding: 0.5rem;
-      background-color: #f2f2f2;
-    }
-
-    #url-input {
-      flex: 1;
-      padding: 0.5rem;
-      font-size: 1rem;
-    }
-
-    #go-btn {
-      padding: 0.5rem 1rem;
-      font-size: 1rem;
-      margin-left: 0.5rem;
-      cursor: pointer;
-    }
-
-    iframe {
-      flex: 1;
-      width: 100%;
-      border: none;
-    }
+    body { font-family: Arial, sans-serif; margin: 50px; background: #f0f0f0; }
+    input[type="text"] { width: 60%; padding: 10px; }
+    button { padding: 10px 20px; margin-left: 10px; }
+    iframe { width: 100%; height: 80vh; margin-top: 20px; border: 1px solid #ccc; }
   </style>
 </head>
 <body>
-  <header>Euphoria</header>
-  <div id="controls">
-    <input type="text" id="url-input" placeholder="Enter a URL">
-    <button id="go-btn">Go</button>
-  </div>
-  <iframe id="proxy-frame"></iframe>
+  <h1>Euphoria Proxy</h1>
+  <form id="proxyForm">
+    <input type="text" id="urlInput" placeholder="Enter URL here" required>
+    <button type="submit">Load</button>
+  </form>
+  <iframe id="proxyFrame" src=""></iframe>
 
   <script>
-    const input = document.getElementById('url-input');
-    const button = document.getElementById('go-btn');
-    const iframe = document.getElementById('proxy-frame');
-    const proxyServer = 'https://wisp-server-im20.onrender.com/proxy?url=';
+    const form = document.getElementById("proxyForm");
+    const input = document.getElementById("urlInput");
+    const frame = document.getElementById("proxyFrame");
 
-    // Navigate iframe through proxy
-    function navigate() {
-      const url = input.value.trim();
-      if (!url) return;
-
-      // Add https:// if missing
-      const fullUrl = url.startsWith('http://') || url.startsWith('https://') ? url : 'https://' + url;
-      iframe.src = proxyServer + encodeURIComponent(fullUrl);
-    }
-
-    button.addEventListener('click', navigate);
-
-    input.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') navigate();
-    });
-
-    // Allow links inside iframe to load via proxy
-    iframe.addEventListener('load', () => {
-      try {
-        const doc = iframe.contentDocument || iframe.contentWindow.document;
-        const links = doc.querySelectorAll('a');
-        links.forEach(link => {
-          link.addEventListener('click', (e) => {
-            e.preventDefault();
-            const href = link.href;
-            if (href) iframe.src = proxyServer + encodeURIComponent(href);
-          });
-        });
-      } catch (err) {
-        // Cross-origin pages may block this, ignore safely
-      }
+    form.addEventListener("submit", e => {
+      e.preventDefault();
+      const url = encodeURIComponent(input.value);
+      frame.src = `/proxy?url=${url}`;
     });
   </script>
 </body>
