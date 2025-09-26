@@ -2,66 +2,34 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Proxy Browser</title>
+  <title>Headless Proxy Browser</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 0;
-      padding: 0;
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-    }
-    header {
-      background: #222;
-      color: white;
-      padding: 10px;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    input {
-      flex: 1;
-      padding: 8px;
-      font-size: 14px;
-    }
-    button {
-      padding: 8px 12px;
-      cursor: pointer;
-      background: #4CAF50;
-      border: none;
-      color: white;
-      font-size: 14px;
-    }
-    iframe {
-      flex: 1;
-      border: none;
-      width: 100%;
-    }
+    body { margin:0; font-family:sans-serif; display:flex; flex-direction:column; height:100vh; }
+    header { background:#222; color:#fff; display:flex; align-items:center; padding:10px; gap:10px; }
+    input { flex:1; padding:8px; font-size:14px; }
+    button { padding:8px 12px; cursor:pointer; background:#4CAF50; border:none; color:#fff; }
+    iframe { flex:1; border:none; width:100%; }
   </style>
 </head>
 <body>
   <header>
-    <input id="url" type="text" placeholder="Enter URL (e.g. https://example.com)">
+    <input id="url" placeholder="Enter URL (e.g. https://chess.com)">
     <button onclick="loadSite()">Go</button>
   </header>
 
   <iframe id="frame"></iframe>
 
   <script>
-    const PROXY = "https://wisp-server-1.onrender.com/proxy?url=";
+    // Updated WISP server URL
+    const PROXY = "https://wisp-server-zy65.onrender.com/proxy?url=";
     const urlBox = document.getElementById("url");
     const frame = document.getElementById("frame");
 
     function loadSite(url) {
       url = url || urlBox.value.trim();
-
-      if (!/^https?:\/\//i.test(url)) {
-        url = "https://" + url;
-      }
-
-      frame.src = PROXY + encodeURIComponent(url);
+      if (!/^https?:\/\//i.test(url)) url = "https://" + url;
       urlBox.value = url;
+      frame.src = PROXY + encodeURIComponent(url);
     }
 
     // Press Enter to load
@@ -69,7 +37,21 @@
       if (e.key === "Enter") loadSite();
     });
 
-    // Intercept iframe links to update input box
+    // Intercept iframe navigation using a polling approach
+    let lastUrl = "";
+    setInterval(() => {
+      try {
+        const currentUrl = frame.contentWindow.location.href;
+        if (currentUrl && currentUrl !== "about:blank" && currentUrl !== lastUrl) {
+          lastUrl = currentUrl;
+          urlBox.value = currentUrl;
+        }
+      } catch (err) {
+        // Cross-origin pages may block access, normal
+      }
+    }, 500);
+
+    // Optional: reload page when a link is clicked (same-origin only)
     frame.addEventListener("load", () => {
       try {
         const doc = frame.contentDocument || frame.contentWindow.document;
@@ -83,8 +65,7 @@
           });
         });
       } catch (err) {
-        // Some cross-origin pages may block JS access; that's normal
-        console.warn("Cannot access iframe content:", err);
+        // Cross-origin pages block this, normal for many sites
       }
     });
   </script>
