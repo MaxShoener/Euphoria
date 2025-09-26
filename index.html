@@ -1,117 +1,251 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Euphoria</title>
-  <style>
-    body, html {
-      margin: 0;
-      padding: 0;
-      height: 100%;
-      font-family: Arial, sans-serif;
-      display: flex;
-      flex-direction: column;
-      background-color: #f0f2f5;
-    }
-    header {
-      background-color: #282c34;
-      color: white;
-      padding: 10px 20px;
-      display: flex;
-      align-items: center;
-    }
-    header input[type="text"] {
-      flex: 1;
-      padding: 6px 10px;
-      margin-right: 10px;
-      font-size: 16px;
-      border-radius: 4px;
-      border: none;
-    }
-    header button {
-      padding: 6px 12px;
-      font-size: 16px;
-      cursor: pointer;
-      background-color: #61dafb;
-      border: none;
-      border-radius: 4px;
-    }
-    iframe {
-      flex: 1;
-      border: none;
-      width: 100%;
-    }
-    #loading {
-      position: absolute;
-      top: 60px;
-      left: 50%;
-      transform: translateX(-50%);
-      padding: 10px 20px;
-      background: rgba(0,0,0,0.7);
-      color: white;
-      border-radius: 4px;
-      display: none;
-      font-size: 14px;
-      z-index: 1000;
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Euphoria</title>
+<style>
+  body, html {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    font-family: Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    background-color: #f0f2f5;
+  }
+  header {
+    background-color: #282c34;
+    color: white;
+    padding: 10px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  header input[type="text"] {
+    flex: 1;
+    padding: 6px 10px;
+    font-size: 16px;
+    border-radius: 4px;
+    border: none;
+  }
+  header button {
+    padding: 6px 12px;
+    font-size: 16px;
+    cursor: pointer;
+    background-color: #61dafb;
+    border: none;
+    border-radius: 4px;
+  }
+  #tabs {
+    display: flex;
+    background: #20232a;
+    gap: 4px;
+    padding: 4px;
+    overflow-x: auto;
+  }
+  .tab {
+    padding: 6px 12px;
+    background: #61dafb;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    user-select: none;
+  }
+  .tab.active {
+    background: #21a1f1;
+    font-weight: bold;
+  }
+  .close-btn {
+    font-weight: bold;
+    cursor: pointer;
+    color: #20232a;
+  }
+  iframe {
+    flex: 1;
+    border: none;
+    width: 100%;
+  }
+  #loading {
+    position: absolute;
+    top: 60px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 10px 20px;
+    background: rgba(0,0,0,0.7);
+    color: white;
+    border-radius: 4px;
+    display: none;
+    font-size: 14px;
+    z-index: 1000;
+  }
+</style>
 </head>
 <body>
-  <header>
-    <input type="text" id="urlInput" placeholder="Enter a URL to visit">
-    <button id="goBtn">Go</button>
-  </header>
-  <div id="loading">Loading...</div>
-  <iframe id="proxyFrame" src=""></iframe>
+<header>
+  <button id="backBtn">&larr; Back</button>
+  <button id="forwardBtn">Forward &rarr;</button>
+  <input type="text" id="urlInput" placeholder="Enter a URL to visit">
+  <button id="goBtn">Go</button>
+  <button id="newTabBtn">+ Tab</button>
+</header>
+<div id="tabs"></div>
+<div id="loading">Loading...</div>
+<iframe id="proxyFrame" src=""></iframe>
 
-  <script>
-    const goBtn = document.getElementById('goBtn');
-    const urlInput = document.getElementById('urlInput');
-    const proxyFrame = document.getElementById('proxyFrame');
-    const loading = document.getElementById('loading');
+<script>
+const proxyBase = 'https://wisp-server-im20.onrender.com/proxy?url=';
+const urlInput = document.getElementById('urlInput');
+const goBtn = document.getElementById('goBtn');
+const proxyFrame = document.getElementById('proxyFrame');
+const loading = document.getElementById('loading');
+const backBtn = document.getElementById('backBtn');
+const forwardBtn = document.getElementById('forwardBtn');
+const tabsDiv = document.getElementById('tabs');
+const newTabBtn = document.getElementById('newTabBtn');
 
-    const proxyBase = 'https://wisp-server-im20.onrender.com/proxy?url=';
+let tabs = [];
+let currentTabIndex = -1;
 
-    function loadURL(url) {
-      if (!url.startsWith('http')) url = 'https://' + url;
-      loading.style.display = 'block';
-      proxyFrame.src = proxyBase + encodeURIComponent(url);
-    }
+// Create a new tab
+function createTab(url = '') {
+  const tab = { url, history: [], index: -1 };
+  tabs.push(tab);
 
-    // Load when button clicked
-    goBtn.addEventListener('click', () => loadURL(urlInput.value));
+  const tabEl = document.createElement('div');
+  tabEl.classList.add('tab');
+  tabEl.draggable = true;
 
-    // Load when pressing Enter in input
-    urlInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') loadURL(urlInput.value);
-    });
+  const label = document.createElement('span');
+  label.textContent = url || 'New Tab';
+  tabEl.appendChild(label);
 
-    // Hide loading once iframe fully loads
-    proxyFrame.addEventListener('load', () => {
-      loading.style.display = 'none';
+  const closeBtn = document.createElement('span');
+  closeBtn.textContent = '×';
+  closeBtn.classList.add('close-btn');
+  closeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeTab(tabs.indexOf(tab));
+  });
+  tabEl.appendChild(closeBtn);
 
-      try {
-        const iframeDoc = proxyFrame.contentDocument || proxyFrame.contentWindow.document;
-        iframeDoc.querySelectorAll('a').forEach(a => {
-          a.addEventListener('click', (e) => {
-            e.preventDefault();
-            loadURL(a.href);
-          });
-        });
-      } catch (err) {
-        // Cross-origin pages can't be accessed; fallback enabled below
-      }
-    });
+  tabEl.addEventListener('click', () => switchTab(tabs.indexOf(tab)));
 
-    // Fallback: capture top-level clicks for links
-    document.body.addEventListener('click', (e) => {
-      const target = e.target.closest('a');
-      if (target && target.href) {
+  // Drag and drop events
+  tabEl.addEventListener('dragstart', (e) => e.dataTransfer.setData('text/plain', tabs.indexOf(tab)));
+  tabEl.addEventListener('dragover', (e) => e.preventDefault());
+  tabEl.addEventListener('drop', (e) => {
+    e.preventDefault();
+    const fromIndex = parseInt(e.dataTransfer.getData('text/plain'));
+    const toIndex = tabs.indexOf(tab);
+    reorderTabs(fromIndex, toIndex);
+  });
+
+  tabsDiv.appendChild(tabEl);
+  switchTab(tabs.length - 1);
+}
+
+// Switch tab
+function switchTab(index) {
+  if (currentTabIndex === index) return;
+  currentTabIndex = index;
+  tabsDiv.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', i === index));
+  const current = tabs[currentTabIndex];
+  if (current.index >= 0) loadURL(current.history[current.index], false);
+  else loadURL(current.url || '', true);
+}
+
+// Close tab
+function closeTab(index) {
+  tabs.splice(index, 1);
+  tabsDiv.removeChild(tabsDiv.children[index]);
+  if (currentTabIndex === index) switchTab(index > 0 ? index - 1 : 0);
+  else if (currentTabIndex > index) currentTabIndex--;
+}
+
+// Reorder tabs
+function reorderTabs(from, to) {
+  if (from === to) return;
+  const tab = tabs.splice(from, 1)[0];
+  tabs.splice(to, 0, tab);
+
+  const tabEl = tabsDiv.children[from];
+  tabsDiv.removeChild(tabEl);
+  tabsDiv.insertBefore(tabEl, tabsDiv.children[to]);
+
+  if (currentTabIndex === from) currentTabIndex = to;
+  else if (from < currentTabIndex && to >= currentTabIndex) currentTabIndex--;
+  else if (from > currentTabIndex && to <= currentTabIndex) currentTabIndex++;
+
+  tabsDiv.querySelectorAll('.tab').forEach((t, i) => t.classList.toggle('active', i === currentTabIndex));
+}
+
+// Load URL
+function loadURL(url, addToHistory = true) {
+  if (!url) return;
+  if (!url.startsWith('http')) url = 'https://' + url;
+  loading.style.display = 'block';
+  proxyFrame.src = proxyBase + encodeURIComponent(url);
+
+  const current = tabs[currentTabIndex];
+  if (addToHistory) {
+    current.history.splice(current.index + 1);
+    current.history.push(url);
+    current.index = current.history.length - 1;
+  }
+  updateNavButtons();
+  updateTabLabel();
+}
+
+function updateNavButtons() {
+  const current = tabs[currentTabIndex];
+  backBtn.disabled = current.index <= 0;
+  forwardBtn.disabled = current.index >= current.history.length - 1;
+}
+
+function updateTabLabel() {
+  const tabEl = tabsDiv.children[currentTabIndex].querySelector('span');
+  const current = tabs[currentTabIndex];
+  tabEl.textContent = current.history[current.index] || 'New Tab';
+}
+
+backBtn.addEventListener('click', () => {
+  const current = tabs[currentTabIndex];
+  if (current.index > 0) {
+    current.index--;
+    loadURL(current.history[current.index], false);
+  }
+});
+
+forwardBtn.addEventListener('click', () => {
+  const current = tabs[currentTabIndex];
+  if (current.index < current.history.length - 1) {
+    current.index++;
+    loadURL(current.history[current.index], false);
+  }
+});
+
+goBtn.addEventListener('click', () => loadURL(urlInput.value));
+urlInput.addEventListener('keypress', e => { if (e.key === 'Enter') loadURL(urlInput.value); });
+newTabBtn.addEventListener('click', () => createTab());
+
+proxyFrame.addEventListener('load', () => {
+  loading.style.display = 'none';
+  try {
+    const iframeDoc = proxyFrame.contentDocument || proxyFrame.contentWindow.document;
+    iframeDoc.querySelectorAll('a').forEach(a => {
+      a.addEventListener('click', e => {
         e.preventDefault();
-        loadURL(target.href);
-      }
-    }, true);
-  </script>
+        loadURL(a.href);
+      });
+    });
+  } catch (err) {}
+});
+
+// Initial tab
+createTab();
+</script>
 </body>
 </html>
