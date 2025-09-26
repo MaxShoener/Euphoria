@@ -13,6 +13,7 @@
       font-family: Arial, sans-serif;
       display: flex;
       flex-direction: column;
+      background-color: #f0f2f5;
     }
 
     header {
@@ -29,6 +30,7 @@
       padding: 8px;
       border-radius: 4px;
       border: none;
+      font-size: 14px;
     }
 
     header button {
@@ -38,6 +40,7 @@
       color: white;
       border-radius: 4px;
       cursor: pointer;
+      font-size: 14px;
     }
 
     header button:hover {
@@ -54,7 +57,7 @@
 <body>
 
   <header>
-    <input id="urlInput" type="text" placeholder="Enter a URL to proxy" value="">
+    <input id="urlInput" type="text" placeholder="Enter a URL to proxy">
     <button id="loadBtn">Load</button>
   </header>
 
@@ -67,6 +70,7 @@
     const iframe = document.getElementById("proxyFrame");
 
     function loadURL(url) {
+      if (!url) return;
       try {
         const encodedURL = encodeURIComponent(url);
         iframe.src = serverProxy + encodedURL;
@@ -75,14 +79,11 @@
       }
     }
 
-    // Load the default value on page load
-    loadURL(input.value);
-
     button.addEventListener("click", () => {
       loadURL(input.value);
     });
 
-    // Handle clicked links inside iframe
+    // Intercept clicked links inside iframe
     iframe.addEventListener("load", () => {
       try {
         const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
@@ -95,8 +96,7 @@
           });
         });
       } catch (err) {
-        // Some sites block cross-origin access; ignore those errors
-        // We still allow users to type/paste URLs manually
+        // Ignore cross-origin access errors
       }
     });
   </script>
