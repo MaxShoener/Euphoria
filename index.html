@@ -21,7 +21,7 @@
 
   <script>
     // Updated WISP server URL
-    const PROXY = "https://wisp-server-uzh4.onrender.com/proxy?url=";
+    const PROXY = "https://wisp-server-wl5x.onrender.com/proxy?url=";
     const urlBox = document.getElementById("url");
     const frame = document.getElementById("frame");
 
@@ -32,10 +32,12 @@
       frame.src = PROXY + encodeURIComponent(url);
     }
 
+    // Press Enter to load
     urlBox.addEventListener("keypress", e => {
       if (e.key === "Enter") loadSite();
     });
 
+    // Intercept iframe navigation using a polling approach
     let lastUrl = "";
     setInterval(() => {
       try {
@@ -44,9 +46,12 @@
           lastUrl = currentUrl;
           urlBox.value = currentUrl;
         }
-      } catch (err) {}
+      } catch (err) {
+        // Cross-origin pages may block access, normal
+      }
     }, 500);
 
+    // Optional: reload page when a link is clicked (same-origin only)
     frame.addEventListener("load", () => {
       try {
         const doc = frame.contentDocument || frame.contentWindow.document;
@@ -59,7 +64,9 @@
             loadSite(newUrl);
           });
         });
-      } catch (err) {}
+      } catch (err) {
+        // Cross-origin pages block this, normal for many sites
+      }
     });
   </script>
 </body>
