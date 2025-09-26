@@ -3,48 +3,124 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Euphoria Proxy Interactive</title>
+<title>Euphoria Proxy</title>
 <style>
-  body { margin:0; font-family:sans-serif; display:flex; flex-direction:column; height:100vh; }
-  #url-bar { display:flex; padding:10px; gap:5px; background:#222; }
-  #url-bar input { flex:1; padding:5px; border:none; border-radius:3px; }
-  #url-bar button { padding:5px 10px; border:none; border-radius:3px; background:#4caf50; color:white; cursor:pointer; }
-  #browser-frame { flex:1; border:none; }
+  body {
+    margin: 0;
+    font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    background-color: #1e1e2f;
+    color: #fff;
+  }
+
+  header {
+    padding: 10px;
+    background-color: #2a2a3d;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  input[type="text"] {
+    flex: 1;
+    padding: 8px 12px;
+    font-size: 16px;
+    border-radius: 6px;
+    border: none;
+  }
+
+  button {
+    padding: 8px 16px;
+    font-size: 16px;
+    border: none;
+    border-radius: 6px;
+    background-color: #4c6ef5;
+    color: #fff;
+    cursor: pointer;
+  }
+
+  iframe {
+    flex: 1;
+    border: none;
+    width: 100%;
+    background-color: #fff;
+  }
+
+  .loading {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 18px;
+    background-color: rgba(0,0,0,0.7);
+    padding: 12px 20px;
+    border-radius: 8px;
+    display: none;
+  }
 </style>
 </head>
 <body>
-<div id="url-bar">
-  <input type="text" id="url-input" placeholder="Enter URL..." />
-  <button id="go-btn">Enter</button>
-</div>
-<iframe id="browser-frame"></iframe>
+
+<header>
+  <input type="text" id="urlInput" placeholder="Enter URL" />
+  <button id="goBtn">Go</button>
+</header>
+
+<div class="loading" id="loading">Loading...</div>
+
+<iframe id="proxyFrame" src=""></iframe>
 
 <script>
-const backend = "https://wisp-server-w7nx.onrender.com";
-let sessionId = null;
-const iframe = document.getElementById("browser-frame");
-const input = document.getElementById("url-input");
+const input = document.getElementById("urlInput");
+const button = document.getElementById("goBtn");
+const iframe = document.getElementById("proxyFrame");
+const loading = document.getElementById("loading");
 
-async function createSession() {
-  const res = await fetch(`${backend}/session`, { method: "POST" });
-  const data = await res.json();
-  sessionId = data.sessionId;
-  console.log("Session created:", sessionId);
+// Backend URL
+const BACKEND_URL = "https://wisp-server-w7nx.onrender.com/load";
+
+// Load URL function
+async function loadUrl(url) {
+  if (!url.startsWith("http")) {
+    url = "https://" + url;
+  }
+
+  loading.style.display = "block";
+  try {
+    const res = await fetch(BACKEND_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url })
+    });
+
+    const data = await res.json();
+    if (data.success && data.screenshot) {
+      iframe.src = "data:image/png;base64," + data.screenshot;
+    } else {
+      iframe.srcdoc = `<h2 style="color:red;">Failed to load URL</h2>`;
+    }
+  } catch (err) {
+    console.error("Error:", err);
+    iframe.srcdoc = `<h2 style="color:red;">Error loading page</h2>`;
+  }
+  loading.style.display = "none";
 }
 
-async function navigate(url) {
-  if (!sessionId) await createSession();
-  await fetch(`${backend}/session/${sessionId}/navigate`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url })
-  });
-  // fallback: display screenshot in iframe
-  iframe.src = `${backend}/session/${sessionId}/screenshot?rand=${Math.random()}`;
-}
+// Click Go button
+button.addEventListener("click", () => {
+  const url = input.value.trim();
+  if (url) loadUrl(url);
+});
 
-document.getElementById("go-btn").addEventListener("click", () => navigate(input.value));
-input.addEventListener("keyup", e => { if(e.key==="Enter") navigate(input.value); });
+// Press Enter key
+input.addEventListener("keyup", (e) => {
+  if (e.key === "Enter") {
+    button.click();
+  }
+});
 </script>
+
 </body>
 </html>
