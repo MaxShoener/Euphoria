@@ -2,13 +2,13 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>WISP Fetch Proxy</title>
+<title>WISP Playwright Proxy</title>
 <style>
   body { margin:0; font-family:sans-serif; display:flex; flex-direction:column; height:100vh; }
   header { background:#222; color:#fff; display:flex; align-items:center; padding:10px; gap:10px; }
   input { flex:1; padding:8px; font-size:14px; }
   button { padding:8px 12px; cursor:pointer; background:#4CAF50; border:none; color:#fff; }
-  #frame { flex:1; overflow:auto; }
+  iframe { flex:1; border:none; }
 </style>
 </head>
 <body>
@@ -17,10 +17,10 @@
   <button onclick="loadSite()">Go</button>
 </header>
 
-<div id="frame"></div>
+<iframe id="frame"></iframe>
 
 <script>
-const PROXY = "https://wisp-server-ufj9.onrender.com/proxy?url="; // your proxy URL
+const PROXY = "https://wisp-server-ufj9.onrender.com/proxy?url="; // update with your deployed URL
 const urlBox = document.getElementById("url");
 const frame = document.getElementById("frame");
 
@@ -28,11 +28,7 @@ function loadSite(url) {
   url = url || urlBox.value.trim();
   if (!/^https?:\/\//i.test(url)) url = "https://" + url;
   urlBox.value = url;
-
-  fetch(PROXY + encodeURIComponent(url))
-    .then(r => r.text())
-    .then(html => { frame.innerHTML = html })
-    .catch(err => { frame.innerHTML = `<p style="color:red">Error: ${err.message}</p>` });
+  frame.src = PROXY + encodeURIComponent(url);
 }
 
 urlBox.addEventListener("keypress", e => { if (e.key === "Enter") loadSite(); });
