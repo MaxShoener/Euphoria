@@ -1,31 +1,31 @@
-const path = require('path');
 const express = require('express');
-const fetch = require('node-fetch');
-const puppeteer = require('puppeteer');
+const fetch = require('node-fetch'); // fallback if Playwright isn't available
+const cors = require('cors');
 
 const app = express();
-const PORT = process.env.PORT || 10000;
+app.use(cors());
+app.use(express.json());
 
-// Serve static frontend files
-app.use(express.static(path.join(__dirname)));
+// Serve static files (optional if hosting index.html on the same repo)
+app.use(express.static('public'));
 
-// Proxy endpoint using Puppeteer
+// Simple fetch proxy
 app.get('/fetch', async (req, res) => {
-  const url = req.query.url;
-  if (!url) return res.status(400).send('No URL provided');
+  const { url } = req.query;
+  if (!url) return res.status(400).send('Missing URL parameter');
 
   try {
-    const browser = await puppeteer.launch({ headless: true });
-    const page = await browser.newPage();
-    await page.goto(url, { waitUntil: 'networkidle2' });
-    const content = await page.content();
-    await browser.close();
-    res.send(content);
+    const response = await fetch(url);
+    const html = await response.text();
+    res.send(html);
   } catch (err) {
-    res.status(500).send(err.toString());
+    console.error(err);
+    res.status(500).send('Failed to fetch URL');
   }
 });
 
+// Start server
+const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => {
-  console.log(`Euphoria proxy running on port ${PORT}`);
+  console.log(`Euphoria Proxy running on http://localhost:${PORT}`);
 });
