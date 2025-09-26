@@ -1,49 +1,75 @@
-const express = require("express");
-const { chromium } = require("playwright"); // Playwright for browser automation
-const PORT = process.env.PORT || 10000;
-
-const app = express();
-app.use(express.urlencoded({ extended: true }));
-
-// Helper: rewrite all <a> href links to go through the proxy
-function rewriteLinks(html, proxyBase) {
-  return html.replace(/href=["'](.*?)["']/gi, (match, href) => {
-    // Ignore empty, anchor, or javascript links
-    if (!href || href.startsWith("#") || href.startsWith("javascript:")) return match;
-
-    let fullUrl = href;
-    // Ensure the href is absolute
-    if (!/^https?:\/\//i.test(href)) {
-      fullUrl = proxyBase + encodeURIComponent(href);
-    } else {
-      fullUrl = proxyBase + encodeURIComponent(href);
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Euphoria Proxy</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #f4f4f4;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
     }
-    return `href="${fullUrl}"`;
-  });
-}
+    header {
+      background: #222;
+      color: #fff;
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    header input {
+      width: 300px;
+      padding: 6px 10px;
+      border-radius: 4px;
+      border: none;
+    }
+    header button {
+      padding: 6px 12px;
+      margin-left: 10px;
+      border: none;
+      background: #00aaff;
+      color: #fff;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    iframe {
+      flex: 1;
+      border: none;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>Euphoria Proxy</div>
+    <div>
+      <input type="text" id="urlInput" placeholder="Enter a URL" />
+      <button id="goButton">Go</button>
+    </div>
+  </header>
+  <iframe id="proxyFrame" src="/proxy?url=https://wisp-server-im20.onrender.com"></iframe>
 
-// Proxy route
-app.get("/proxy", async (req, res) => {
-  const target = req.query.url;
-  if (!target) return res.status(400).send("Missing URL parameter");
+  <script>
+    const input = document.getElementById('urlInput');
+    const button = document.getElementById('goButton');
+    const iframe = document.getElementById('proxyFrame');
 
-  let browser;
-  try {
-    browser = await chromium.launch({ args: ["--no-sandbox", "--disable-setuid-sandbox"] });
-    const page = await browser.newPage();
-    await page.goto(target, { waitUntil: "networkidle" });
+    button.addEventListener('click', () => {
+      const url = input.value.trim();
+      if (!url) return;
+      // Encode URL and update iframe src
+      iframe.src = '/proxy?url=' + encodeURIComponent(url);
+    });
 
-    let content = await page.content();
-
-    // Rewrite links to go through the proxy
-    content = rewriteLinks(content, "/proxy?url=");
-
-    res.send(content);
-  } catch (err) {
-    res.status(500).send(`Error loading ${target}: ${err.message}`);
-  } finally {
-    if (browser) await browser.close();
-  }
-});
-
-app.listen(PORT, () => console.log(`Euphoria proxy running on port ${PORT}`));
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        button.click();
+      }
+    });
+  </script>
+</body>
+</html>
