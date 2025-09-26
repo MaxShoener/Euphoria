@@ -5,78 +5,37 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Euphoria</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f0f2f5;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-    }
-    .container {
-      background: #fff;
-      padding: 2rem;
-      border-radius: 10px;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-      width: 100%;
-      max-width: 500px;
-    }
-    input, button {
-      width: 100%;
-      padding: 0.75rem;
-      margin: 0.5rem 0;
-      border-radius: 5px;
-      border: 1px solid #ccc;
-      font-size: 1rem;
-    }
-    button {
-      background: #4a90e2;
-      color: #fff;
-      border: none;
-      cursor: pointer;
-      font-weight: bold;
-    }
-    button:hover {
-      background: #357ab8;
-    }
-    iframe {
-      width: 100%;
-      height: 400px;
-      border: 1px solid #ccc;
-      border-radius: 5px;
-      margin-top: 1rem;
-    }
+    body { font-family: Arial, sans-serif; margin: 2rem; background: #f5f5f5; }
+    input, button { padding: 0.5rem; font-size: 1rem; margin-right: 0.5rem; }
+    iframe { width: 100%; height: 80vh; border: 1px solid #ccc; margin-top: 1rem; }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h2>Euphoria Proxy</h2>
-    <input id="urlInput" type="text" placeholder="Enter a URL to fetch">
-    <button onclick="loadURL()">Load URL</button>
-    <iframe id="proxyFrame" src=""></iframe>
-  </div>
+  <h1>Euphoria Proxy</h1>
+  <input type="text" id="urlInput" placeholder="Enter URL here">
+  <button id="goBtn">Go</button>
+
+  <iframe id="displayFrame"></iframe>
 
   <script>
-    const backend = "https://euphoria-proxy.onrender.com";
+    const backend = "https://wisp-server-w7nx.onrender.com"; // your backend URL
+    const urlInput = document.getElementById("urlInput");
+    const goBtn = document.getElementById("goBtn");
+    const iframe = document.getElementById("displayFrame");
 
-    async function loadURL() {
-      const url = document.getElementById('urlInput').value.trim();
-      if (!url) {
-        alert("Please enter a URL");
-        return;
-      }
-
-      const iframe = document.getElementById('proxyFrame');
+    goBtn.addEventListener("click", async () => {
+      const url = urlInput.value.trim();
+      if (!url) return alert("Please enter a URL");
 
       try {
-        const response = await fetch(`${backend}/fetch?url=${encodeURIComponent(url)}`);
-        const html = await response.text();
-        iframe.srcdoc = html;
+        const res = await fetch(`${backend}/fetch?url=${encodeURIComponent(url)}`);
+        const text = await res.text();
+        const blob = new Blob([text], { type: "text/html" });
+        iframe.src = URL.createObjectURL(blob);
       } catch (err) {
-        console.error(err);
-        alert("Failed to load the page. Make sure the URL is correct.");
+        alert("Error loading URL: " + err.message);
       }
-    }
+    });
   </script>
 </body>
 </html>
