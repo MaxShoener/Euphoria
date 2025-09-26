@@ -37,7 +37,7 @@
       if (e.key === "Enter") loadSite();
     });
 
-    // Intercept iframe navigation using a polling approach
+    // Poll iframe location (best effort, may fail for cross-origin)
     let lastUrl = "";
     setInterval(() => {
       try {
@@ -47,11 +47,11 @@
           urlBox.value = currentUrl;
         }
       } catch (err) {
-        // Cross-origin pages may block access, normal
+        // Cross-origin pages block access, normal behavior
       }
     }, 500);
 
-    // Optional: reload page when a link is clicked (same-origin only)
+    // Optional: intercept clicks on same-origin links
     frame.addEventListener("load", () => {
       try {
         const doc = frame.contentDocument || frame.contentWindow.document;
@@ -65,7 +65,7 @@
           });
         });
       } catch (err) {
-        // Cross-origin pages block this, normal for many sites
+        // Cross-origin pages block this, normal for most sites
       }
     });
   </script>
