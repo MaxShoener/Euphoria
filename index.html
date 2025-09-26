@@ -4,26 +4,70 @@
   <meta charset="UTF-8">
   <title>Proxy Browser</title>
   <style>
-    body { font-family: sans-serif; text-align: center; }
-    input { width: 400px; padding: 8px; }
-    button { padding: 8px; }
-    iframe { width: 100%; height: 90vh; border: none; margin-top: 10px; }
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    header {
+      background: #222;
+      color: white;
+      padding: 10px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    input {
+      flex: 1;
+      padding: 8px;
+      font-size: 14px;
+    }
+    button {
+      padding: 8px 12px;
+      cursor: pointer;
+      background: #4CAF50;
+      border: none;
+      color: white;
+      font-size: 14px;
+    }
+    iframe {
+      flex: 1;
+      border: none;
+      width: 100%;
+    }
   </style>
 </head>
 <body>
-  <h2>Proxy Browser</h2>
-  <input id="url" type="text" placeholder="Enter URL e.g. https://chess.com">
-  <button onclick="loadSite()">Go</button>
+  <header>
+    <input id="url" type="text" placeholder="Enter URL (e.g. https://example.com)">
+    <button onclick="loadSite()">Go</button>
+  </header>
 
   <iframe id="frame"></iframe>
 
   <script>
-    const PROXY = "https://wisp-server-mn4z.onrender.com/proxy?url=";
+    // Render WISP server endpoint
+    const PROXY = "https://wisp-server-1.onrender.com/proxy?url=";
 
     function loadSite() {
-      const url = document.getElementById("url").value;
+      let url = document.getElementById("url").value.trim();
+
+      // Ensure proper protocol
+      if (!/^https?:\/\//i.test(url)) {
+        url = "https://" + url;
+      }
+
+      // Load proxied site into iframe
       document.getElementById("frame").src = PROXY + encodeURIComponent(url);
     }
+
+    // Press Enter to go
+    document.getElementById("url").addEventListener("keypress", e => {
+      if (e.key === "Enter") loadSite();
+    });
   </script>
 </body>
 </html>
