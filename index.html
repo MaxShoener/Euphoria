@@ -1,71 +1,51 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Headless Proxy Browser</title>
-  <style>
-    body { margin:0; font-family:sans-serif; display:flex; flex-direction:column; height:100vh; }
-    header { background:#222; color:#fff; display:flex; align-items:center; padding:10px; gap:10px; }
-    input { flex:1; padding:8px; font-size:14px; }
-    button { padding:8px 12px; cursor:pointer; background:#4CAF50; border:none; color:#fff; }
-    iframe { flex:1; border:none; width:100%; }
-  </style>
+<meta charset="UTF-8">
+<title>WISP Hosted Proxy</title>
+<style>
+  body { margin:0; font-family:sans-serif; display:flex; flex-direction:column; height:100vh; }
+  header { background:#222; color:#fff; display:flex; align-items:center; padding:10px; gap:10px; }
+  input { flex:1; padding:8px; font-size:14px; }
+  button { padding:8px 12px; cursor:pointer; background:#4CAF50; border:none; color:#fff; }
+  iframe { flex:1; border:none; width:100%; }
+</style>
 </head>
 <body>
-  <header>
-    <input id="url" placeholder="Enter URL (e.g. https://chess.com)">
-    <button onclick="loadSite()">Go</button>
-  </header>
+<header>
+  <input id="url" placeholder="Enter URL (e.g. https://example.com)">
+  <button onclick="loadSite()">Go</button>
+</header>
 
-  <iframe id="frame"></iframe>
+<iframe id="frame"></iframe>
 
-  <script>
-    const PROXY = "https://wisp-server-ri6o.onrender.com/proxy?url=";
-    const urlBox = document.getElementById("url");
-    const frame = document.getElementById("frame");
+<script>
+const PROXY = "https://wisp-server-ri6o.onrender.com/proxy?url=";
+const urlBox = document.getElementById("url");
+const frame = document.getElementById("frame");
 
-    function loadSite(url) {
-      url = url || urlBox.value.trim();
-      if (!/^https?:\/\//i.test(url)) url = "https://" + url;
-      urlBox.value = url;
-      frame.src = PROXY + encodeURIComponent(url);
+function loadSite(url) {
+  url = url || urlBox.value.trim();
+  if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+  urlBox.value = url;
+  frame.src = PROXY + encodeURIComponent(url);
+}
+
+urlBox.addEventListener("keypress", e => {
+  if (e.key === "Enter") loadSite();
+});
+
+// Optional: update URL input when iframe changes (cross-origin restrictions apply)
+let lastUrl = "";
+setInterval(() => {
+  try {
+    const currentUrl = frame.contentWindow.location.href;
+    if (currentUrl && currentUrl !== "about:blank" && currentUrl !== lastUrl) {
+      lastUrl = currentUrl;
+      urlBox.value = currentUrl;
     }
-
-    urlBox.addEventListener("keypress", e => {
-      if (e.key === "Enter") loadSite();
-    });
-
-    // Poll iframe location to update URL input
-    let lastUrl = "";
-    setInterval(() => {
-      try {
-        const currentUrl = frame.contentWindow.location.href;
-        if (currentUrl && currentUrl !== "about:blank" && currentUrl !== lastUrl) {
-          lastUrl = currentUrl;
-          urlBox.value = currentUrl;
-        }
-      } catch (err) {
-        // Cross-origin pages block access, normal
-      }
-    }, 500);
-
-    // Optional: intercept same-origin link clicks
-    frame.addEventListener("load", () => {
-      try {
-        const doc = frame.contentDocument || frame.contentWindow.document;
-        const links = doc.querySelectorAll("a[href]");
-        links.forEach(link => {
-          link.addEventListener("click", e => {
-            e.preventDefault();
-            const href = link.getAttribute("href");
-            const newUrl = new URL(href, urlBox.value).href;
-            loadSite(newUrl);
-          });
-        });
-      } catch (err) {
-        // Cross-origin pages block this, normal
-      }
-    });
-  </script>
+  } catch (err) {}
+}, 500);
+</script>
 </body>
 </html>
