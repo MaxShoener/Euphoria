@@ -23,10 +23,34 @@
     const input = document.getElementById("urlInput");
     const frame = document.getElementById("proxyFrame");
 
+    // Load the first URL in iframe
     form.addEventListener("submit", e => {
       e.preventDefault();
-      const url = encodeURIComponent(input.value);
-      frame.src = `/proxy?url=${url}`;
+      loadURL(input.value);
+    });
+
+    // Function to load URL through proxy
+    function loadURL(url) {
+      const encoded = encodeURIComponent(url);
+      frame.src = `/proxy?url=${encoded}`;
+    }
+
+    // Intercept clicks inside the iframe and proxy them
+    frame.addEventListener("load", () => {
+      try {
+        const iframeDoc = frame.contentDocument || frame.contentWindow.document;
+        const links = iframeDoc.querySelectorAll("a");
+        links.forEach(link => {
+          link.addEventListener("click", e => {
+            e.preventDefault();
+            const href = link.href;
+            if (href) loadURL(href);
+          });
+        });
+      } catch (err) {
+        // Cross-origin pages may block access; that's expected
+        console.log("Link interception not available for cross-origin content");
+      }
     });
   </script>
 </body>
