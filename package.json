@@ -1,14 +1,15 @@
 {
-  "name": "euphoria-server",
+  "name": "euphoria-proxy",
   "version": "1.0.0",
-  "description": "Euphoria browser server",
+  "description": "Euphoria proxy server using Puppeteer",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
     "express": "^4.18.2",
-    "node-fetch": "^3.4.0"
+    "node-fetch": "^2.6.12",
+    "puppeteer": "^21.3.8"
   },
   "engines": {
     "node": ">=18"
