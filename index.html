@@ -6,68 +6,92 @@
   <style>
     body {
       font-family: Arial, sans-serif;
-      background: #1e1e1e;
-      color: #fff;
       margin: 0;
       padding: 0;
-    }
-    header {
-      background: #0f62fe;
-      padding: 1em;
-      text-align: center;
-      font-size: 1.5em;
-      font-weight: bold;
-    }
-    #proxy-form {
       display: flex;
-      justify-content: center;
-      margin: 2em;
+      flex-direction: column;
+      height: 100vh;
     }
-    input[type="text"] {
-      width: 60%;
-      padding: 0.5em;
-      border: none;
-      border-radius: 4px 0 0 4px;
-      outline: none;
+
+    header {
+      background-color: #2b2b2b;
+      color: white;
+      padding: 1rem;
+      text-align: center;
+      font-size: 1.5rem;
     }
-    button {
-      padding: 0.5em 1em;
-      border: none;
-      background: #0f62fe;
-      color: #fff;
+
+    #controls {
+      display: flex;
+      padding: 0.5rem;
+      background-color: #f2f2f2;
+    }
+
+    #url-input {
+      flex: 1;
+      padding: 0.5rem;
+      font-size: 1rem;
+    }
+
+    #go-btn {
+      padding: 0.5rem 1rem;
+      font-size: 1rem;
+      margin-left: 0.5rem;
       cursor: pointer;
-      border-radius: 0 4px 4px 0;
     }
+
     iframe {
-      display: block;
-      width: 90%;
-      height: 80vh;
-      margin: 1em auto;
-      border: 1px solid #444;
-      border-radius: 4px;
+      flex: 1;
+      width: 100%;
+      border: none;
     }
   </style>
 </head>
 <body>
-  <header>Euphoria Proxy</header>
-
-  <form id="proxy-form">
-    <input type="text" id="url-input" placeholder="Enter URL here..." />
-    <button type="submit">Go</button>
-  </form>
-
-  <iframe id="proxy-frame" src=""></iframe>
+  <header>Euphoria</header>
+  <div id="controls">
+    <input type="text" id="url-input" placeholder="Enter a URL">
+    <button id="go-btn">Go</button>
+  </div>
+  <iframe id="proxy-frame"></iframe>
 
   <script>
-    const form = document.getElementById("proxy-form");
-    const input = document.getElementById("url-input");
-    const iframe = document.getElementById("proxy-frame");
+    const input = document.getElementById('url-input');
+    const button = document.getElementById('go-btn');
+    const iframe = document.getElementById('proxy-frame');
+    const proxyServer = 'https://wisp-server-im20.onrender.com/proxy?url=';
 
-    form.addEventListener("submit", (e) => {
-      e.preventDefault();
-      const url = encodeURIComponent(input.value.trim());
+    // Navigate iframe through proxy
+    function navigate() {
+      const url = input.value.trim();
       if (!url) return;
-      iframe.src = `/proxy?url=${url}`;
+
+      // Add https:// if missing
+      const fullUrl = url.startsWith('http://') || url.startsWith('https://') ? url : 'https://' + url;
+      iframe.src = proxyServer + encodeURIComponent(fullUrl);
+    }
+
+    button.addEventListener('click', navigate);
+
+    input.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') navigate();
+    });
+
+    // Allow links inside iframe to load via proxy
+    iframe.addEventListener('load', () => {
+      try {
+        const doc = iframe.contentDocument || iframe.contentWindow.document;
+        const links = doc.querySelectorAll('a');
+        links.forEach(link => {
+          link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const href = link.href;
+            if (href) iframe.src = proxyServer + encodeURIComponent(href);
+          });
+        });
+      } catch (err) {
+        // Cross-origin pages may block this, ignore safely
+      }
     });
   </script>
 </body>
