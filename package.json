@@ -1,20 +1,19 @@
 {
   "name": "euphoria-proxy",
   "version": "1.0.0",
-  "description": "Euphoria Proxy Server using Playwright",
+  "description": "Headless proxy server using Playwright",
   "main": "server.js",
+  "type": "commonjs",
   "scripts": {
     "start": "node server.js",
     "postinstall": "npx playwright install chromium"
   },
-  "dependencies": {
-    "express": "^4.18.2",
-    "playwright": "^1.43.0",
-    "node-fetch": "^3.3.2"
-  },
   "engines": {
     "node": ">=18"
   },
-  "author": "Max Shoener",
-  "license": "MIT"
+  "dependencies": {
+    "express": "^4.18.2",
+    "playwright-core": "^1.44.0",
+    "node-fetch": "^3.3.2"
+  }
 }
