@@ -19,11 +19,11 @@
 
 <script>
 async function loadURL() {
-  const url = document.getElementById('urlInput').value;
+  const url = document.getElementById('urlInput').value.trim();
   if (!url) return alert('Please enter a URL');
 
   try {
-    const response = await fetch('/fetch', {
+    const response = await fetch('https://wisp-server-z832.onrender.com/fetch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ url })
