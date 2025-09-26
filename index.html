@@ -1,37 +1,43 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>WISP Playwright Proxy</title>
-<style>
-  body { margin:0; font-family:sans-serif; display:flex; flex-direction:column; height:100vh; }
-  header { background:#222; color:#fff; display:flex; align-items:center; padding:10px; gap:10px; }
-  input { flex:1; padding:8px; font-size:14px; }
-  button { padding:8px 12px; cursor:pointer; background:#4CAF50; border:none; color:#fff; }
-  iframe { flex:1; border:none; }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wisp Proxy UI</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 2rem; }
+    input, button { padding: 0.5rem; margin-right: 0.5rem; width: 300px; }
+    iframe { width: 100%; height: 80vh; border: 1px solid #ccc; margin-top: 1rem; }
+  </style>
 </head>
 <body>
-<header>
-  <input id="url" placeholder="Enter URL (e.g. https://example.com)">
-  <button onclick="loadSite()">Go</button>
-</header>
+  <h1>Wisp Playwright Proxy</h1>
+  <div>
+    <input type="text" id="urlInput" placeholder="Enter a URL" />
+    <button id="goBtn">Go</button>
+  </div>
+  <iframe id="proxyFrame"></iframe>
 
-<iframe id="frame"></iframe>
+  <script>
+    const goBtn = document.getElementById("goBtn");
+    const urlInput = document.getElementById("urlInput");
+    const proxyFrame = document.getElementById("proxyFrame");
 
-<script>
-const PROXY = "https://wisp-server-ufj9.onrender.com/proxy?url="; // update with your deployed server
-const urlBox = document.getElementById("url");
-const frame = document.getElementById("frame");
+    const WISP_PROXY = "https://wisp-server-ufj9.onrender.com/proxy?url=";
 
-function loadSite(url) {
-  url = url || urlBox.value.trim();
-  if (!/^https?:\/\//i.test(url)) url = "https://" + url;
-  urlBox.value = url;
-  frame.src = PROXY + encodeURIComponent(url);
-}
+    function loadUrl() {
+      const url = urlInput.value.trim();
+      if (!url) return alert("Please enter a URL");
 
-urlBox.addEventListener("keypress", e => { if (e.key === "Enter") loadSite(); });
-</script>
+      // Encode the URL to pass to the proxy
+      const proxiedUrl = WISP_PROXY + encodeURIComponent(url);
+      proxyFrame.src = proxiedUrl;
+    }
+
+    goBtn.addEventListener("click", loadUrl);
+    urlInput.addEventListener("keydown", e => {
+      if (e.key === "Enter") loadUrl();
+    });
+  </script>
 </body>
 </html>
