@@ -1,109 +1,50 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Euphoria</title>
-  <style>
-    body {
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background: #121212;
-      color: #ffffff;
-      margin: 0;
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-    }
-
-    header {
-      background: #1f1f2e;
-      padding: 1rem;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      gap: 0.5rem;
-    }
-
-    input[type="text"] {
-      flex: 1;
-      min-width: 200px;
-      padding: 0.5rem 1rem;
-      border-radius: 8px;
-      border: none;
-      outline: none;
-      font-size: 1rem;
-    }
-
-    button {
-      padding: 0.5rem 1rem;
-      border: none;
-      border-radius: 8px;
-      background: #ff4081;
-      color: white;
-      font-size: 1rem;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-
-    button:hover {
-      background: #e73370;
-    }
-
-    iframe {
-      flex: 1;
-      width: 100%;
-      border: none;
-    }
-
-    .footer {
-      text-align: center;
-      padding: 0.5rem;
-      background: #1f1f2e;
-      font-size: 0.85rem;
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Euphoria Proxy Interactive</title>
+<style>
+  body { margin:0; font-family:sans-serif; display:flex; flex-direction:column; height:100vh; }
+  #url-bar { display:flex; padding:10px; gap:5px; background:#222; }
+  #url-bar input { flex:1; padding:5px; border:none; border-radius:3px; }
+  #url-bar button { padding:5px 10px; border:none; border-radius:3px; background:#4caf50; color:white; cursor:pointer; }
+  #browser-frame { flex:1; border:none; }
+</style>
 </head>
 <body>
-  <header>
-    <input id="urlInput" type="text" placeholder="Enter a URL to proxy">
-    <button id="goBtn">Go</button>
-  </header>
+<div id="url-bar">
+  <input type="text" id="url-input" placeholder="Enter URL..." />
+  <button id="go-btn">Enter</button>
+</div>
+<iframe id="browser-frame"></iframe>
 
-  <iframe id="proxyFrame" sandbox="allow-same-origin allow-scripts allow-forms allow-popups"></iframe>
+<script>
+const backend = "https://wisp-server-w7nx.onrender.com";
+let sessionId = null;
+const iframe = document.getElementById("browser-frame");
+const input = document.getElementById("url-input");
 
-  <div class="footer">
-    Powered by Euphoria Proxy
-  </div>
+async function createSession() {
+  const res = await fetch(`${backend}/session`, { method: "POST" });
+  const data = await res.json();
+  sessionId = data.sessionId;
+  console.log("Session created:", sessionId);
+}
 
-  <script>
-    const urlInput = document.getElementById('urlInput');
-    const goBtn = document.getElementById('goBtn');
-    const proxyFrame = document.getElementById('proxyFrame');
+async function navigate(url) {
+  if (!sessionId) await createSession();
+  await fetch(`${backend}/session/${sessionId}/navigate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url })
+  });
+  // fallback: display screenshot in iframe
+  iframe.src = `${backend}/session/${sessionId}/screenshot?rand=${Math.random()}`;
+}
 
-    const backendUrl = "https://wisp-server-w7nx.onrender.com";
-
-    function loadUrl() {
-      let url = urlInput.value.trim();
-      if (!url) return;
-
-      // Auto-prefix https:// if missing
-      if (!/^https?:\/\//i.test(url)) {
-        url = 'https://' + url;
-      }
-
-      const encodedUrl = encodeURIComponent(url);
-      proxyFrame.src = `${backendUrl}/proxy?url=${encodedUrl}`;
-    }
-
-    goBtn.addEventListener('click', loadUrl);
-
-    urlInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') loadUrl();
-    });
-
-    // Optional: Load a default URL
-    urlInput.value = "https://example.com";
-    loadUrl();
-  </script>
+document.getElementById("go-btn").addEventListener("click", () => navigate(input.value));
+input.addEventListener("keyup", e => { if(e.key==="Enter") navigate(input.value); });
+</script>
 </body>
 </html>
