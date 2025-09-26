@@ -20,16 +20,38 @@
     const go = document.getElementById("go");
     const frame = document.getElementById("frame");
 
-    const PROXY = "https://wisp-server-ufj9.onrender.com/proxy?url=";
+    const PROXY = "https://wisp-server-im20.onrender.com/proxy?url=";
+
+    function loadURL(url) {
+      frame.src = PROXY + encodeURIComponent(url);
+    }
 
     go.addEventListener("click", () => {
       const url = input.value.trim();
       if (!url) return alert("Please enter a URL");
-      frame.src = PROXY + encodeURIComponent(url);
+      loadURL(url);
     });
 
     input.addEventListener("keypress", (e) => {
       if (e.key === "Enter") go.click();
+    });
+
+    // Intercept clicks inside the iframe
+    frame.addEventListener("load", () => {
+      try {
+        const iframeDoc = frame.contentDocument || frame.contentWindow.document;
+        const links = iframeDoc.querySelectorAll("a");
+        links.forEach(link => {
+          link.addEventListener("click", (e) => {
+            e.preventDefault();
+            const href = link.href;
+            if (href) loadURL(href);
+          });
+        });
+      } catch (err) {
+        // Cross-origin pages may prevent direct access; ignore errors
+        console.warn("Cannot intercept links in cross-origin iframe:", err.message);
+      }
     });
   </script>
 </body>
