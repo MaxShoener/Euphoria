@@ -13,14 +13,14 @@
 </head>
 <body>
 <header>
-  <input id="url" placeholder="Enter URL (e.g. https://example.com)">
+  <input id="url" placeholder="Enter URL (e.g. https://chess.com)">
   <button onclick="loadSite()">Go</button>
 </header>
 
 <iframe id="frame"></iframe>
 
 <script>
-const PROXY = "https://wisp-server-ri6o.onrender.com/proxy?url=";
+const PROXY = "https://wisp-server-ri6o.onrender.com/proxy?url="; // your deployed server
 const urlBox = document.getElementById("url");
 const frame = document.getElementById("frame");
 
@@ -34,18 +34,6 @@ function loadSite(url) {
 urlBox.addEventListener("keypress", e => {
   if (e.key === "Enter") loadSite();
 });
-
-// Optional: update URL input when iframe changes (cross-origin restrictions apply)
-let lastUrl = "";
-setInterval(() => {
-  try {
-    const currentUrl = frame.contentWindow.location.href;
-    if (currentUrl && currentUrl !== "about:blank" && currentUrl !== lastUrl) {
-      lastUrl = currentUrl;
-      urlBox.value = currentUrl;
-    }
-  } catch (err) {}
-}, 500);
 </script>
 </body>
 </html>
