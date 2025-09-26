@@ -49,24 +49,43 @@
   <iframe id="frame"></iframe>
 
   <script>
-    // Render WISP server endpoint
     const PROXY = "https://wisp-server-1.onrender.com/proxy?url=";
+    const urlBox = document.getElementById("url");
+    const frame = document.getElementById("frame");
 
-    function loadSite() {
-      let url = document.getElementById("url").value.trim();
+    function loadSite(url) {
+      url = url || urlBox.value.trim();
 
-      // Ensure proper protocol
       if (!/^https?:\/\//i.test(url)) {
         url = "https://" + url;
       }
 
-      // Load proxied site into iframe
-      document.getElementById("frame").src = PROXY + encodeURIComponent(url);
+      frame.src = PROXY + encodeURIComponent(url);
+      urlBox.value = url;
     }
 
-    // Press Enter to go
-    document.getElementById("url").addEventListener("keypress", e => {
+    // Press Enter to load
+    urlBox.addEventListener("keypress", e => {
       if (e.key === "Enter") loadSite();
+    });
+
+    // Intercept iframe links to update input box
+    frame.addEventListener("load", () => {
+      try {
+        const doc = frame.contentDocument || frame.contentWindow.document;
+        const links = doc.querySelectorAll("a[href]");
+        links.forEach(link => {
+          link.addEventListener("click", e => {
+            e.preventDefault();
+            const href = link.getAttribute("href");
+            const newUrl = new URL(href, urlBox.value).href;
+            loadSite(newUrl);
+          });
+        });
+      } catch (err) {
+        // Some cross-origin pages may block JS access; that's normal
+        console.warn("Cannot access iframe content:", err);
+      }
     });
   </script>
 </body>
