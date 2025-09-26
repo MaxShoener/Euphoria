@@ -7,73 +7,128 @@
   <style>
     body {
       font-family: Arial, sans-serif;
+      background: #1e1e2f;
+      color: #f0f0f0;
       margin: 0;
       padding: 0;
-      background: #f5f5f5;
     }
+
     header {
-      background: #4a00e0;
-      color: white;
-      padding: 1em;
+      background-color: #282a3a;
+      padding: 1rem;
       text-align: center;
+      font-size: 1.5rem;
+      font-weight: bold;
+      color: #00d4ff;
     }
+
     main {
-      padding: 2em;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem;
     }
-    input[type="text"] {
+
+    form {
+      display: flex;
       width: 80%;
-      padding: 0.5em;
-      margin-right: 1em;
-      font-size: 1em;
+      max-width: 600px;
+      margin-bottom: 2rem;
     }
-    button {
-      padding: 0.5em 1em;
-      font-size: 1em;
-      cursor: pointer;
-      background: #4a00e0;
-      color: white;
+
+    input[type="text"] {
+      flex: 1;
+      padding: 0.5rem;
+      border-radius: 4px 0 0 4px;
       border: none;
-      border-radius: 4px;
+      font-size: 1rem;
     }
+
+    button {
+      padding: 0.5rem 1rem;
+      border: none;
+      background-color: #00d4ff;
+      color: #1e1e2f;
+      font-weight: bold;
+      cursor: pointer;
+      border-radius: 0 4px 4px 0;
+      transition: background-color 0.2s;
+    }
+
+    button:hover {
+      background-color: #00b8cc;
+    }
+
     iframe {
-      width: 100%;
+      width: 90%;
       height: 80vh;
-      margin-top: 1em;
-      border: 1px solid #ccc;
-      border-radius: 4px;
+      border: none;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0,0,0,0.5);
+    }
+
+    footer {
+      text-align: center;
+      padding: 1rem;
+      font-size: 0.9rem;
+      background-color: #282a3a;
+      color: #888;
     }
   </style>
 </head>
 <body>
-  <header>
-    <h1>Euphoria Proxy</h1>
-  </header>
+
+  <header>Euphoria Proxy</header>
+
   <main>
-    <input type="text" id="urlInput" placeholder="Enter a URL to visit" />
-    <button id="goBtn">Go</button>
-    <iframe id="proxyFrame" src=""></iframe>
+    <form id="proxy-form">
+      <input type="text" id="url-input" placeholder="Enter a URL to visit" required>
+      <button type="submit">Go</button>
+    </form>
+
+    <iframe id="proxy-frame" src=""></iframe>
   </main>
 
+  <footer>
+    Euphoria Proxy &copy; 2025
+  </footer>
+
   <script>
-    const goBtn = document.getElementById("goBtn");
-    const urlInput = document.getElementById("urlInput");
-    const proxyFrame = document.getElementById("proxyFrame");
+    const form = document.getElementById('proxy-form');
+    const input = document.getElementById('url-input');
+    const iframe = document.getElementById('proxy-frame');
 
-    // Your deployed proxy URL
-    const proxyBase = "https://wisp-server-im20.onrender.com/proxy?url=";
+    const PROXY_BASE = "https://wisp-server-im20.onrender.com/proxy?url=";
 
-    goBtn.addEventListener("click", () => {
-      const url = urlInput.value.trim();
-      if (!url) return alert("Please enter a URL");
-      // Ensure protocol is included
-      const fullUrl = url.startsWith("http://") || url.startsWith("https://") ? url : "https://" + url;
-      proxyFrame.src = proxyBase + encodeURIComponent(fullUrl);
+    form.addEventListener('submit', e => {
+      e.preventDefault();
+      let url = input.value.trim();
+
+      // Ensure the URL starts with http or https
+      if (!/^https?:\/\//i.test(url)) {
+        url = 'https://' + url;
+      }
+
+      iframe.src = PROXY_BASE + encodeURIComponent(url);
     });
 
-    // Optional: make pressing Enter key click the Go button
-    urlInput.addEventListener("keypress", (e) => {
-      if (e.key === "Enter") goBtn.click();
+    // Optional: open clicked links inside the iframe
+    iframe.addEventListener('load', () => {
+      const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+      const links = iframeDoc.querySelectorAll('a');
+
+      links.forEach(link => {
+        link.addEventListener('click', event => {
+          event.preventDefault();
+          let href = link.getAttribute('href');
+          if (!/^https?:\/\//i.test(href)) {
+            href = 'https://' + href;
+          }
+          iframe.src = PROXY_BASE + encodeURIComponent(href);
+        });
+      });
     });
   </script>
+
 </body>
 </html>
