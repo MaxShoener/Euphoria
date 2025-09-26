@@ -2,80 +2,81 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Wisp Proxy</title>
+  <title>Wisp Proxy (Playwright)</title>
   <style>
-    body, html {
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f4f4;
       margin: 0;
       padding: 0;
-      height: 100%;
-      width: 100%;
-      overflow: hidden;
-      font-family: sans-serif;
-    }
-    #controls {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 40px;
-      background: #222;
-      color: #fff;
       display: flex;
+      flex-direction: column;
       align-items: center;
-      padding: 0 10px;
-      z-index: 1000;
     }
-    #url {
-      flex: 1;
-      margin-right: 10px;
-      padding: 5px;
-      font-size: 14px;
+    header {
+      background: #333;
+      color: #fff;
+      padding: 10px;
+      width: 100%;
+      text-align: center;
     }
-    #go {
-      padding: 5px 10px;
-      font-size: 14px;
-      cursor: pointer;
+    form {
+      margin: 20px;
+    }
+    input[type="text"] {
+      width: 400px;
+      padding: 10px;
+    }
+    button {
+      padding: 10px 15px;
+      margin-left: 5px;
     }
     iframe {
-      position: absolute;
-      top: 40px;
-      left: 0;
-      width: 100%;
-      height: calc(100% - 40px);
+      width: 95%;
+      height: 85vh;
       border: none;
+      background: white;
     }
   </style>
 </head>
 <body>
-  <div id="controls">
-    <input id="url" type="text" placeholder="Enter URL" value="https://example.com">
-    <button id="go">Go</button>
-  </div>
-  <iframe id="iframe"></iframe>
+  <header>
+    <h1>🌐 Wisp Proxy (Playwright)</h1>
+  </header>
+
+  <form id="proxyForm">
+    <input type="text" id="urlInput" placeholder="Enter URL (e.g. https://example.com)" required>
+    <button type="submit">Go</button>
+  </form>
+
+  <iframe id="proxyFrame"></iframe>
 
   <script>
-    const server = "https://wisp-server-im20.onrender.com/proxy?url=";
-    const iframe = document.getElementById("iframe");
-    const urlInput = document.getElementById("url");
-    const goButton = document.getElementById("go");
+    const form = document.getElementById("proxyForm");
+    const input = document.getElementById("urlInput");
+    const frame = document.getElementById("proxyFrame");
 
-    async function loadURL() {
-      let url = urlInput.value.trim();
-      if (!url.startsWith("http://") && !url.startsWith("https://")) {
+    const proxyBase = "https://wisp-server-im20.onrender.com/proxy?url=";
+
+    function loadUrl(url) {
+      if (!/^https?:\/\//i.test(url)) {
         url = "https://" + url;
       }
-
-      // Update iframe to point to your proxy server
-      iframe.src = server + encodeURIComponent(url);
+      frame.src = proxyBase + encodeURIComponent(url);
+      input.value = url;
     }
 
-    goButton.addEventListener("click", loadURL);
-    urlInput.addEventListener("keyup", (e) => {
-      if (e.key === "Enter") loadURL();
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      loadUrl(input.value.trim());
     });
 
-    // Load initial URL
-    loadURL();
+    // Listen for navigation messages from the iframe
+    window.addEventListener("message", (event) => {
+      if (event.data.type === "navigate") {
+        loadUrl(event.data.url);
+      }
+    });
   </script>
 </body>
 </html>
