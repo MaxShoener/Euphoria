@@ -20,7 +20,6 @@
   <iframe id="frame"></iframe>
 
   <script>
-    // Updated WISP server URL
     const PROXY = "https://wisp-server-ri6o.onrender.com/proxy?url=";
     const urlBox = document.getElementById("url");
     const frame = document.getElementById("frame");
@@ -32,12 +31,11 @@
       frame.src = PROXY + encodeURIComponent(url);
     }
 
-    // Press Enter to load
     urlBox.addEventListener("keypress", e => {
       if (e.key === "Enter") loadSite();
     });
 
-    // Poll iframe location (best effort, may fail for cross-origin)
+    // Poll iframe location to update URL input
     let lastUrl = "";
     setInterval(() => {
       try {
@@ -47,11 +45,11 @@
           urlBox.value = currentUrl;
         }
       } catch (err) {
-        // Cross-origin pages block access, normal behavior
+        // Cross-origin pages block access, normal
       }
     }, 500);
 
-    // Optional: intercept clicks on same-origin links
+    // Optional: intercept same-origin link clicks
     frame.addEventListener("load", () => {
       try {
         const doc = frame.contentDocument || frame.contentWindow.document;
@@ -65,7 +63,7 @@
           });
         });
       } catch (err) {
-        // Cross-origin pages block this, normal for most sites
+        // Cross-origin pages block this, normal
       }
     });
   </script>
