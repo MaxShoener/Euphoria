@@ -5,92 +5,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Euphoria</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #1e1e1e;
-      color: #fff;
-      margin: 0;
-      padding: 0;
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-    }
-    header {
-      background: #292929;
-      padding: 1rem;
-      text-align: center;
-      font-size: 1.5rem;
-      font-weight: bold;
-    }
-    main {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 2rem;
-    }
-    input[type="text"] {
-      width: 80%;
-      padding: 0.5rem;
-      font-size: 1rem;
-      border-radius: 5px;
-      border: none;
-      margin-bottom: 1rem;
-    }
-    button {
-      padding: 0.5rem 1rem;
-      font-size: 1rem;
-      border-radius: 5px;
-      border: none;
-      background: #4caf50;
-      color: #fff;
-      cursor: pointer;
-      transition: background 0.3s;
-    }
-    button:hover {
-      background: #45a049;
-    }
-    iframe {
-      margin-top: 1rem;
-      width: 90%;
-      height: 70%;
-      border: 2px solid #444;
-      border-radius: 5px;
-    }
+    body { font-family: Arial, sans-serif; text-align: center; padding: 50px; }
+    input { width: 300px; padding: 10px; font-size: 16px; }
+    button { padding: 10px 20px; font-size: 16px; margin-left: 10px; }
+    iframe { margin-top: 20px; width: 80%; height: 600px; border: 1px solid #ccc; }
   </style>
 </head>
 <body>
-  <header>Euphoria</header>
-  <main>
-    <input type="text" id="urlInput" placeholder="Enter URL to proxy" />
-    <button id="loadBtn">Load</button>
-    <iframe id="proxyFrame" src=""></iframe>
-  </main>
+  <h1>Euphoria Proxy</h1>
+  <p>Enter a URL to view via the proxy:</p>
+  <input id="urlInput" type="text" placeholder="https://example.com">
+  <button onclick="loadUrl()">Go</button>
+
+  <iframe id="preview" src=""></iframe>
 
   <script>
-    const loadBtn = document.getElementById("loadBtn");
-    const urlInput = document.getElementById("urlInput");
-    const proxyFrame = document.getElementById("proxyFrame");
-
-    loadBtn.addEventListener("click", () => {
-      let url = urlInput.value.trim();
-      if (!url) return alert("Please enter a URL");
-
-      // Add http:// if missing
-      if (!/^https?:\/\//i.test(url)) {
-        url = "http://" + url;
-      }
-
-      // Use your Puppeteer proxy endpoint
-      const proxyUrl = `https://wisp-server-im20.onrender.com/proxy?url=${encodeURIComponent(url)}`;
-      proxyFrame.src = proxyUrl;
-    });
-
-    // Optional: Press Enter to load URL
-    urlInput.addEventListener("keyup", (e) => {
-      if (e.key === "Enter") loadBtn.click();
-    });
+    function loadUrl() {
+      const url = document.getElementById('urlInput').value.trim();
+      if (!url) return alert('Please enter a URL');
+      document.getElementById('preview').src = `/proxy?url=${encodeURIComponent(url)}`;
+    }
   </script>
 </body>
 </html>
