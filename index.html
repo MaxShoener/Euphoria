@@ -1,158 +1,37 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8">
   <title>Euphoria</title>
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #111;
-      color: #eee;
-      margin: 0;
-      text-align: center;
-    }
-    header {
-      background: #222;
-      padding: 15px;
-    }
-    header h1 {
-      margin: 0;
-      font-size: 24px;
-      color: #00e0ff;
-    }
-    nav {
-      margin: 15px 0;
-    }
-    nav button {
-      margin: 0 10px;
-      padding: 8px 16px;
-      background: #00e0ff;
-      border: none;
-      border-radius: 4px;
-      color: #111;
-      font-weight: bold;
-      cursor: pointer;
-    }
-    nav button:hover {
-      background: #00bcd4;
-    }
-    .search-bar {
-      margin: 20px;
-    }
-    input[type="text"] {
-      width: 300px;
-      padding: 8px;
-      border-radius: 4px;
-      border: none;
-    }
-    button.go {
-      padding: 8px 16px;
-      margin-left: 8px;
-      border: none;
-      border-radius: 4px;
-      background: #00e0ff;
-      color: #111;
-      font-weight: bold;
-      cursor: pointer;
-    }
-    .spinner {
-      border: 6px solid #333;
-      border-top: 6px solid #00e0ff;
-      border-radius: 50%;
-      width: 40px;
-      height: 40px;
-      animation: spin 1s linear infinite;
-      margin: 30px auto;
-    }
-    @keyframes spin {
-      100% { transform: rotate(360deg); }
-    }
-    .message {
-      margin-top: 10px;
-      font-size: 16px;
-    }
+    body { font-family: sans-serif; margin: 0; padding: 0; text-align: center; }
+    #controls { padding: 10px; background: #222; color: #fff; }
+    input { width: 50%; padding: 8px; }
+    button { padding: 8px; margin-left: 5px; }
+    #browser { max-width: 100%; border: none; margin-top: 10px; }
   </style>
 </head>
 <body>
-  <header>
-    <h1>Euphoria</h1>
-  </header>
-
-  <nav>
-    <button onclick="navigate('home')">Home</button>
-    <button onclick="navigate('browse')">Browse</button>
-    <button onclick="navigate('login')">Login</button>
-    <button onclick="navigate('remote')">Remote Play</button>
-  </nav>
-
-  <div class="search-bar">
-    <input type="text" id="searchInput" placeholder="Enter URL or search..." />
-    <button class="go" onclick="doSearch()">Go</button>
+  <div id="controls">
+    <input type="text" id="query" placeholder="Enter URL or search...">
+    <button onclick="go()">Go</button>
   </div>
-
-  <div id="output"></div>
+  <img id="browser" src="" alt="Browser output">
 
   <script>
-    const backend = "https://wisp-server-w7nx.onrender.com";
+    const backend = "https://wisp-server-w7nx.onrender.com"; // 🔗 Your backend URL
 
-    async function doSearch() {
-      const query = document.getElementById("searchInput").value.trim();
-      if (!query) return;
+    async function go() {
+      const q = document.getElementById("query").value;
+      if (!q) return;
 
-      const url = backend + "/screenshot"; // example endpoint
-      showLoading();
-
-      try {
-        const res = await fetch(url);
-        if (!res.ok) throw new Error("Backend error");
-        const contentType = res.headers.get("content-type");
-
-        if (contentType && contentType.includes("image/png")) {
-          const blob = await res.blob();
-          const img = document.createElement("img");
-          img.src = URL.createObjectURL(blob);
-          img.style.maxWidth = "80%";
-          clearOutput();
-          document.getElementById("output").appendChild(img);
-        } else {
-          const text = await res.text();
-          if (text.includes("Browser not ready")) {
-            showLoading("Backend is waking up... retrying in 5s");
-            setTimeout(doSearch, 5000);
-          } else {
-            clearOutput();
-            document.getElementById("output").innerText = text;
-          }
-        }
-      } catch (err) {
-        clearOutput();
-        document.getElementById("output").innerText = "❌ Failed: " + err.message;
-      }
+      const img = document.getElementById("browser");
+      img.src = backend + "/screenshot?q=" + encodeURIComponent(q) + "&t=" + Date.now();
     }
 
-    function showLoading(msg = "Loading...") {
-      clearOutput();
-      const spinner = document.createElement("div");
-      spinner.className = "spinner";
-      const message = document.createElement("div");
-      message.className = "message";
-      message.innerText = msg;
-      document.getElementById("output").appendChild(spinner);
-      document.getElementById("output").appendChild(message);
-    }
-
-    function clearOutput() {
-      document.getElementById("output").innerHTML = "";
-    }
-
-    function navigate(section) {
-      clearOutput();
-      document.getElementById("output").innerText = "📂 " + section + " section (coming soon)";
-    }
-
-    // Support Enter key
-    document.getElementById("searchInput").addEventListener("keydown", e => {
-      if (e.key === "Enter") doSearch();
+    // Enter key support
+    document.getElementById("query").addEventListener("keypress", e => {
+      if (e.key === "Enter") go();
     });
   </script>
 </body>
