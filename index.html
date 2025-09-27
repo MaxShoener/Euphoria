@@ -1,51 +1,70 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Euphoria</title>
-  <style>
-    body { margin:0; font-family: sans-serif; background:#f0f0f0; }
-    header { background:#6200ee; color:white; padding:10px; text-align:center; font-size:24px; }
-    #controls { display:flex; padding:10px; gap:5px; background:white; }
-    #controls input { flex:1; padding:5px; font-size:16px; }
-    #controls button { padding:5px 10px; font-size:16px; }
-    #nav { display:flex; padding:5px; gap:5px; background:#eee; }
-    iframe { width:100%; height:calc(100vh - 100px); border:none; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Euphoria</title>
+<style>
+  body { font-family: Arial, sans-serif; margin: 0; display: flex; flex-direction: column; height: 100vh; }
+  #nav { display: flex; padding: 10px; background: #282c34; color: white; align-items: center; }
+  #nav input[type="text"] { flex: 1; padding: 5px; border-radius: 4px; border: none; margin-right: 5px; }
+  #nav button { padding: 5px 10px; margin-left: 2px; border: none; border-radius: 4px; cursor: pointer; }
+  #iframe-container { flex: 1; }
+  iframe { width: 100%; height: 100%; border: none; }
+</style>
 </head>
 <body>
-  <header>Euphoria</header>
-  <div id="controls">
-    <input id="urlInput" type="text" placeholder="Enter URL or search term">
-    <button id="goBtn">Go</button>
-  </div>
-  <div id="nav">
-    <button id="backBtn">Back</button>
-    <button id="forwardBtn">Forward</button>
-    <button id="reloadBtn">Reload</button>
-  </div>
-  <iframe id="browserFrame" src=""></iframe>
 
-  <script>
-    const input = document.getElementById('urlInput');
-    const goBtn = document.getElementById('goBtn');
-    const iframe = document.getElementById('browserFrame');
+<div id="nav">
+  <button onclick="goBack()">◀</button>
+  <button onclick="goForward()">▶</button>
+  <input type="text" id="url" placeholder="Enter URL or search term" onkeydown="handleKey(event)">
+  <button onclick="go()">Go</button>
+</div>
 
-    function navigate(url) {
-      if (!url.includes('://')) {
-        // Treat as search
-        url = 'https://www.google.com/search?q=' + encodeURIComponent(url);
-      }
-      iframe.src = '/proxy?url=' + encodeURIComponent(url);
-    }
+<div id="iframe-container">
+  <iframe id="browser" src=""></iframe>
+</div>
 
-    goBtn.addEventListener('click', () => navigate(input.value));
-    input.addEventListener('keydown', e => { if(e.key==='Enter') navigate(input.value); });
+<script>
+let historyStack = [];
+let historyIndex = -1;
 
-    // Navigation buttons
-    document.getElementById('backBtn').addEventListener('click', () => iframe.contentWindow.history.back());
-    document.getElementById('forwardBtn').addEventListener('click', () => iframe.contentWindow.history.forward());
-    document.getElementById('reloadBtn').addEventListener('click', () => iframe.contentWindow.location.reload());
-  </script>
+const iframe = document.getElementById('browser');
+const input = document.getElementById('url');
+
+function handleKey(e) {
+  if(e.key === 'Enter') go();
+}
+
+function go() {
+  let url = input.value.trim();
+  if(!url) return;
+
+  if(!url.startsWith('http')) {
+    // treat as search
+    url = 'https://www.google.com/search?q=' + encodeURIComponent(url);
+  }
+
+  iframe.src = '/proxy?url=' + encodeURIComponent(url);
+  
+  // update history
+  historyStack = historyStack.slice(0, historyIndex + 1);
+  historyStack.push(url);
+  historyIndex++;
+}
+
+function goBack() {
+  if(historyIndex <= 0) return;
+  historyIndex--;
+  iframe.src = '/proxy?url=' + encodeURIComponent(historyStack[historyIndex]);
+}
+
+function goForward() {
+  if(historyIndex >= historyStack.length - 1) return;
+  historyIndex++;
+  iframe.src = '/proxy?url=' + encodeURIComponent(historyStack[historyIndex]);
+}
+</script>
 </body>
 </html>
