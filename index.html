@@ -2,61 +2,43 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Euphoria</title>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: Arial, sans-serif; height: 100vh; display: flex; flex-direction: column; }
-    
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      background-color: #f0f0f0;
+    }
+
     header {
-      background-color: #2c3e50;
+      background-color: #1e1e1e;
       color: white;
-      padding: 8px 12px;
+      padding: 10px 20px;
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 10px;
     }
 
-    .tabs {
-      display: flex;
-      gap: 4px;
+    header input[type="text"] {
       flex: 1;
-    }
-
-    .tab {
-      background-color: #34495e;
-      padding: 5px 10px;
-      border-radius: 4px 4px 0 0;
-      cursor: pointer;
-      user-select: none;
-    }
-
-    .tab.active {
-      background-color: #1abc9c;
-      font-weight: bold;
-    }
-
-    .address-bar {
-      display: flex;
-      gap: 4px;
-      flex: 2;
-    }
-
-    input[type="text"] {
-      flex: 1;
-      padding: 5px;
-      border-radius: 4px;
+      padding: 8px;
+      border-radius: 5px;
       border: none;
       font-size: 16px;
     }
 
-    button {
-      padding: 5px 12px;
-      font-size: 16px;
-      cursor: pointer;
+    header button {
+      padding: 8px 16px;
       border: none;
-      border-radius: 4px;
-      background-color: #1abc9c;
+      border-radius: 5px;
+      background-color: #4caf50;
       color: white;
+      font-size: 16px;
+      cursor: pointer;
     }
 
     iframe {
@@ -67,63 +49,41 @@
   </style>
 </head>
 <body>
-  <header>
-    <div class="tabs" id="tabsContainer">
-      <div class="tab active" data-id="tab1">Tab 1</div>
-    </div>
-    <div class="address-bar">
-      <input id="urlInput" type="text" placeholder="Type URL or search...">
-      <button id="goBtn">Enter</button>
-    </div>
-  </header>
 
-  <iframe id="browserFrame" src=""></iframe>
+<header>
+  <input id="urlInput" type="text" placeholder="Type a URL or search query..." />
+  <button id="goBtn">Go</button>
+</header>
 
-  <script>
-    const tabsContainer = document.getElementById('tabsContainer');
-    const urlInput = document.getElementById('urlInput');
-    const goBtn = document.getElementById('goBtn');
-    const iframe = document.getElementById('browserFrame');
+<iframe id="browserFrame" src=""></iframe>
 
-    const sessions = { tab1: 'user1' };
-    let activeTab = 'tab1';
+<script>
+  const urlInput = document.getElementById('urlInput');
+  const goBtn = document.getElementById('goBtn');
+  const iframe = document.getElementById('browserFrame');
 
-    function loadURL() {
-      const query = urlInput.value.trim();
-      if (!query) return;
+  const backendURL = 'https://wisp-server-w7nx.onrender.com/browse';
 
-      // Automatically treat non-URLs as Google search
-      let url = query.startsWith('http') ? query : query;
-      iframe.src = `https://wisp-server-w7nx.onrender.com/browse?url=${encodeURIComponent(url)}&session=${sessions[activeTab]}`;
+  function navigate() {
+    let value = urlInput.value.trim();
+    if (!value) return;
+
+    // If input looks like a URL, use it; otherwise, search Google
+    if (!/^https?:\/\//i.test(value)) {
+      value = `https://www.google.com/search?q=${encodeURIComponent(value)}`;
     }
 
-    goBtn.addEventListener('click', loadURL);
-    urlInput.addEventListener('keydown', e => { if (e.key === 'Enter') loadURL(); });
+    iframe.src = `${backendURL}?url=${encodeURIComponent(value)}`;
+  }
 
-    // Tab switching
-    tabsContainer.addEventListener('click', e => {
-      if (e.target.classList.contains('tab')) {
-        document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
-        e.target.classList.add('active');
-        activeTab = e.target.dataset.id;
-        urlInput.value = ''; // reset input for new tab
-        iframe.src = ''; // clear iframe
-      }
-    });
+  goBtn.addEventListener('click', navigate);
 
-    // Example: add a new tab functionality
-    function addTab() {
-      const newId = `tab${Object.keys(sessions).length + 1}`;
-      const tabDiv = document.createElement('div');
-      tabDiv.className = 'tab';
-      tabDiv.dataset.id = newId;
-      tabDiv.textContent = `Tab ${Object.keys(sessions).length + 1}`;
-      tabsContainer.appendChild(tabDiv);
-      sessions[newId] = `user${Object.keys(sessions).length + 1}`;
+  urlInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      navigate();
     }
+  });
+</script>
 
-    // For demonstration, add a second tab after 1s
-    setTimeout(addTab, 1000);
-  </script>
 </body>
 </html>
