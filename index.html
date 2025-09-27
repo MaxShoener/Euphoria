@@ -1,74 +1,51 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Euphoria</title>
-<style>
-  body { margin: 0; font-family: Arial, sans-serif; display: flex; flex-direction: column; height: 100vh; }
-  #controls { display: flex; padding: 10px; gap: 5px; background: #f8f8f8; align-items: center; }
-  #urlInput { flex: 1; padding: 5px; font-size: 16px; }
-  button { padding: 6px 12px; font-size: 14px; cursor: pointer; }
-  iframe { flex: 1; width: 100%; border: none; }
-</style>
+  <meta charset="UTF-8">
+  <title>Euphoria</title>
+  <style>
+    body { margin:0; font-family: sans-serif; background:#f0f0f0; }
+    header { background:#6200ee; color:white; padding:10px; text-align:center; font-size:24px; }
+    #controls { display:flex; padding:10px; gap:5px; background:white; }
+    #controls input { flex:1; padding:5px; font-size:16px; }
+    #controls button { padding:5px 10px; font-size:16px; }
+    #nav { display:flex; padding:5px; gap:5px; background:#eee; }
+    iframe { width:100%; height:calc(100vh - 100px); border:none; }
+  </style>
 </head>
 <body>
-<div id="controls">
-  <button onclick="back()">◀</button>
-  <button onclick="forward()">▶</button>
-  <button onclick="reload()">⟳</button>
-  <input id="urlInput" placeholder="Enter URL or search term" />
-  <button onclick="go()">Go</button>
-</div>
-<iframe id="browserFrame"></iframe>
+  <header>Euphoria</header>
+  <div id="controls">
+    <input id="urlInput" type="text" placeholder="Enter URL or search term">
+    <button id="goBtn">Go</button>
+  </div>
+  <div id="nav">
+    <button id="backBtn">Back</button>
+    <button id="forwardBtn">Forward</button>
+    <button id="reloadBtn">Reload</button>
+  </div>
+  <iframe id="browserFrame" src=""></iframe>
 
-<script>
-const iframe = document.getElementById('browserFrame');
-const input = document.getElementById('urlInput');
-let historyStack = [];
-let historyIndex = -1;
+  <script>
+    const input = document.getElementById('urlInput');
+    const goBtn = document.getElementById('goBtn');
+    const iframe = document.getElementById('browserFrame');
 
-function formatURL(url) {
-  if (!url.startsWith('http')) {
-    return '/proxy?url=' + encodeURIComponent('https://www.google.com/search?q=' + url);
-  }
-  return '/proxy?url=' + encodeURIComponent(url);
-}
+    function navigate(url) {
+      if (!url.includes('://')) {
+        // Treat as search
+        url = 'https://www.google.com/search?q=' + encodeURIComponent(url);
+      }
+      iframe.src = '/proxy?url=' + encodeURIComponent(url);
+    }
 
-function go(url) {
-  const target = url || input.value;
-  if (!target) return;
-  const formatted = formatURL(target);
+    goBtn.addEventListener('click', () => navigate(input.value));
+    input.addEventListener('keydown', e => { if(e.key==='Enter') navigate(input.value); });
 
-  iframe.src = formatted;
-
-  // Update history
-  historyStack = historyStack.slice(0, historyIndex + 1);
-  historyStack.push(formatted);
-  historyIndex++;
-}
-
-function back() {
-  if (historyIndex > 0) {
-    historyIndex--;
-    iframe.src = historyStack[historyIndex];
-  }
-}
-
-function forward() {
-  if (historyIndex < historyStack.length - 1) {
-    historyIndex++;
-    iframe.src = historyStack[historyIndex];
-  }
-}
-
-function reload() {
-  if (historyIndex >= 0) iframe.src = historyStack[historyIndex];
-}
-
-// Go on Enter key
-input.addEventListener('keypress', e => {
-  if (e.key === 'Enter') go();
-});
-</script>
+    // Navigation buttons
+    document.getElementById('backBtn').addEventListener('click', () => iframe.contentWindow.history.back());
+    document.getElementById('forwardBtn').addEventListener('click', () => iframe.contentWindow.history.forward());
+    document.getElementById('reloadBtn').addEventListener('click', () => iframe.contentWindow.location.reload());
+  </script>
 </body>
 </html>
