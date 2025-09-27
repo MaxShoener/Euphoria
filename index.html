@@ -4,43 +4,137 @@
   <meta charset="UTF-8">
   <title>Euphoria Proxy</title>
   <style>
-    body { font-family: Arial, sans-serif; text-align: center; padding: 30px; }
-    input { width: 300px; padding: 8px; }
-    button { padding: 8px 15px; margin-left: 5px; }
-    #output { margin-top: 30px; }
-    iframe { width: 90%; height: 600px; border: 1px solid #ccc; margin-top: 20px; }
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 20px;
+      background: #f8f9fa;
+    }
+    h1 { margin-bottom: 20px; }
+    #controls { margin-bottom: 20px; }
+    input {
+      width: 350px;
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    button {
+      padding: 8px 15px;
+      margin: 2px;
+      border: none;
+      border-radius: 4px;
+      background: #007bff;
+      color: white;
+      cursor: pointer;
+    }
+    button:hover { background: #0056b3; }
+    #output { margin-top: 20px; }
+    img {
+      max-width: 90%;
+      border: 1px solid #ccc;
+      margin-top: 15px;
+    }
   </style>
 </head>
 <body>
   <h1>Euphoria Proxy</h1>
-  <input id="urlInput" type="text" placeholder="Enter a URL (e.g. https://chess.com)">
-  <button onclick="browse()">Browse</button>
 
-  <div id="output"></div>
+  <!-- Controls -->
+  <div id="controls">
+    <button onclick="goHome()">Home</button>
+    <button onclick="goBack()">⬅ Back</button>
+    <button onclick="goForward()">➡ Forward</button>
+    <button onclick="refreshPage()">🔄 Refresh</button>
+  </div>
+
+  <!-- Search bar -->
+  <div>
+    <input id="urlInput" type="text" placeholder="Enter URL or search query">
+    <button onclick="browse()">Go</button>
+  </div>
+
+  <!-- Output area -->
+  <div id="output"><p>Backend waking up...</p></div>
 
   <script>
-    // Always point to your deployed backend
     const backendUrl = "https://wisp-server-w7nx.onrender.com";
+    const maxRetries = 10;
+    const retryDelay = 5000;
 
-    async function browse() {
-      const input = document.getElementById("urlInput").value.trim();
+    let historyStack = [];
+    let currentIndex = -1;
+
+    // 🔹 Wake up backend on page load
+    window.addEventListener("load", () => {
+      fetch(`${backendUrl}/ping`).catch(() => {});
+    });
+
+    // 🔹 Browse a URL or search
+    async function browse(attempt = 1, url = null) {
+      const input = url || document.getElementById("urlInput").value.trim();
       if (!input) return;
 
-      // Tell backend to browse this URL
-      const res = await fetch(`${backendUrl}/browse?url=${encodeURIComponent(input)}`);
-      if (!res.ok) {
-        document.getElementById("output").innerText = "Error: " + res.statusText;
-        return;
+      // Track history
+      if (!url) {
+        historyStack = historyStack.slice(0, currentIndex + 1);
+        historyStack.push(input);
+        currentIndex++;
       }
 
-      const data = await res.json();
+      document.getElementById("output").innerHTML =
+        `<p>Loading (attempt ${attempt})...</p>`;
 
-      // Show the screenshot/image or HTML preview
-      document.getElementById("output").innerHTML = `
-        <h3>Browser Output</h3>
-        <img src="data:image/png;base64,${data.screenshot}" alt="Browser output">
-      `;
+      try {
+        const res = await fetch(`${backendUrl}/browse?url=${encodeURIComponent(input)}`);
+        if (!res.ok) throw new Error("Backend not ready");
+
+        const data = await res.json();
+        document.getElementById("output").innerHTML = `
+          <h3>Browser Output</h3>
+          <img src="data:image/png;base64,${data.screenshot}" alt="Browser output">
+        `;
+      } catch (err) {
+        if (attempt < maxRetries) {
+          setTimeout(() => browse(attempt + 1, input), retryDelay);
+        } else {
+          document.getElementById("output").innerHTML =
+            `<p style="color:red;">Failed after ${maxRetries} attempts. Backend may still be sleeping.</p>`;
+        }
+      }
     }
+
+    // 🔹 Navigation controls
+    function goHome() {
+      document.getElementById("urlInput").value = "https://google.com";
+      browse();
+    }
+
+    function goBack() {
+      if (currentIndex > 0) {
+        currentIndex--;
+        document.getElementById("urlInput").value = historyStack[currentIndex];
+        browse(1, historyStack[currentIndex]);
+      }
+    }
+
+    function goForward() {
+      if (currentIndex < historyStack.length - 1) {
+        currentIndex++;
+        document.getElementById("urlInput").value = historyStack[currentIndex];
+        browse(1, historyStack[currentIndex]);
+      }
+    }
+
+    function refreshPage() {
+      if (currentIndex >= 0) {
+        browse(1, historyStack[currentIndex]);
+      }
+    }
+
+    // 🔹 Support Enter key to search
+    document.getElementById("urlInput").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") browse();
+    });
   </script>
 </body>
 </html>
