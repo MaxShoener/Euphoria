@@ -4,86 +4,57 @@
 <meta charset="UTF-8">
 <title>Euphoria</title>
 <style>
-  body {
-    font-family: Arial, sans-serif;
-    background: #f9f9f9;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
-  }
-  header {
-    background: #2b2b2b;
-    color: white;
-    padding: 1rem;
-    text-align: center;
-  }
-  #controls {
-    display: flex;
-    padding: 0.5rem;
-    background: #eee;
-  }
-  #urlInput {
-    flex: 1;
-    padding: 0.5rem;
-    font-size: 1rem;
-  }
-  button {
-    padding: 0.5rem 1rem;
-    margin-left: 0.5rem;
-    font-size: 1rem;
-    cursor: pointer;
-  }
-  #output {
-    flex: 1;
-    width: 100%;
-    border: none;
-  }
+body { font-family: sans-serif; background: #f5f5f5; text-align: center; padding: 20px; }
+input, button { padding: 10px; margin: 5px; font-size: 16px; }
+img#browserOutput { width: 80%; margin-top: 20px; border: 1px solid #ccc; }
 </style>
 </head>
 <body>
-<header>Euphoria</header>
-
-<div id="controls">
-  <input id="urlInput" type="text" placeholder="Enter URL or search query..." />
-  <button id="goBtn">Go</button>
-  <button id="backBtn">◀</button>
-  <button id="forwardBtn">▶</button>
+<h1>Euphoria</h1>
+<div>
+    <input type="text" id="urlInput" placeholder="Enter URL or search">
+    <button id="goBtn">Go</button>
 </div>
-
-<iframe id="output"></iframe>
-
+<div>
+    <input type="text" id="username" placeholder="Username">
+    <input type="password" id="password" placeholder="Password">
+    <button id="loginBtn">Login</button>
+</div>
+<img id="browserOutput" src="" alt="Browser output">
 <script>
-const BACKEND_URL = "https://wisp-server-w7nx.onrender.com"; // your backend
-const input = document.getElementById('urlInput');
-const output = document.getElementById('output');
-const goBtn = document.getElementById('goBtn');
-const backBtn = document.getElementById('backBtn');
-const forwardBtn = document.getElementById('forwardBtn');
-
-let historyStack = [];
-let historyIndex = -1;
-
-function loadURL(url) {
-  if (!/^https?:\/\//i.test(url)) {
-    url = 'https://www.google.com/search?q=' + encodeURIComponent(url);
-  }
-
-  output.src = `${BACKEND_URL}/browse?url=${encodeURIComponent(url)}&t=${Date.now()}`;
-
-  // Manage history
-  if (historyIndex === -1 || historyStack[historyIndex] !== url) {
-    historyStack = historyStack.slice(0, historyIndex + 1);
-    historyStack.push(url);
-    historyIndex++;
-  }
+async function navigate() {
+    const urlOrSearch = document.getElementById("urlInput").value;
+    const res = await fetch("/navigate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ urlOrSearch })
+    });
+    const blob = await res.blob();
+    document.getElementById("browserOutput").src = URL.createObjectURL(blob);
 }
 
-goBtn.onclick = () => loadURL(input.value.trim());
-input.addEventListener('keydown', e => { if(e.key === 'Enter') loadURL(input.value.trim()); });
-backBtn.onclick = () => { if(historyIndex>0) { historyIndex--; loadURL(historyStack[historyIndex]); } };
-forwardBtn.onclick = () => { if(historyIndex<historyStack.length-1) { historyIndex++; loadURL(historyStack[historyIndex]); } };
+document.getElementById("goBtn").addEventListener("click", navigate);
+document.getElementById("urlInput").addEventListener("keypress", e => {
+    if (e.key === "Enter") navigate();
+});
+
+document.getElementById("loginBtn").addEventListener("click", async () => {
+    const username = document.getElementById("username").value;
+    const password = document.getElementById("password").value;
+    const res = await fetch("/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password })
+    });
+    const data = await res.json();
+    alert(data.success ? "Login successful!" : "Login failed!");
+});
+
+// Auto-refresh browser output every 5 seconds
+setInterval(() => {
+    const src = document.getElementById("browserOutput").src;
+    if (src) document.getElementById("browserOutput").src = src;
+}, 5000);
 </script>
 </body>
 </html>
