@@ -4,57 +4,32 @@
 <meta charset="UTF-8">
 <title>Euphoria</title>
 <style>
-body { font-family: sans-serif; background: #f5f5f5; text-align: center; padding: 20px; }
-input, button { padding: 10px; margin: 5px; font-size: 16px; }
-img#browserOutput { width: 80%; margin-top: 20px; border: 1px solid #ccc; }
+body { font-family: sans-serif; margin: 20px; }
+#browserOutput { width: 100%; max-width: 1200px; height: 600px; border: 1px solid #ccc; }
+input { width: 400px; padding: 5px; }
+button { padding: 5px 10px; }
 </style>
 </head>
 <body>
 <h1>Euphoria</h1>
-<div>
-    <input type="text" id="urlInput" placeholder="Enter URL or search">
-    <button id="goBtn">Go</button>
-</div>
-<div>
-    <input type="text" id="username" placeholder="Username">
-    <input type="password" id="password" placeholder="Password">
-    <button id="loginBtn">Login</button>
-</div>
+<input type="text" id="urlInput" placeholder="Enter URL or search term">
+<button id="goBtn">Go</button>
+<br><br>
 <img id="browserOutput" src="" alt="Browser output">
+
 <script>
-async function navigate() {
-    const urlOrSearch = document.getElementById("urlInput").value;
-    const res = await fetch("/navigate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ urlOrSearch })
-    });
-    const blob = await res.blob();
-    document.getElementById("browserOutput").src = URL.createObjectURL(blob);
+const urlInput = document.getElementById('urlInput');
+const goBtn = document.getElementById('goBtn');
+const browserOutput = document.getElementById('browserOutput');
+
+async function loadPage() {
+    const val = urlInput.value.trim();
+    const url = val.startsWith('http') ? val : 'https://www.google.com/search?q=' + encodeURIComponent(val);
+    browserOutput.src = '/browse?url=' + encodeURIComponent(url);
 }
 
-document.getElementById("goBtn").addEventListener("click", navigate);
-document.getElementById("urlInput").addEventListener("keypress", e => {
-    if (e.key === "Enter") navigate();
-});
-
-document.getElementById("loginBtn").addEventListener("click", async () => {
-    const username = document.getElementById("username").value;
-    const password = document.getElementById("password").value;
-    const res = await fetch("/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password })
-    });
-    const data = await res.json();
-    alert(data.success ? "Login successful!" : "Login failed!");
-});
-
-// Auto-refresh browser output every 5 seconds
-setInterval(() => {
-    const src = document.getElementById("browserOutput").src;
-    if (src) document.getElementById("browserOutput").src = src;
-}, 5000);
+goBtn.addEventListener('click', loadPage);
+urlInput.addEventListener('keydown', e => { if (e.key === 'Enter') loadPage(); });
 </script>
 </body>
 </html>
