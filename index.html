@@ -1,38 +1,55 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Euphoria</title>
-  <style>
-    body { font-family: sans-serif; margin: 0; padding: 0; text-align: center; }
-    #controls { padding: 10px; background: #222; color: #fff; }
-    input { width: 50%; padding: 8px; }
-    button { padding: 8px; margin-left: 5px; }
-    #browser { max-width: 100%; border: none; margin-top: 10px; }
-  </style>
+<meta charset="UTF-8">
+<title>Euphoria</title>
+<style>
+body { font-family:sans-serif; background:#111; color:#fff; text-align:center; margin:0; padding:0; }
+#controls { background:#222; padding:10px; }
+input { width:50%; padding:8px; border:none; border-radius:4px; }
+button { padding:8px 12px; margin-left:5px; border:none; border-radius:4px; cursor:pointer; }
+button:hover { background:#444; color:#fff; }
+#browser { max-width:100%; margin-top:10px; border:2px solid #333; }
+</style>
 </head>
 <body>
-  <div id="controls">
-    <input type="text" id="query" placeholder="Enter URL or search...">
-    <button onclick="go()">Go</button>
-  </div>
-  <img id="browser" src="" alt="Browser output">
+<div id="controls">
+  <input type="text" id="query" placeholder="Enter URL or search...">
+  <button onclick="startStream()">Go</button>
+  <button onclick="stopStream()">Stop</button>
+</div>
+<img id="browser" src="" alt="Browser output">
 
-  <script>
-    const backend = "https://wisp-server-w7nx.onrender.com"; // 🔗 Your backend URL
+<script>
+let ws;
 
-    async function go() {
-      const q = document.getElementById("query").value;
-      if (!q) return;
+function startStream() {
+  const query = document.getElementById("query").value;
+  if (!query) return;
 
-      const img = document.getElementById("browser");
-      img.src = backend + "/screenshot?q=" + encodeURIComponent(q) + "&t=" + Date.now();
+  stopStream(); // stop any previous connection
+
+  ws = new WebSocket("wss://wisp-server-w7nx.onrender.com");
+  ws.binaryType = "arraybuffer";
+
+  ws.onopen = () => ws.send(JSON.stringify({ query }));
+  ws.onmessage = e => {
+    if (e.data instanceof ArrayBuffer) {
+      const blob = new Blob([e.data], { type: "image/jpeg" });
+      document.getElementById("browser").src = URL.createObjectURL(blob);
+    } else {
+      try { console.error(JSON.parse(e.data).error); } catch {}
     }
+  };
+}
 
-    // Enter key support
-    document.getElementById("query").addEventListener("keypress", e => {
-      if (e.key === "Enter") go();
-    });
-  </script>
+function stopStream() {
+  if (ws) ws.close();
+}
+
+document.getElementById("query").addEventListener("keypress", e => {
+  if (e.key === "Enter") startStream();
+});
+</script>
 </body>
 </html>
