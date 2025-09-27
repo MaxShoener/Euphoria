@@ -4,67 +4,60 @@
   <meta charset="UTF-8">
   <title>Euphoria</title>
   <style>
-    body { margin: 0; font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; }
-    #controls { display: flex; padding: 5px; background: #222; color: white; }
-    #controls input { flex: 1; padding: 5px; margin: 0 5px; }
-    #controls button { padding: 5px 10px; margin-left: 2px; }
-    iframe { flex: 1; width: 100%; border: none; }
+    body { font-family: sans-serif; margin: 0; display: flex; flex-direction: column; height: 100vh; }
+    #controls { padding: 10px; background: #222; color: white; display: flex; gap: 10px; }
+    #browser { flex: 1; border: none; width: 100%; }
   </style>
 </head>
 <body>
   <div id="controls">
-    <button id="back">◀</button>
-    <button id="forward">▶</button>
-    <button id="reload">⟳</button>
-    <input id="url" placeholder="Search or enter URL..." />
-    <button id="go">Go</button>
+    <button onclick="goBack()">◀ Back</button>
+    <button onclick="goForward()">▶ Forward</button>
+    <input id="url" type="text" placeholder="Enter URL or search..." style="flex:1">
+    <button onclick="go()">Go</button>
   </div>
-  <iframe id="iframe"></iframe>
+  <iframe id="browser"></iframe>
 
   <script>
-    const iframe = document.getElementById('iframe');
-    const input = document.getElementById('url');
-    const historyStack = [];
-    let historyIndex = -1;
+    let historyStack = [];
+    let currentIndex = -1;
 
-    function smartURL(query) {
-      if (/^(https?:\/\/)/i.test(query)) return query;
-      if (/\.[a-z]{2,}$/i.test(query)) return 'https://' + query;
-      return 'https://www.google.com/search?q=' + encodeURIComponent(query);
+    async function go() {
+      const input = document.getElementById('url').value.trim();
+      if (!input) return;
+
+      const res = await fetch('/browse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: input })
+      });
+
+      const html = await res.text();
+      const blob = new Blob([html], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+
+      const iframe = document.getElementById('browser');
+      iframe.src = url;
+
+      // Update history
+      historyStack = historyStack.slice(0, currentIndex + 1);
+      historyStack.push(url);
+      currentIndex++;
     }
 
-    function loadURL(url) {
-      const finalURL = '/browse?url=' + encodeURIComponent(url);
-      iframe.src = finalURL;
-
-      // Push to history if navigating normally
-      if (historyIndex === -1 || historyStack[historyIndex] !== finalURL) {
-        historyStack.splice(historyIndex + 1);
-        historyStack.push(finalURL);
-        historyIndex++;
+    function goBack() {
+      if (currentIndex > 0) {
+        currentIndex--;
+        document.getElementById('browser').src = historyStack[currentIndex];
       }
     }
 
-    document.getElementById('go').addEventListener('click', () => loadURL(smartURL(input.value)));
-    input.addEventListener('keydown', e => { if (e.key === 'Enter') loadURL(smartURL(input.value)); });
-
-    document.getElementById('back').addEventListener('click', () => {
-      if (historyIndex > 0) {
-        historyIndex--;
-        iframe.src = historyStack[historyIndex];
+    function goForward() {
+      if (currentIndex < historyStack.length - 1) {
+        currentIndex++;
+        document.getElementById('browser').src = historyStack[currentIndex];
       }
-    });
-
-    document.getElementById('forward').addEventListener('click', () => {
-      if (historyIndex < historyStack.length - 1) {
-        historyIndex++;
-        iframe.src = historyStack[historyIndex];
-      }
-    });
-
-    document.getElementById('reload').addEventListener('click', () => {
-      if (historyIndex >= 0) iframe.src = historyStack[historyIndex];
-    });
+    }
   </script>
 </body>
 </html>
