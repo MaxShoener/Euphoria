@@ -4,58 +4,65 @@
 <meta charset="UTF-8">
 <title>Euphoria</title>
 <style>
-body { font-family:sans-serif; background:#111; color:#fff; text-align:center; margin:0; padding:0; }
-#controls { background:#222; padding:10px; }
-input { width:50%; padding:8px; border:none; border-radius:4px; }
-button { padding:8px 12px; margin-left:5px; border:none; border-radius:4px; cursor:pointer; }
-button:hover { background:#444; color:#fff; }
-#browser { max-width:100%; margin-top:10px; border:2px solid #333; }
+  body { font-family: sans-serif; margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; }
+  #controls { padding: 10px; background: #222; color: white; display: flex; gap: 5px; }
+  input[type=text] { flex: 1; padding: 5px; font-size: 16px; }
+  button { padding: 5px 10px; font-size: 16px; }
+  #output { flex: 1; background: #000; display: flex; align-items: center; justify-content: center; }
+  #browserFrame { max-width: 100%; max-height: 100%; }
 </style>
 </head>
 <body>
 <div id="controls">
-  <input type="text" id="query" placeholder="Enter URL or search...">
-  <button onclick="sendQuery()">Go</button>
-  <button onclick="sendAction('back')">Back</button>
-  <button onclick="sendAction('forward')">Forward</button>
-  <button onclick="sendAction('reload')">Reload</button>
-  <button onclick="sendAction('stop')">Stop</button>
+  <button id="back">◀</button>
+  <button id="forward">▶</button>
+  <input id="url" type="text" placeholder="Enter URL or search..." />
+  <button id="go">Go</button>
 </div>
-<img id="browser" src="" alt="Browser output">
+<div id="output">
+  <img id="browserFrame" src="" alt="Browser output" />
+</div>
 
 <script>
 let ws;
+const img = document.getElementById('browserFrame');
+const urlInput = document.getElementById('url');
+const goBtn = document.getElementById('go');
+const backBtn = document.getElementById('back');
+const forwardBtn = document.getElementById('forward');
 
-function initWebSocket() {
-  if (!ws || ws.readyState !== 1) {
-    ws = new WebSocket("wss://wisp-server-w7nx.onrender.com");
-    ws.binaryType = "arraybuffer";
+// Replace with your backend WebSocket
+const backendURL = "wss://wisp-server-w7nx.onrender.com"; 
 
-    ws.onmessage = e => {
-      if (e.data instanceof ArrayBuffer) {
-        const blob = new Blob([e.data], { type: "image/jpeg" });
-        document.getElementById("browser").src = URL.createObjectURL(blob);
-      } else {
-        try { console.error(JSON.parse(e.data).error); } catch {}
-      }
+function connect() {
+    ws = new WebSocket(backendURL);
+    ws.onopen = () => console.log("Connected to backend");
+    ws.onmessage = (msg) => {
+        if(msg.data instanceof Blob) {
+            const url = URL.createObjectURL(msg.data);
+            img.src = url;
+        } else {
+            console.log("Backend message:", msg.data);
+        }
     };
-  }
+    ws.onclose = () => setTimeout(connect, 3000);
+}
+connect();
+
+function sendCommand(command, value) {
+    if(ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ command, value }));
+    }
 }
 
-function sendQuery() {
-  initWebSocket();
-  const query = document.getElementById("query").value;
-  if (query) ws.send(JSON.stringify({ query }));
-}
-
-function sendAction(action) {
-  initWebSocket();
-  ws.send(JSON.stringify({ action }));
-}
-
-document.getElementById("query").addEventListener("keypress", e => {
-  if (e.key === "Enter") sendQuery();
-});
+goBtn.onclick = () => {
+    const val = urlInput.value.trim();
+    if(val.startsWith("http")) sendCommand("navigate", val);
+    else sendCommand("search", val);
+};
+urlInput.onkeypress = (e) => { if(e.key === "Enter") goBtn.click(); };
+backBtn.onclick = () => sendCommand("back");
+forwardBtn.onclick = () => sendCommand("forward");
 </script>
 </body>
 </html>
