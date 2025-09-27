@@ -2,67 +2,45 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Euphoria</title>
 <style>
-  body { font-family: sans-serif; margin: 0; padding: 0; display: flex; flex-direction: column; height: 100vh; }
-  #controls { padding: 10px; background: #222; color: white; display: flex; gap: 5px; }
-  input[type=text] { flex: 1; padding: 5px; font-size: 16px; }
-  button { padding: 5px 10px; font-size: 16px; }
-  #output { flex: 1; background: #000; display: flex; align-items: center; justify-content: center; }
-  #browserFrame { max-width: 100%; max-height: 100%; }
+  body { font-family: Arial, sans-serif; background: #f2f2f2; margin: 0; padding: 0; display: flex; flex-direction: column; align-items: center; }
+  #controls { margin: 20px; }
+  input { width: 300px; padding: 8px; }
+  button { padding: 8px 12px; }
+  img { max-width: 100%; border: 1px solid #ccc; margin-top: 20px; }
 </style>
 </head>
 <body>
+<h1>Euphoria</h1>
 <div id="controls">
-  <button id="back">◀</button>
-  <button id="forward">▶</button>
-  <input id="url" type="text" placeholder="Enter URL or search..." />
-  <button id="go">Go</button>
+  <input type="text" id="urlInput" placeholder="Enter URL or search...">
+  <button id="goBtn">Go</button>
 </div>
-<div id="output">
-  <img id="browserFrame" src="" alt="Browser output" />
-</div>
-
+<img id="browserOutput" src="" alt="Browser output">
 <script>
-let ws;
-const img = document.getElementById('browserFrame');
-const urlInput = document.getElementById('url');
-const goBtn = document.getElementById('go');
-const backBtn = document.getElementById('back');
-const forwardBtn = document.getElementById('forward');
+const input = document.getElementById('urlInput');
+const goBtn = document.getElementById('goBtn');
+const output = document.getElementById('browserOutput');
 
-// Replace with your backend WebSocket
-const backendURL = "wss://wisp-server-w7nx.onrender.com"; 
-
-function connect() {
-    ws = new WebSocket(backendURL);
-    ws.onopen = () => console.log("Connected to backend");
-    ws.onmessage = (msg) => {
-        if(msg.data instanceof Blob) {
-            const url = URL.createObjectURL(msg.data);
-            img.src = url;
-        } else {
-            console.log("Backend message:", msg.data);
-        }
-    };
-    ws.onclose = () => setTimeout(connect, 3000);
-}
-connect();
-
-function sendCommand(command, value) {
-    if(ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ command, value }));
-    }
+function navigate() {
+  let url = input.value.trim();
+  if (!url) return;
+  // If not a full URL, search with Google
+  if (!/^https?:\/\//i.test(url)) {
+    url = 'https://www.google.com/search?q=' + encodeURIComponent(url);
+  }
+  output.src = `/browse?url=${encodeURIComponent(url)}&t=${Date.now()}`;
 }
 
-goBtn.onclick = () => {
-    const val = urlInput.value.trim();
-    if(val.startsWith("http")) sendCommand("navigate", val);
-    else sendCommand("search", val);
-};
-urlInput.onkeypress = (e) => { if(e.key === "Enter") goBtn.click(); };
-backBtn.onclick = () => sendCommand("back");
-forwardBtn.onclick = () => sendCommand("forward");
+goBtn.addEventListener('click', navigate);
+input.addEventListener('keypress', e => { if (e.key === 'Enter') navigate(); });
+
+// Auto refresh every 5 seconds for streaming effect
+setInterval(() => {
+  if (output.src) output.src = output.src.split('&t=')[0] + '&t=' + Date.now();
+}, 5000);
 </script>
 </body>
 </html>
