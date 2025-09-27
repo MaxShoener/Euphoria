@@ -1,54 +1,34 @@
-// server.js
 import express from 'express';
-import { chromium } from 'playwright';
-import bodyParser from 'body-parser';
-import cors from 'cors';
+import fetch from 'node-fetch';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
 const app = express();
-app.use(bodyParser.json());
-app.use(cors());
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-let browser; 
-let context;
+// Serve frontend
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
 
-async function initBrowser() {
-  if (!browser) {
-    browser = await chromium.launch({
-      headless: false, // headful mode for JS-heavy sites and login
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--use-fake-ui-for-media-stream', // for WebRTC test mode
-        '--use-fake-device-for-media-stream'
-      ]
-    });
-    context = await browser.newContext({ ignoreHTTPSErrors: true, storageState: null });
-  }
-}
-
-// Endpoint to browse a site
-app.post('/browse', async (req, res) => {
-  await initBrowser();
-  const { url } = req.body;
-  const page = await context.newPage();
+// Proxy route for external websites
+app.get('/proxy', async (req, res) => {
   try {
-    const visitUrl = url?.startsWith('http') ? url : `https://www.google.com/search?q=${encodeURIComponent(url)}`;
-    await page.goto(visitUrl, { waitUntil: 'domcontentloaded' });
-
-    const content = await page.content();
-    res.send(content);
+    const target = req.query.url;
+    if (!target) return res.status(400).send('Missing URL');
+    
+    const response = await fetch(target, {
+      headers: { 'User-Agent': 'Euphoria/1.0' }
+    });
+    
+    const body = await response.text();
+    res.send(body);
   } catch (err) {
-    res.status(500).send(`Failed to load page: ${err.message}`);
-  } finally {
-    await page.close();
+    res.status(500).send(`Error fetching ${req.query.url}: ${err.message}`);
   }
 });
 
-// Special streaming endpoint (Xbox Remote Play fallback)
-app.get('/stream', (req, res) => {
-  res.send('Xbox Remote Play / WebRTC not supported on Render. Use VPS/local server with GPU for streaming.');
-});
+app.use(express.static(__dirname));
 
-app.listen(3000, () => {
-  console.log('Euphoria backend running on port 3000');
-});
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Euphoria running on port ${PORT}`));
