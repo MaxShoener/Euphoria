@@ -1,49 +1,51 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Euphoria</title>
-<style>
-  body, html { margin: 0; padding: 0; height: 100%; font-family: Arial, sans-serif; background: #f9f9f9; }
-  #nav { display: flex; padding: 8px; background: #222; color: white; align-items: center; }
-  #nav input { flex: 1; padding: 6px; font-size: 16px; border-radius: 4px; border: none; }
-  #nav button { margin-left: 5px; padding: 6px 12px; border: none; border-radius: 4px; background: #444; color: white; cursor: pointer; }
-  #nav button:hover { background: #555; }
-  iframe { width: 100%; height: calc(100% - 50px); border: none; display: block; }
-</style>
+  <meta charset="UTF-8">
+  <title>Euphoria</title>
+  <style>
+    body { margin:0; font-family:sans-serif; }
+    .navbar { display:flex; align-items:center; padding:8px; background:#222; color:white; }
+    .navbar input { flex:1; margin:0 8px; padding:4px 8px; }
+    .navbar button { padding:4px 8px; cursor:pointer; }
+    iframe { width:100%; height:calc(100vh - 40px); border:none; }
+  </style>
 </head>
 <body>
+  <div class="navbar">
+    <button id="backBtn">◀ Back</button>
+    <button id="forwardBtn">▶ Forward</button>
+    <input id="urlInput" placeholder="Type URL or search..." />
+    <button id="goBtn">Go</button>
+  </div>
+  <iframe id="browserFrame" sandbox="allow-scripts allow-forms allow-same-origin"></iframe>
 
-<div id="nav">
-  <button id="back">←</button>
-  <button id="forward">→</button>
-  <input id="urlInput" placeholder="Enter URL or search..." />
-  <button id="go">Go</button>
-</div>
+  <script>
+    const urlInput = document.getElementById('urlInput');
+    const goBtn = document.getElementById('goBtn');
+    const iframe = document.getElementById('browserFrame');
+    const backBtn = document.getElementById('backBtn');
+    const forwardBtn = document.getElementById('forwardBtn');
 
-<iframe id="browserFrame"></iframe>
+    let historyStack = [];
+    let currentIndex = -1;
 
-<script>
-const frame = document.getElementById('browserFrame');
-const input = document.getElementById('urlInput');
+    function navigate(url){
+      if(!url.startsWith('http')) url = `https://www.google.com/search?q=${encodeURIComponent(url)}`;
+      iframe.src = url;
+      historyStack = historyStack.slice(0,currentIndex+1);
+      historyStack.push(url);
+      currentIndex++;
+    }
 
-function navigate() {
-  let value = input.value.trim();
-  if (!value) return;
-
-  // Detect URL vs search
-  if (!/^https?:\/\//i.test(value)) {
-    value = 'https://www.google.com/search?q=' + encodeURIComponent(value);
-  }
-  frame.src = '/proxy?url=' + encodeURIComponent(value);
-}
-
-// Event listeners
-document.getElementById('go').onclick = navigate;
-input.addEventListener('keydown', e => { if (e.key === 'Enter') navigate(); });
-document.getElementById('back').onclick = () => frame.contentWindow.history.back();
-document.getElementById('forward').onclick = () => frame.contentWindow.history.forward();
-</script>
-
+    goBtn.addEventListener('click',()=>navigate(urlInput.value));
+    urlInput.addEventListener('keydown',e=>{ if(e.key==='Enter') navigate(urlInput.value); });
+    backBtn.addEventListener('click',()=>{
+      if(currentIndex>0){ currentIndex--; iframe.src = historyStack[currentIndex]; }
+    });
+    forwardBtn.addEventListener('click',()=>{
+      if(currentIndex<historyStack.length-1){ currentIndex++; iframe.src = historyStack[currentIndex]; }
+    });
+  </script>
 </body>
 </html>
