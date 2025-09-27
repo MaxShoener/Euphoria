@@ -4,54 +4,43 @@
   <meta charset="UTF-8">
   <title>Euphoria Proxy</title>
   <style>
-    body {
-      font-family: sans-serif;
-      padding: 20px;
-      background: #121212;
-      color: #f0f0f0;
-    }
-    h1 { margin-bottom: 20px; }
-    form { margin-bottom: 20px; }
-    input {
-      padding: 8px;
-      width: 300px;
-    }
-    button {
-      padding: 8px 16px;
-    }
-    iframe {
-      width: 100%;
-      height: 80vh;
-      border: 1px solid #444;
-      background: white;
-    }
+    body { font-family: Arial, sans-serif; text-align: center; padding: 30px; }
+    input { width: 300px; padding: 8px; }
+    button { padding: 8px 15px; margin-left: 5px; }
+    #output { margin-top: 30px; }
+    iframe { width: 90%; height: 600px; border: 1px solid #ccc; margin-top: 20px; }
   </style>
 </head>
 <body>
   <h1>Euphoria Proxy</h1>
-  <form id="search-form">
-    <input type="text" id="url-input" placeholder="Enter a URL (e.g. https://chess.com)">
-    <button type="submit">Browse</button>
-  </form>
-  <iframe id="browser-frame"></iframe>
+  <input id="urlInput" type="text" placeholder="Enter a URL (e.g. https://chess.com)">
+  <button onclick="browse()">Browse</button>
+
+  <div id="output"></div>
 
   <script>
-    const backendUrl = "https://your-backend.onrender.com"; // replace with Render backend URL
+    // Always point to your deployed backend
+    const backendUrl = "https://wisp-server-w7nx.onrender.com";
 
-    document.getElementById("search-form").addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const urlInput = document.getElementById("url-input").value;
-      if (!urlInput) return;
+    async function browse() {
+      const input = document.getElementById("urlInput").value.trim();
+      if (!input) return;
 
-      const res = await fetch(`${backendUrl}/browse?url=${encodeURIComponent(urlInput)}`);
-      const html = await res.text();
+      // Tell backend to browse this URL
+      const res = await fetch(`${backendUrl}/browse?url=${encodeURIComponent(input)}`);
+      if (!res.ok) {
+        document.getElementById("output").innerText = "Error: " + res.statusText;
+        return;
+      }
 
-      const iframe = document.getElementById("browser-frame");
-      const doc = iframe.contentDocument || iframe.contentWindow.document;
-      doc.open();
-      doc.write(html);
-      doc.close();
-    });
+      const data = await res.json();
+
+      // Show the screenshot/image or HTML preview
+      document.getElementById("output").innerHTML = `
+        <h3>Browser Output</h3>
+        <img src="data:image/png;base64,${data.screenshot}" alt="Browser output">
+      `;
+    }
   </script>
 </body>
 </html>
