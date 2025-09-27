@@ -7,127 +7,107 @@
   <style>
     body {
       margin: 0;
-      font-family: Arial, sans-serif;
+      font-family: sans-serif;
       display: flex;
       flex-direction: column;
       height: 100vh;
     }
-
     header {
-      background-color: #1a1a1a;
-      color: white;
-      padding: 0.5rem;
       display: flex;
+      padding: 8px;
+      background-color: #1e1e1e;
+      color: white;
       align-items: center;
-      gap: 0.5rem;
+      gap: 8px;
     }
-
-    input[type="text"] {
+    header input {
       flex: 1;
-      padding: 0.5rem;
-      border-radius: 4px;
-      border: none;
+      padding: 6px;
       font-size: 1rem;
     }
-
-    button {
-      padding: 0.5rem 0.75rem;
-      border: none;
-      border-radius: 4px;
-      background-color: #333;
-      color: white;
+    header button {
+      padding: 6px 12px;
+      font-size: 1rem;
       cursor: pointer;
-      font-size: 0.9rem;
     }
-
-    button:hover {
-      background-color: #555;
+    #spinner {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      display: none;
+      border: 4px solid rgba(0,0,0,0.1);
+      border-left-color: #1e1e1e;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
     }
-
+    @keyframes spin {
+      to { transform: translate(-50%, -50%) rotate(360deg); }
+    }
     iframe {
       flex: 1;
-      border: none;
       width: 100%;
+      border: none;
     }
   </style>
 </head>
 <body>
   <header>
-    <button id="back">◀</button>
-    <button id="forward">▶</button>
-    <button id="reload">⟳</button>
-    <button id="home">🏠</button>
-    <input type="text" id="url" placeholder="Search or type URL..." />
-    <button id="go">Go</button>
+    <button id="backBtn">⬅ Back</button>
+    <button id="forwardBtn">➡ Forward</button>
+    <input type="text" id="urlInput" placeholder="Search or enter URL..." />
+    <button id="goBtn">Go</button>
   </header>
 
-  <iframe id="browser"></iframe>
+  <div id="spinner"></div>
+  <iframe id="browserFrame" src=""></iframe>
 
   <script>
-    const iframe = document.getElementById('browser');
-    const urlInput = document.getElementById('url');
-    const backBtn = document.getElementById('back');
-    const forwardBtn = document.getElementById('forward');
-    const reloadBtn = document.getElementById('reload');
-    const homeBtn = document.getElementById('home');
-    const goBtn = document.getElementById('go');
+    const iframe = document.getElementById('browserFrame');
+    const input = document.getElementById('urlInput');
+    const backBtn = document.getElementById('backBtn');
+    const forwardBtn = document.getElementById('forwardBtn');
+    const goBtn = document.getElementById('goBtn');
+    const spinner = document.getElementById('spinner');
 
-    const backendURL = 'https://wisp-server-w7nx.onrender.com/browse';
-    const homePage = 'https://www.google.com';
-    const historyStack = [];
-    let currentIndex = -1;
-
-    async function loadURL(url) {
+    function loadURL(url) {
+      // If not a full URL, treat as search
       if (!/^https?:\/\//i.test(url)) {
-        url = 'https://www.google.com/search?q=' + encodeURIComponent(url);
+        url = encodeURIComponent(url);
+        url = `/browse?url=${url}`;
+      } else {
+        url = `/browse?url=${encodeURIComponent(url)}`;
       }
-
-      iframe.src = `${backendURL}?url=${encodeURIComponent(url)}`;
-
-      // Update history
-      if (currentIndex < historyStack.length - 1) {
-        historyStack.splice(currentIndex + 1);
-      }
-      historyStack.push(url);
-      currentIndex = historyStack.length - 1;
+      spinner.style.display = 'block';
+      iframe.src = url;
     }
 
-    goBtn.addEventListener('click', () => {
-      const url = urlInput.value.trim();
-      if (url) loadURL(url);
-    });
-
-    urlInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') {
-        const url = urlInput.value.trim();
-        if (url) loadURL(url);
-      }
+    goBtn.addEventListener('click', () => loadURL(input.value));
+    input.addEventListener('keydown', e => {
+      if (e.key === 'Enter') loadURL(input.value);
     });
 
     backBtn.addEventListener('click', () => {
-      if (currentIndex > 0) {
-        currentIndex--;
-        iframe.src = `${backendURL}?url=${encodeURIComponent(historyStack[currentIndex])}`;
-      }
+      iframe.contentWindow.history.back();
     });
 
     forwardBtn.addEventListener('click', () => {
-      if (currentIndex < historyStack.length - 1) {
-        currentIndex++;
-        iframe.src = `${backendURL}?url=${encodeURIComponent(historyStack[currentIndex])}`;
-      }
+      iframe.contentWindow.history.forward();
     });
 
-    reloadBtn.addEventListener('click', () => {
-      if (currentIndex >= 0) {
-        iframe.src = `${backendURL}?url=${encodeURIComponent(historyStack[currentIndex])}`;
+    iframe.addEventListener('load', () => {
+      spinner.style.display = 'none';
+      try {
+        // Resize iframe to content height
+        const doc = iframe.contentDocument || iframe.contentWindow.document;
+        iframe.style.height = doc.body.scrollHeight + 'px';
+      } catch (err) {
+        // Cross-origin, cannot access content
+        iframe.style.height = '100%';
       }
     });
-
-    homeBtn.addEventListener('click', () => loadURL(homePage));
-
-    // Load home page on start
-    loadURL(homePage);
   </script>
 </body>
 </html>
