@@ -2,45 +2,88 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Euphoria</title>
 <style>
-  body { font-family: Arial, sans-serif; background: #f2f2f2; margin: 0; padding: 0; display: flex; flex-direction: column; align-items: center; }
-  #controls { margin: 20px; }
-  input { width: 300px; padding: 8px; }
-  button { padding: 8px 12px; }
-  img { max-width: 100%; border: 1px solid #ccc; margin-top: 20px; }
+  body {
+    font-family: Arial, sans-serif;
+    background: #f9f9f9;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+  }
+  header {
+    background: #2b2b2b;
+    color: white;
+    padding: 1rem;
+    text-align: center;
+  }
+  #controls {
+    display: flex;
+    padding: 0.5rem;
+    background: #eee;
+  }
+  #urlInput {
+    flex: 1;
+    padding: 0.5rem;
+    font-size: 1rem;
+  }
+  button {
+    padding: 0.5rem 1rem;
+    margin-left: 0.5rem;
+    font-size: 1rem;
+    cursor: pointer;
+  }
+  #output {
+    flex: 1;
+    width: 100%;
+    border: none;
+  }
 </style>
 </head>
 <body>
-<h1>Euphoria</h1>
-<div id="controls">
-  <input type="text" id="urlInput" placeholder="Enter URL or search...">
-  <button id="goBtn">Go</button>
-</div>
-<img id="browserOutput" src="" alt="Browser output">
-<script>
-const input = document.getElementById('urlInput');
-const goBtn = document.getElementById('goBtn');
-const output = document.getElementById('browserOutput');
+<header>Euphoria</header>
 
-function navigate() {
-  let url = input.value.trim();
-  if (!url) return;
-  // If not a full URL, search with Google
+<div id="controls">
+  <input id="urlInput" type="text" placeholder="Enter URL or search query..." />
+  <button id="goBtn">Go</button>
+  <button id="backBtn">◀</button>
+  <button id="forwardBtn">▶</button>
+</div>
+
+<iframe id="output"></iframe>
+
+<script>
+const BACKEND_URL = "https://wisp-server-w7nx.onrender.com"; // your backend
+const input = document.getElementById('urlInput');
+const output = document.getElementById('output');
+const goBtn = document.getElementById('goBtn');
+const backBtn = document.getElementById('backBtn');
+const forwardBtn = document.getElementById('forwardBtn');
+
+let historyStack = [];
+let historyIndex = -1;
+
+function loadURL(url) {
   if (!/^https?:\/\//i.test(url)) {
     url = 'https://www.google.com/search?q=' + encodeURIComponent(url);
   }
-  output.src = `/browse?url=${encodeURIComponent(url)}&t=${Date.now()}`;
+
+  output.src = `${BACKEND_URL}/browse?url=${encodeURIComponent(url)}&t=${Date.now()}`;
+
+  // Manage history
+  if (historyIndex === -1 || historyStack[historyIndex] !== url) {
+    historyStack = historyStack.slice(0, historyIndex + 1);
+    historyStack.push(url);
+    historyIndex++;
+  }
 }
 
-goBtn.addEventListener('click', navigate);
-input.addEventListener('keypress', e => { if (e.key === 'Enter') navigate(); });
-
-// Auto refresh every 5 seconds for streaming effect
-setInterval(() => {
-  if (output.src) output.src = output.src.split('&t=')[0] + '&t=' + Date.now();
-}, 5000);
+goBtn.onclick = () => loadURL(input.value.trim());
+input.addEventListener('keydown', e => { if(e.key === 'Enter') loadURL(input.value.trim()); });
+backBtn.onclick = () => { if(historyIndex>0) { historyIndex--; loadURL(historyStack[historyIndex]); } };
+forwardBtn.onclick = () => { if(historyIndex<historyStack.length-1) { historyIndex++; loadURL(historyStack[historyIndex]); } };
 </script>
 </body>
 </html>
