@@ -1,198 +1,55 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Euphoria — Stream</title>
-<style>
-  :root{--bar:#2b2f36;--accent:#4a90e2;--muted:#ddd}
-  body{margin:0;font-family:system-ui,Segoe UI,Roboto,Arial;background:#111;color:#fff;height:100vh;display:flex;flex-direction:column}
-  header{background:var(--bar);padding:12px 16px;display:flex;align-items:center;gap:12px}
-  header h1{margin:0;font-size:1rem}
-  .controls{display:flex;gap:8px;flex:1;align-items:center}
-  input[type=text]{flex:1;padding:8px;border-radius:6px;border:none;font-size:14px}
-  button{padding:8px 12px;border-radius:6px;border:none;background:var(--accent);color:#fff;cursor:pointer}
-  #toolbar{display:flex;gap:8px;padding:8px;background:#0f1113;align-items:center}
-  #canvasWrap{flex:1;display:flex;align-items:center;justify-content:center;background:#000}
-  canvas{max-width:100%;max-height:100%;background:#000}
-  .small{padding:6px 8px;font-size:13px}
-</style>
+  <meta charset="UTF-8" />
+  <title>Euphoria</title>
+  <style>
+    body { margin: 0; font-family: Arial, sans-serif; background: #121212; color: #fff; }
+    header { display: flex; align-items: center; padding: 10px; background: #1e1e1e; }
+    input { flex: 1; padding: 8px; border: none; border-radius: 4px; margin: 0 10px; }
+    button { padding: 8px 12px; margin-right: 5px; background: #3a3a3a; border: none; border-radius: 4px; color: #fff; cursor: pointer; }
+    button:hover { background: #555; }
+    iframe { width: 100%; height: calc(100vh - 50px); border: none; background: #fff; }
+  </style>
 </head>
 <body>
+  <header>
+    <button id="back">⬅️</button>
+    <button id="forward">➡️</button>
+    <input type="text" id="url" placeholder="Enter URL or search...">
+    <button id="go">Go</button>
+  </header>
+  <iframe id="viewer"></iframe>
 
-<header>
-  <h1>Euphoria (Stream)</h1>
-  <div class="controls">
-    <input id="urlInput" placeholder="URL or search (Enter to go)">
-    <button id="goBtn">Go</button>
-    <button id="newSessionBtn" title="Start new streaming session">New Session</button>
-  </div>
-</header>
+  <script>
+    const backend = "https://wisp-server-w7nx.onrender.com"; // ✅ your backend
 
-<div id="toolbar">
-  <button id="backBtn" class="small">◀</button>
-  <button id="forwardBtn" class="small">▶</button>
-  <button id="reloadBtn" class="small">⟳</button>
-  <span style="margin-left:10px;color:var(--muted)">Click canvas to focus. Drag to move mouse. Use keyboard to type.</span>
-</div>
+    const iframe = document.getElementById("viewer");
+    const input = document.getElementById("url");
+    const goBtn = document.getElementById("go");
+    const backBtn = document.getElementById("back");
+    const forwardBtn = document.getElementById("forward");
 
-<div id="canvasWrap">
-  <canvas id="screen"></canvas>
-</div>
+    let historyStack = [], historyIndex = -1;
 
-<script>
-/*
-  FRONTEND:
-  - Opens WebSocket to backend /ws?session=<id> (server creates session and returns websocket url)
-  - Receives messages of type: 'frame' (base64 JPEG), 'size' (width,height), 'log'
-  - Sends events: {type:'mouse',x,y,button,action}, {type:'keyboard',key,action}, {type:'command',cmd:'goto'|'back'|'forward'|'reload', url}
-*/
-
-const BACKEND = 'https://wisp-server-w7nx.onrender.com'; // <<--- your backend URL
-const screen = document.getElementById('screen');
-const ctx = screen.getContext('2d');
-const urlInput = document.getElementById('urlInput');
-const goBtn = document.getElementById('goBtn');
-const newSessionBtn = document.getElementById('newSessionBtn');
-const backBtn = document.getElementById('backBtn');
-const forwardBtn = document.getElementById('forwardBtn');
-const reloadBtn = document.getElementById('reloadBtn');
-
-let ws = null;
-let sessionId = null;
-let canvasW = 1280, canvasH = 720;
-let isMouseDown = false;
-let lastMouse = {x:0,y:0};
-
-// set canvas initial size
-function setCanvasSize(w,h){
-  canvasW = w; canvasH = h;
-  screen.width = w; screen.height = h;
-  screen.style.width = Math.min(window.innerWidth, w) + 'px';
-  screen.style.height = Math.min(window.innerHeight - 120, h) + 'px';
-}
-
-// connect websocket for a session; server will stream frames
-async function startSession(existingSession){
-  // create session via backend if none provided
-  let createUrl = BACKEND + '/session';
-  if(existingSession) createUrl += '?session=' + encodeURIComponent(existingSession);
-  const r = await fetch(createUrl, { method: 'POST' }).catch(err=>{alert('Session creation failed: '+err);});
-  if(!r) return;
-  const j = await r.json();
-  sessionId = j.session;
-  const wsUrl = (BACKEND.replace(/^http/, 'ws')) + '/ws?session=' + encodeURIComponent(sessionId);
-
-  if(ws){
-    ws.close();
-    ws = null;
-  }
-
-  ws = new WebSocket(wsUrl);
-  ws.binaryType = 'arraybuffer';
-  ws.onopen = () => console.log('ws open', sessionId);
-  ws.onmessage = ev => {
-    // messages are JSON text for control, frame as binary (ArrayBuffer begins with 0xFF 0xD8 JPEG)
-    if(typeof ev.data === 'string'){
-      try{
-        const m = JSON.parse(ev.data);
-        if(m.type === 'size'){
-          setCanvasSize(m.w, m.h);
-        } else if(m.type === 'log'){
-          console.log('[server]', m.msg);
-        } else if(m.type === 'ready'){
-          console.log('session ready', m.session);
-        }
-      }catch(e){ console.log('msg', ev.data); }
-    } else {
-      // binary frame (jpeg)
-      const blob = new Blob([ev.data], { type: 'image/jpeg' });
-      const url = URL.createObjectURL(blob);
-      const img = new Image();
-      img.onload = () => {
-        ctx.drawImage(img, 0, 0, canvasW, canvasH);
-        URL.revokeObjectURL(url);
-      };
-      img.src = url;
+    function formatUrl(query) {
+      if (query.startsWith("http://") || query.startsWith("https://")) return query;
+      if (query.includes(".")) return "https://" + query;
+      return "https://www.google.com/search?q=" + encodeURIComponent(query);
     }
-  };
-  ws.onclose = () => console.log('ws closed');
-  ws.onerror = e => console.log('ws err', e);
-}
 
-// send events to server
-function sendEvent(obj){
-  if(ws && ws.readyState === WebSocket.OPEN){
-    ws.send(JSON.stringify(obj));
-  }
-}
+    function navigate(query) {
+      const target = formatUrl(query);
+      iframe.src = backend + "/browse?url=" + encodeURIComponent(target);
+      if (historyIndex < historyStack.length - 1) historyStack = historyStack.slice(0, historyIndex + 1);
+      historyStack.push(query);
+      historyIndex++;
+    }
 
-// pointer mapping: convert client coordinates into page coordinates
-function clientToPage(x,y){
-  const rect = screen.getBoundingClientRect();
-  const sx = (x - rect.left) / rect.width;
-  const sy = (y - rect.top) / rect.height;
-  return { x: Math.round(sx * canvasW), y: Math.round(sy * canvasH) };
-}
-
-// mouse handling
-screen.addEventListener('mousedown', e => {
-  isMouseDown = true;
-  const p = clientToPage(e.clientX, e.clientY);
-  sendEvent({type:'mouse',action:'down',x:p.x,y:p.y,button: e.button||0});
-});
-screen.addEventListener('mouseup', e => {
-  isMouseDown = false;
-  const p = clientToPage(e.clientX, e.clientY);
-  sendEvent({type:'mouse',action:'up',x:p.x,y:p.y,button: e.button||0});
-});
-screen.addEventListener('mousemove', e => {
-  const p = clientToPage(e.clientX, e.clientY);
-  if(isMouseDown){
-    sendEvent({type:'mouse',action:'move',x:p.x,y:p.y});
-  } else {
-    // optionally send move for hover
-    sendEvent({type:'mouse',action:'move',x:p.x,y:p.y});
-  }
-});
-
-// wheel
-screen.addEventListener('wheel', e=>{
-  sendEvent({type:'wheel',deltaY:e.deltaY});
-  e.preventDefault();
-});
-
-// keyboard events — focus required; clicking the canvas sets focus
-window.addEventListener('keydown', e => {
-  // avoid interfering with browser shortcuts
-  if(e.metaKey || e.ctrlKey) return;
-  const key = e.key;
-  sendEvent({type:'keyboard',action:'down',key});
-  // prevent default for printable keys to stop browser typing into address bar accidentally
-  if(key.length === 1 || key === 'Enter' || key === 'Backspace') e.preventDefault();
-});
-window.addEventListener('keyup', e => {
-  if(e.metaKey || e.ctrlKey) return;
-  sendEvent({type:'keyboard',action:'up',key:e.key});
-});
-
-// controls
-goBtn.addEventListener('click', () => {
-  const raw = urlInput.value.trim();
-  if(!raw) return;
-  const url = raw.startsWith('http') ? raw : 'https://www.google.com/search?q=' + encodeURIComponent(raw);
-  sendEvent({type:'command',cmd:'goto',url});
-});
-urlInput.addEventListener('keydown', e=>{ if(e.key==='Enter') goBtn.click(); });
-
-newSessionBtn.addEventListener('click', ()=> startSession(null));
-backBtn.addEventListener('click', ()=> sendEvent({type:'command',cmd:'back'}));
-forwardBtn.addEventListener('click', ()=> sendEvent({type:'command',cmd:'forward'}));
-reloadBtn.addEventListener('click', ()=> sendEvent({type:'command',cmd:'reload'}));
-
-// start a session on load
-startSession();
-
-</script>
+    goBtn.onclick = () => navigate(input.value);
+    input.addEventListener("keypress", e => { if (e.key === "Enter") navigate(input.value); });
+    backBtn.onclick = () => { if (historyIndex > 0) { historyIndex--; input.value = historyStack[historyIndex]; navigate(input.value); } };
+    forwardBtn.onclick = () => { if (historyIndex < historyStack.length - 1) { historyIndex++; input.value = historyStack[historyIndex]; navigate(input.value); } };
+  </script>
 </body>
 </html>
