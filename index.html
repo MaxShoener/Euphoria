@@ -1,143 +1,108 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Euphoria Proxy</title>
-  <style>
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background: #0d1117;
-      color: #e6edf3;
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-    }
-    header {
-      padding: 10px;
-      background: #161b22;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    input {
-      flex: 1;
-      padding: 8px 12px;
-      border: none;
-      border-radius: 6px;
-      outline: none;
-      font-size: 14px;
-    }
-    button {
-      padding: 8px 14px;
-      background: #238636;
-      border: none;
-      border-radius: 6px;
-      color: white;
-      font-size: 14px;
-      cursor: pointer;
-    }
-    button:hover {
-      background: #2ea043;
-    }
-    iframe {
-      flex: 1;
-      border: none;
-      width: 100%;
-    }
-    .toolbar {
-      display: flex;
-      gap: 8px;
-      padding: 6px 10px;
-      background: #21262d;
-      border-top: 1px solid #30363d;
-    }
-    .toolbar button {
-      background: #30363d;
-      color: #e6edf3;
-      border: none;
-      border-radius: 4px;
-      padding: 6px 10px;
-    }
-    .toolbar button:hover {
-      background: #484f58;
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Euphoria Proxy</title>
+<style>
+  body {
+    margin: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: #f4f4f4;
+  }
+
+  header {
+    display: flex;
+    align-items: center;
+    padding: 10px;
+    background: #1f2937;
+    color: #fff;
+  }
+
+  header input[type="text"] {
+    flex: 1;
+    padding: 8px 12px;
+    border-radius: 6px;
+    border: none;
+    font-size: 16px;
+    margin-right: 10px;
+  }
+
+  header button {
+    padding: 8px 12px;
+    border: none;
+    border-radius: 6px;
+    background: #3b82f6;
+    color: white;
+    font-size: 16px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  header button:hover {
+    background: #2563eb;
+  }
+
+  iframe {
+    width: 100%;
+    height: calc(100vh - 60px);
+    border: none;
+  }
+</style>
 </head>
 <body>
-  <header>
-    <h2 style="margin:0; color:#58a6ff;">Euphoria</h2>
-    <input id="urlInput" type="text" placeholder="Enter a URL or search..." />
-    <button onclick="loadUrl()">Go</button>
-  </header>
 
-  <div class="toolbar">
-    <button onclick="goBack()">⬅️</button>
-    <button onclick="goForward()">➡️</button>
-    <button onclick="reloadFrame()">🔄</button>
-    <button onclick="goHome()">🏠 Home</button>
-  </div>
+<header>
+  <input id="urlInput" type="text" placeholder="Enter URL or search query..." />
+  <button id="goBtn">Enter</button>
+</header>
 
-  <iframe id="browserFrame"></iframe>
+<iframe id="proxyFrame" src=""></iframe>
 
-  <script>
-    const backend = "https://wisp-server-w7nx.onrender.com"; // your backend
-    const homepage = "https://www.google.com"; // customize your home page
-    const historyStack = [];
-    let historyIndex = -1;
+<script>
+const goBtn = document.getElementById('goBtn');
+const urlInput = document.getElementById('urlInput');
+const iframe = document.getElementById('proxyFrame');
 
-    function loadUrl(url = null) {
-      let input = url || document.getElementById("urlInput").value.trim();
-      if (!input) return;
+function navigate() {
+  let input = urlInput.value.trim();
+  if (!input) return;
 
-      if (!/^https?:\/\//i.test(input)) {
-        if (input.includes(".") && !input.includes(" ")) {
-          input = "https://" + input;
-        } else {
-          input = "https://www.google.com/search?q=" + encodeURIComponent(input);
-        }
-      }
+  // Detect if input is a URL
+  if (!input.startsWith('http://') && !input.startsWith('https://')) {
+    // Treat as search query
+    input = 'https://www.google.com/search?q=' + encodeURIComponent(input);
+  }
 
-      const frameUrl = backend + "/proxy?url=" + encodeURIComponent(input);
-      document.getElementById("browserFrame").src = frameUrl;
+  // Proxy backend endpoint
+  const backendURL = 'https://wisp-server-w7nx.onrender.com/browse'; // your backend
 
-      if (!url) {
-        historyStack.splice(historyIndex + 1);
-        historyStack.push(input);
-        historyIndex = historyStack.length - 1;
-      }
-
-      document.getElementById("urlInput").value = input;
+  fetch(backendURL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url: input })
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.html) {
+      // Render fetched HTML inside iframe using a Blob
+      const blob = new Blob([data.html], { type: 'text/html' });
+      iframe.src = URL.createObjectURL(blob);
+    } else {
+      alert('Failed to load page');
     }
+  })
+  .catch(err => {
+    console.error(err);
+    alert('Error fetching page');
+  });
+}
 
-    function goBack() {
-      if (historyIndex > 0) {
-        historyIndex--;
-        loadUrl(historyStack[historyIndex]);
-      }
-    }
+goBtn.addEventListener('click', navigate);
+urlInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') navigate();
+});
+</script>
 
-    function goForward() {
-      if (historyIndex < historyStack.length - 1) {
-        historyIndex++;
-        loadUrl(historyStack[historyIndex]);
-      }
-    }
-
-    function reloadFrame() {
-      if (historyIndex >= 0) {
-        loadUrl(historyStack[historyIndex]);
-      }
-    }
-
-    function goHome() {
-      loadUrl(homepage);
-    }
-
-    document.getElementById("urlInput").addEventListener("keydown", (e) => {
-      if (e.key === "Enter") loadUrl();
-    });
-  </script>
 </body>
 </html>
