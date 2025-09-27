@@ -1,90 +1,142 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Euphoria Proxy</title>
   <style>
     body {
       margin: 0;
       font-family: Arial, sans-serif;
-      background: #0f172a;
-      color: white;
+      background: #0d1117;
+      color: #e6edf3;
       display: flex;
       flex-direction: column;
       height: 100vh;
     }
-
     header {
-      display: flex;
-      background: #1e293b;
       padding: 10px;
+      background: #161b22;
+      display: flex;
+      align-items: center;
       gap: 10px;
     }
-
-    input[type="text"] {
+    input {
       flex: 1;
-      padding: 10px;
-      border-radius: 6px;
+      padding: 8px 12px;
       border: none;
+      border-radius: 6px;
       outline: none;
+      font-size: 14px;
     }
-
     button {
-      padding: 10px 15px;
+      padding: 8px 14px;
+      background: #238636;
       border: none;
       border-radius: 6px;
-      background: #3b82f6;
       color: white;
+      font-size: 14px;
       cursor: pointer;
     }
-
     button:hover {
-      background: #2563eb;
+      background: #2ea043;
     }
-
     iframe {
       flex: 1;
       border: none;
       width: 100%;
     }
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      padding: 6px 10px;
+      background: #21262d;
+      border-top: 1px solid #30363d;
+    }
+    .toolbar button {
+      background: #30363d;
+      color: #e6edf3;
+      border: none;
+      border-radius: 4px;
+      padding: 6px 10px;
+    }
+    .toolbar button:hover {
+      background: #484f58;
+    }
   </style>
 </head>
 <body>
   <header>
-    <input type="text" id="urlInput" placeholder="Enter URL or search...">
-    <button onclick="navigate()">Go</button>
+    <h2 style="margin:0; color:#58a6ff;">Euphoria</h2>
+    <input id="urlInput" type="text" placeholder="Enter a URL or search..." />
+    <button onclick="loadUrl()">Go</button>
   </header>
+
+  <div class="toolbar">
+    <button onclick="goBack()">⬅️</button>
+    <button onclick="goForward()">➡️</button>
+    <button onclick="reloadFrame()">🔄</button>
+    <button onclick="goHome()">🏠 Home</button>
+  </div>
 
   <iframe id="browserFrame"></iframe>
 
   <script>
-    const backend = "https://wisp-server-w7nx.onrender.com/proxy";
-    const input = document.getElementById("urlInput");
-    const frame = document.getElementById("browserFrame");
+    const backend = "https://wisp-server-w7nx.onrender.com"; // your backend
+    const homepage = "https://www.google.com"; // customize your home page
+    const historyStack = [];
+    let historyIndex = -1;
 
-    function formatUrl(query) {
-      if (!query.includes(".")) {
-        // Treat as search
-        return "https://www.google.com/search?q=" + encodeURIComponent(query);
+    function loadUrl(url = null) {
+      let input = url || document.getElementById("urlInput").value.trim();
+      if (!input) return;
+
+      if (!/^https?:\/\//i.test(input)) {
+        if (input.includes(".") && !input.includes(" ")) {
+          input = "https://" + input;
+        } else {
+          input = "https://www.google.com/search?q=" + encodeURIComponent(input);
+        }
       }
-      if (!/^https?:\/\//i.test(query)) {
-        query = "https://" + query;
+
+      const frameUrl = backend + "/proxy?url=" + encodeURIComponent(input);
+      document.getElementById("browserFrame").src = frameUrl;
+
+      if (!url) {
+        historyStack.splice(historyIndex + 1);
+        historyStack.push(input);
+        historyIndex = historyStack.length - 1;
       }
-      return query;
+
+      document.getElementById("urlInput").value = input;
     }
 
-    function navigate() {
-      const query = input.value.trim();
-      if (!query) return;
-      const targetUrl = formatUrl(query);
-      frame.src = backend + "?url=" + encodeURIComponent(targetUrl);
+    function goBack() {
+      if (historyIndex > 0) {
+        historyIndex--;
+        loadUrl(historyStack[historyIndex]);
+      }
     }
 
-    input.addEventListener("keypress", (e) => {
-      if (e.key === "Enter") {
-        navigate();
+    function goForward() {
+      if (historyIndex < historyStack.length - 1) {
+        historyIndex++;
+        loadUrl(historyStack[historyIndex]);
       }
+    }
+
+    function reloadFrame() {
+      if (historyIndex >= 0) {
+        loadUrl(historyStack[historyIndex]);
+      }
+    }
+
+    function goHome() {
+      loadUrl(homepage);
+    }
+
+    document.getElementById("urlInput").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") loadUrl();
     });
   </script>
 </body>
