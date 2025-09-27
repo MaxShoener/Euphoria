@@ -21,6 +21,7 @@
   <iframe id="browserFrame" sandbox="allow-scripts allow-forms allow-same-origin"></iframe>
 
   <script>
+    const BACKEND = 'https://your-backend.com'; // replace with your deployed backend
     const urlInput = document.getElementById('urlInput');
     const goBtn = document.getElementById('goBtn');
     const iframe = document.getElementById('browserFrame');
@@ -30,11 +31,16 @@
     let historyStack = [];
     let currentIndex = -1;
 
-    function navigate(url){
+    function toProxyURL(url){
       if(!url.startsWith('http')) url = `https://www.google.com/search?q=${encodeURIComponent(url)}`;
-      iframe.src = url;
+      return `${BACKEND}/proxy?url=${encodeURIComponent(url)}`;
+    }
+
+    function navigate(url){
+      const proxiedURL = toProxyURL(url);
+      iframe.src = proxiedURL;
       historyStack = historyStack.slice(0,currentIndex+1);
-      historyStack.push(url);
+      historyStack.push(proxiedURL);
       currentIndex++;
     }
 
