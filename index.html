@@ -2,111 +2,68 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Euphoria</title>
   <style>
-    body {
-      margin: 0;
-      font-family: sans-serif;
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-    }
-    header {
-      display: flex;
-      padding: 8px;
-      background-color: #1e1e1e;
-      color: white;
-      align-items: center;
-      gap: 8px;
-    }
-    header input {
-      flex: 1;
-      padding: 6px;
-      font-size: 1rem;
-    }
-    header button {
-      padding: 6px 12px;
-      font-size: 1rem;
-      cursor: pointer;
-    }
-    #spinner {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      display: none;
-      border: 4px solid rgba(0,0,0,0.1);
-      border-left-color: #1e1e1e;
-      border-radius: 50%;
-      width: 40px;
-      height: 40px;
-      animation: spin 1s linear infinite;
-    }
-    @keyframes spin {
-      to { transform: translate(-50%, -50%) rotate(360deg); }
-    }
-    iframe {
-      flex: 1;
-      width: 100%;
-      border: none;
-    }
+    body { margin: 0; font-family: sans-serif; display: flex; flex-direction: column; height: 100vh; }
+    #controls { display: flex; padding: 5px; background: #222; color: white; }
+    #controls input { flex: 1; padding: 5px; margin: 0 5px; }
+    #controls button { padding: 5px 10px; margin-left: 2px; }
+    iframe { flex: 1; width: 100%; border: none; }
   </style>
 </head>
 <body>
-  <header>
-    <button id="backBtn">⬅ Back</button>
-    <button id="forwardBtn">➡ Forward</button>
-    <input type="text" id="urlInput" placeholder="Search or enter URL..." />
-    <button id="goBtn">Go</button>
-  </header>
-
-  <div id="spinner"></div>
-  <iframe id="browserFrame" src=""></iframe>
+  <div id="controls">
+    <button id="back">◀</button>
+    <button id="forward">▶</button>
+    <button id="reload">⟳</button>
+    <input id="url" placeholder="Search or enter URL..." />
+    <button id="go">Go</button>
+  </div>
+  <iframe id="iframe"></iframe>
 
   <script>
-    const iframe = document.getElementById('browserFrame');
-    const input = document.getElementById('urlInput');
-    const backBtn = document.getElementById('backBtn');
-    const forwardBtn = document.getElementById('forwardBtn');
-    const goBtn = document.getElementById('goBtn');
-    const spinner = document.getElementById('spinner');
+    const iframe = document.getElementById('iframe');
+    const input = document.getElementById('url');
+    const historyStack = [];
+    let historyIndex = -1;
 
-    function loadURL(url) {
-      // If not a full URL, treat as search
-      if (!/^https?:\/\//i.test(url)) {
-        url = encodeURIComponent(url);
-        url = `/browse?url=${url}`;
-      } else {
-        url = `/browse?url=${encodeURIComponent(url)}`;
-      }
-      spinner.style.display = 'block';
-      iframe.src = url;
+    function smartURL(query) {
+      if (/^(https?:\/\/)/i.test(query)) return query;
+      if (/\.[a-z]{2,}$/i.test(query)) return 'https://' + query;
+      return 'https://www.google.com/search?q=' + encodeURIComponent(query);
     }
 
-    goBtn.addEventListener('click', () => loadURL(input.value));
-    input.addEventListener('keydown', e => {
-      if (e.key === 'Enter') loadURL(input.value);
-    });
+    function loadURL(url) {
+      const finalURL = '/browse?url=' + encodeURIComponent(url);
+      iframe.src = finalURL;
 
-    backBtn.addEventListener('click', () => {
-      iframe.contentWindow.history.back();
-    });
-
-    forwardBtn.addEventListener('click', () => {
-      iframe.contentWindow.history.forward();
-    });
-
-    iframe.addEventListener('load', () => {
-      spinner.style.display = 'none';
-      try {
-        // Resize iframe to content height
-        const doc = iframe.contentDocument || iframe.contentWindow.document;
-        iframe.style.height = doc.body.scrollHeight + 'px';
-      } catch (err) {
-        // Cross-origin, cannot access content
-        iframe.style.height = '100%';
+      // Push to history if navigating normally
+      if (historyIndex === -1 || historyStack[historyIndex] !== finalURL) {
+        historyStack.splice(historyIndex + 1);
+        historyStack.push(finalURL);
+        historyIndex++;
       }
+    }
+
+    document.getElementById('go').addEventListener('click', () => loadURL(smartURL(input.value)));
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') loadURL(smartURL(input.value)); });
+
+    document.getElementById('back').addEventListener('click', () => {
+      if (historyIndex > 0) {
+        historyIndex--;
+        iframe.src = historyStack[historyIndex];
+      }
+    });
+
+    document.getElementById('forward').addEventListener('click', () => {
+      if (historyIndex < historyStack.length - 1) {
+        historyIndex++;
+        iframe.src = historyStack[historyIndex];
+      }
+    });
+
+    document.getElementById('reload').addEventListener('click', () => {
+      if (historyIndex >= 0) iframe.src = historyStack[historyIndex];
     });
   </script>
 </body>
