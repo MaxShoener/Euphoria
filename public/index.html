@@ -2,34 +2,121 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Euphoria</title>
 <style>
-body { font-family: sans-serif; margin: 20px; }
-#browserOutput { width: 100%; max-width: 1200px; height: 600px; border: 1px solid #ccc; }
-input { width: 400px; padding: 5px; }
-button { padding: 5px 10px; }
+    body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        background: #f5f5f5;
+    }
+    header {
+        padding: 10px;
+        background: #222;
+        color: white;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+    input[type="text"] {
+        flex: 1;
+        padding: 5px;
+        font-size: 16px;
+        border-radius: 4px;
+        border: none;
+    }
+    button {
+        padding: 6px 10px;
+        font-size: 16px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        background: #4CAF50;
+        color: white;
+    }
+    button:hover {
+        background: #45a049;
+    }
+    #browser-frame {
+        flex: 1;
+        width: 100%;
+        border: none;
+        background: white;
+    }
 </style>
 </head>
 <body>
-<h1>Euphoria</h1>
-<input type="text" id="urlInput" placeholder="Enter URL or search term">
-<button id="goBtn">Go</button>
-<br><br>
-<img id="browserOutput" src="" alt="Browser output">
+
+<header>
+    <button id="backBtn">&larr;</button>
+    <button id="forwardBtn">&rarr;</button>
+    <button id="reloadBtn">&#x21bb;</button>
+    <input type="text" id="urlInput" placeholder="Enter URL or search term">
+    <button id="goBtn">Go</button>
+</header>
+
+<iframe id="browser-frame" src=""></iframe>
 
 <script>
 const urlInput = document.getElementById('urlInput');
 const goBtn = document.getElementById('goBtn');
-const browserOutput = document.getElementById('browserOutput');
+const backBtn = document.getElementById('backBtn');
+const forwardBtn = document.getElementById('forwardBtn');
+const reloadBtn = document.getElementById('reloadBtn');
+const browserFrame = document.getElementById('browser-frame');
 
-async function loadPage() {
-    const val = urlInput.value.trim();
-    const url = val.startsWith('http') ? val : 'https://www.google.com/search?q=' + encodeURIComponent(val);
-    browserOutput.src = '/browse?url=' + encodeURIComponent(url);
+const backendBase = 'https://wisp-server-w7nx.onrender.com/browse?url=';
+
+let historyStack = [];
+let currentIndex = -1;
+
+function navigate(url) {
+    browserFrame.src = backendBase + encodeURIComponent(url);
+    // update history
+    if (currentIndex === -1 || historyStack[currentIndex] !== url) {
+        historyStack = historyStack.slice(0, currentIndex + 1);
+        historyStack.push(url);
+        currentIndex++;
+    }
 }
 
-goBtn.addEventListener('click', loadPage);
-urlInput.addEventListener('keydown', e => { if (e.key === 'Enter') loadPage(); });
+goBtn.addEventListener('click', () => {
+    const val = urlInput.value.trim();
+    if (!val) return;
+    const url = val.startsWith('http://') || val.startsWith('https://')
+        ? val
+        : 'https://www.google.com/search?q=' + encodeURIComponent(val);
+    navigate(url);
+});
+
+urlInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') goBtn.click();
+});
+
+backBtn.addEventListener('click', () => {
+    if (currentIndex > 0) {
+        currentIndex--;
+        browserFrame.src = backendBase + encodeURIComponent(historyStack[currentIndex]);
+    }
+});
+
+forwardBtn.addEventListener('click', () => {
+    if (currentIndex < historyStack.length - 1) {
+        currentIndex++;
+        browserFrame.src = backendBase + encodeURIComponent(historyStack[currentIndex]);
+    }
+});
+
+reloadBtn.addEventListener('click', () => {
+    if (currentIndex >= 0) {
+        browserFrame.src = backendBase + encodeURIComponent(historyStack[currentIndex]);
+    }
+});
 </script>
+
 </body>
 </html>
