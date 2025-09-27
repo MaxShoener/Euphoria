@@ -15,40 +15,46 @@ button:hover { background:#444; color:#fff; }
 <body>
 <div id="controls">
   <input type="text" id="query" placeholder="Enter URL or search...">
-  <button onclick="startStream()">Go</button>
-  <button onclick="stopStream()">Stop</button>
+  <button onclick="sendQuery()">Go</button>
+  <button onclick="sendAction('back')">Back</button>
+  <button onclick="sendAction('forward')">Forward</button>
+  <button onclick="sendAction('reload')">Reload</button>
+  <button onclick="sendAction('stop')">Stop</button>
 </div>
 <img id="browser" src="" alt="Browser output">
 
 <script>
 let ws;
 
-function startStream() {
-  const query = document.getElementById("query").value;
-  if (!query) return;
+function initWebSocket() {
+  if (!ws || ws.readyState !== 1) {
+    ws = new WebSocket("wss://wisp-server-w7nx.onrender.com");
+    ws.binaryType = "arraybuffer";
 
-  stopStream(); // stop any previous connection
-
-  ws = new WebSocket("wss://wisp-server-w7nx.onrender.com");
-  ws.binaryType = "arraybuffer";
-
-  ws.onopen = () => ws.send(JSON.stringify({ query }));
-  ws.onmessage = e => {
-    if (e.data instanceof ArrayBuffer) {
-      const blob = new Blob([e.data], { type: "image/jpeg" });
-      document.getElementById("browser").src = URL.createObjectURL(blob);
-    } else {
-      try { console.error(JSON.parse(e.data).error); } catch {}
-    }
-  };
+    ws.onmessage = e => {
+      if (e.data instanceof ArrayBuffer) {
+        const blob = new Blob([e.data], { type: "image/jpeg" });
+        document.getElementById("browser").src = URL.createObjectURL(blob);
+      } else {
+        try { console.error(JSON.parse(e.data).error); } catch {}
+      }
+    };
+  }
 }
 
-function stopStream() {
-  if (ws) ws.close();
+function sendQuery() {
+  initWebSocket();
+  const query = document.getElementById("query").value;
+  if (query) ws.send(JSON.stringify({ query }));
+}
+
+function sendAction(action) {
+  initWebSocket();
+  ws.send(JSON.stringify({ action }));
 }
 
 document.getElementById("query").addEventListener("keypress", e => {
-  if (e.key === "Enter") startStream();
+  if (e.key === "Enter") sendQuery();
 });
 </script>
 </body>
