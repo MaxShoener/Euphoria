@@ -3,119 +3,89 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Euphoria Proxy Browser</title>
+  <title>Euphoria Proxy</title>
   <style>
     body {
       margin: 0;
       font-family: Arial, sans-serif;
+      background: #0f172a;
+      color: white;
       display: flex;
       flex-direction: column;
       height: 100vh;
-      background: #1e1e1e;
-      color: #fff;
     }
 
     header {
       display: flex;
-      align-items: center;
+      background: #1e293b;
       padding: 10px;
-      background: #2b2b2b;
       gap: 10px;
     }
 
     input[type="text"] {
       flex: 1;
-      padding: 8px 12px;
-      border-radius: 5px;
+      padding: 10px;
+      border-radius: 6px;
       border: none;
-      font-size: 16px;
+      outline: none;
     }
 
     button {
-      padding: 8px 12px;
-      background: #4caf50;
+      padding: 10px 15px;
       border: none;
-      border-radius: 5px;
-      cursor: pointer;
+      border-radius: 6px;
+      background: #3b82f6;
       color: white;
-      font-weight: bold;
-      transition: background 0.2s;
+      cursor: pointer;
     }
 
     button:hover {
-      background: #45a049;
+      background: #2563eb;
     }
 
     iframe {
       flex: 1;
       border: none;
       width: 100%;
-      height: 100%;
-      background: #fff;
-    }
-
-    /* Loading overlay */
-    #loading {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      color: #fff;
-      font-size: 18px;
-      display: none;
-    }
-
-    #iframe-container {
-      position: relative;
-      flex: 1;
-      overflow: hidden;
     }
   </style>
 </head>
 <body>
   <header>
-    <input id="url-input" type="text" placeholder="Enter website URL">
-    <button id="go-btn">Go</button>
+    <input type="text" id="urlInput" placeholder="Enter URL or search...">
+    <button onclick="navigate()">Go</button>
   </header>
 
-  <div id="iframe-container">
-    <div id="loading">Loading...</div>
-    <iframe id="browser-frame"></iframe>
-  </div>
+  <iframe id="browserFrame"></iframe>
 
   <script>
-    const BACKEND_PROXY = "https://wisp-server-w7nx.onrender.com/proxy";
-    const input = document.getElementById("url-input");
-    const button = document.getElementById("go-btn");
-    const iframe = document.getElementById("browser-frame");
-    const loading = document.getElementById("loading");
+    const backend = "https://wisp-server-w7nx.onrender.com/proxy";
+    const input = document.getElementById("urlInput");
+    const frame = document.getElementById("browserFrame");
 
-    function loadUrl(url) {
-      if (!url) return;
-      if (!url.startsWith("http")) url = "https://" + url;
-      iframe.src = `${BACKEND_PROXY}?url=${encodeURIComponent(url)}`;
-      loading.style.display = "block";
+    function formatUrl(query) {
+      if (!query.includes(".")) {
+        // Treat as search
+        return "https://www.google.com/search?q=" + encodeURIComponent(query);
+      }
+      if (!/^https?:\/\//i.test(query)) {
+        query = "https://" + query;
+      }
+      return query;
     }
 
-    // Show loading overlay while iframe is loading
-    iframe.onload = () => {
-      loading.style.display = "none";
-    };
+    function navigate() {
+      const query = input.value.trim();
+      if (!query) return;
+      const targetUrl = formatUrl(query);
+      frame.src = backend + "?url=" + encodeURIComponent(targetUrl);
+    }
 
-    // Enter key triggers load
     input.addEventListener("keypress", (e) => {
       if (e.key === "Enter") {
-        loadUrl(input.value);
+        navigate();
       }
     });
-
-    // Button triggers load
-    button.addEventListener("click", () => {
-      loadUrl(input.value);
-    });
-
-    // Optional: load a default page
-    loadUrl("example.com");
   </script>
 </body>
 </html>
