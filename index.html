@@ -11,79 +11,123 @@
       display: flex;
       flex-direction: column;
       height: 100vh;
-      background-color: #f0f0f0;
     }
 
     header {
-      background-color: #1e1e1e;
+      background-color: #1a1a1a;
       color: white;
-      padding: 10px 20px;
+      padding: 0.5rem;
       display: flex;
       align-items: center;
-      gap: 10px;
+      gap: 0.5rem;
     }
 
-    header input[type="text"] {
+    input[type="text"] {
       flex: 1;
-      padding: 8px;
-      border-radius: 5px;
+      padding: 0.5rem;
+      border-radius: 4px;
       border: none;
-      font-size: 16px;
+      font-size: 1rem;
     }
 
-    header button {
-      padding: 8px 16px;
+    button {
+      padding: 0.5rem 0.75rem;
       border: none;
-      border-radius: 5px;
-      background-color: #4caf50;
+      border-radius: 4px;
+      background-color: #333;
       color: white;
-      font-size: 16px;
       cursor: pointer;
+      font-size: 0.9rem;
+    }
+
+    button:hover {
+      background-color: #555;
     }
 
     iframe {
       flex: 1;
-      width: 100%;
       border: none;
+      width: 100%;
     }
   </style>
 </head>
 <body>
+  <header>
+    <button id="back">◀</button>
+    <button id="forward">▶</button>
+    <button id="reload">⟳</button>
+    <button id="home">🏠</button>
+    <input type="text" id="url" placeholder="Search or type URL..." />
+    <button id="go">Go</button>
+  </header>
 
-<header>
-  <input id="urlInput" type="text" placeholder="Type a URL or search query..." />
-  <button id="goBtn">Go</button>
-</header>
+  <iframe id="browser"></iframe>
 
-<iframe id="browserFrame" src=""></iframe>
+  <script>
+    const iframe = document.getElementById('browser');
+    const urlInput = document.getElementById('url');
+    const backBtn = document.getElementById('back');
+    const forwardBtn = document.getElementById('forward');
+    const reloadBtn = document.getElementById('reload');
+    const homeBtn = document.getElementById('home');
+    const goBtn = document.getElementById('go');
 
-<script>
-  const urlInput = document.getElementById('urlInput');
-  const goBtn = document.getElementById('goBtn');
-  const iframe = document.getElementById('browserFrame');
+    const backendURL = 'https://wisp-server-w7nx.onrender.com/browse';
+    const homePage = 'https://www.google.com';
+    const historyStack = [];
+    let currentIndex = -1;
 
-  const backendURL = 'https://wisp-server-w7nx.onrender.com/browse';
+    async function loadURL(url) {
+      if (!/^https?:\/\//i.test(url)) {
+        url = 'https://www.google.com/search?q=' + encodeURIComponent(url);
+      }
 
-  function navigate() {
-    let value = urlInput.value.trim();
-    if (!value) return;
+      iframe.src = `${backendURL}?url=${encodeURIComponent(url)}`;
 
-    // If input looks like a URL, use it; otherwise, search Google
-    if (!/^https?:\/\//i.test(value)) {
-      value = `https://www.google.com/search?q=${encodeURIComponent(value)}`;
+      // Update history
+      if (currentIndex < historyStack.length - 1) {
+        historyStack.splice(currentIndex + 1);
+      }
+      historyStack.push(url);
+      currentIndex = historyStack.length - 1;
     }
 
-    iframe.src = `${backendURL}?url=${encodeURIComponent(value)}`;
-  }
+    goBtn.addEventListener('click', () => {
+      const url = urlInput.value.trim();
+      if (url) loadURL(url);
+    });
 
-  goBtn.addEventListener('click', navigate);
+    urlInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        const url = urlInput.value.trim();
+        if (url) loadURL(url);
+      }
+    });
 
-  urlInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      navigate();
-    }
-  });
-</script>
+    backBtn.addEventListener('click', () => {
+      if (currentIndex > 0) {
+        currentIndex--;
+        iframe.src = `${backendURL}?url=${encodeURIComponent(historyStack[currentIndex])}`;
+      }
+    });
 
+    forwardBtn.addEventListener('click', () => {
+      if (currentIndex < historyStack.length - 1) {
+        currentIndex++;
+        iframe.src = `${backendURL}?url=${encodeURIComponent(historyStack[currentIndex])}`;
+      }
+    });
+
+    reloadBtn.addEventListener('click', () => {
+      if (currentIndex >= 0) {
+        iframe.src = `${backendURL}?url=${encodeURIComponent(historyStack[currentIndex])}`;
+      }
+    });
+
+    homeBtn.addEventListener('click', () => loadURL(homePage));
+
+    // Load home page on start
+    loadURL(homePage);
+  </script>
 </body>
 </html>
