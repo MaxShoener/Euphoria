@@ -1,63 +1,74 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Euphoria</title>
-  <style>
-    body { font-family: sans-serif; margin: 0; display: flex; flex-direction: column; height: 100vh; }
-    #controls { padding: 10px; background: #222; color: white; display: flex; gap: 10px; }
-    #browser { flex: 1; border: none; width: 100%; }
-  </style>
+<meta charset="UTF-8">
+<title>Euphoria</title>
+<style>
+  body { margin: 0; font-family: Arial, sans-serif; display: flex; flex-direction: column; height: 100vh; }
+  #controls { display: flex; padding: 10px; gap: 5px; background: #f8f8f8; align-items: center; }
+  #urlInput { flex: 1; padding: 5px; font-size: 16px; }
+  button { padding: 6px 12px; font-size: 14px; cursor: pointer; }
+  iframe { flex: 1; width: 100%; border: none; }
+</style>
 </head>
 <body>
-  <div id="controls">
-    <button onclick="goBack()">◀ Back</button>
-    <button onclick="goForward()">▶ Forward</button>
-    <input id="url" type="text" placeholder="Enter URL or search..." style="flex:1">
-    <button onclick="go()">Go</button>
-  </div>
-  <iframe id="browser"></iframe>
+<div id="controls">
+  <button onclick="back()">◀</button>
+  <button onclick="forward()">▶</button>
+  <button onclick="reload()">⟳</button>
+  <input id="urlInput" placeholder="Enter URL or search term" />
+  <button onclick="go()">Go</button>
+</div>
+<iframe id="browserFrame"></iframe>
 
-  <script>
-    let historyStack = [];
-    let currentIndex = -1;
+<script>
+const iframe = document.getElementById('browserFrame');
+const input = document.getElementById('urlInput');
+let historyStack = [];
+let historyIndex = -1;
 
-    async function go() {
-      const input = document.getElementById('url').value.trim();
-      if (!input) return;
+function formatURL(url) {
+  if (!url.startsWith('http')) {
+    return '/proxy?url=' + encodeURIComponent('https://www.google.com/search?q=' + url);
+  }
+  return '/proxy?url=' + encodeURIComponent(url);
+}
 
-      const res = await fetch('/browse', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: input })
-      });
+function go(url) {
+  const target = url || input.value;
+  if (!target) return;
+  const formatted = formatURL(target);
 
-      const html = await res.text();
-      const blob = new Blob([html], { type: 'text/html' });
-      const url = URL.createObjectURL(blob);
+  iframe.src = formatted;
 
-      const iframe = document.getElementById('browser');
-      iframe.src = url;
+  // Update history
+  historyStack = historyStack.slice(0, historyIndex + 1);
+  historyStack.push(formatted);
+  historyIndex++;
+}
 
-      // Update history
-      historyStack = historyStack.slice(0, currentIndex + 1);
-      historyStack.push(url);
-      currentIndex++;
-    }
+function back() {
+  if (historyIndex > 0) {
+    historyIndex--;
+    iframe.src = historyStack[historyIndex];
+  }
+}
 
-    function goBack() {
-      if (currentIndex > 0) {
-        currentIndex--;
-        document.getElementById('browser').src = historyStack[currentIndex];
-      }
-    }
+function forward() {
+  if (historyIndex < historyStack.length - 1) {
+    historyIndex++;
+    iframe.src = historyStack[historyIndex];
+  }
+}
 
-    function goForward() {
-      if (currentIndex < historyStack.length - 1) {
-        currentIndex++;
-        document.getElementById('browser').src = historyStack[currentIndex];
-      }
-    }
-  </script>
+function reload() {
+  if (historyIndex >= 0) iframe.src = historyStack[historyIndex];
+}
+
+// Go on Enter key
+input.addEventListener('keypress', e => {
+  if (e.key === 'Enter') go();
+});
+</script>
 </body>
 </html>
