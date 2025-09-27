@@ -4,52 +4,156 @@
   <meta charset="UTF-8" />
   <title>Euphoria</title>
   <style>
-    body { margin: 0; font-family: Arial, sans-serif; background: #121212; color: #fff; }
-    header { display: flex; align-items: center; padding: 10px; background: #1e1e1e; }
-    input { flex: 1; padding: 8px; border: none; border-radius: 4px; margin: 0 10px; }
-    button { padding: 8px 12px; margin-right: 5px; background: #3a3a3a; border: none; border-radius: 4px; color: #fff; cursor: pointer; }
-    button:hover { background: #555; }
-    iframe { width: 100%; height: calc(100vh - 50px); border: none; background: #fff; }
+    body {
+      font-family: Arial, sans-serif;
+      background: #111;
+      color: #eee;
+      margin: 0;
+      text-align: center;
+    }
+    header {
+      background: #222;
+      padding: 15px;
+    }
+    header h1 {
+      margin: 0;
+      font-size: 24px;
+      color: #00e0ff;
+    }
+    nav {
+      margin: 15px 0;
+    }
+    nav button {
+      margin: 0 10px;
+      padding: 8px 16px;
+      background: #00e0ff;
+      border: none;
+      border-radius: 4px;
+      color: #111;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    nav button:hover {
+      background: #00bcd4;
+    }
+    .search-bar {
+      margin: 20px;
+    }
+    input[type="text"] {
+      width: 300px;
+      padding: 8px;
+      border-radius: 4px;
+      border: none;
+    }
+    button.go {
+      padding: 8px 16px;
+      margin-left: 8px;
+      border: none;
+      border-radius: 4px;
+      background: #00e0ff;
+      color: #111;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .spinner {
+      border: 6px solid #333;
+      border-top: 6px solid #00e0ff;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 30px auto;
+    }
+    @keyframes spin {
+      100% { transform: rotate(360deg); }
+    }
+    .message {
+      margin-top: 10px;
+      font-size: 16px;
+    }
   </style>
 </head>
 <body>
   <header>
-    <button id="back">⬅️</button>
-    <button id="forward">➡️</button>
-    <input type="text" id="url" placeholder="Enter URL or search...">
-    <button id="go">Go</button>
+    <h1>Euphoria</h1>
   </header>
-  <iframe id="viewer"></iframe>
+
+  <nav>
+    <button onclick="navigate('home')">Home</button>
+    <button onclick="navigate('browse')">Browse</button>
+    <button onclick="navigate('login')">Login</button>
+    <button onclick="navigate('remote')">Remote Play</button>
+  </nav>
+
+  <div class="search-bar">
+    <input type="text" id="searchInput" placeholder="Enter URL or search..." />
+    <button class="go" onclick="doSearch()">Go</button>
+  </div>
+
+  <div id="output"></div>
 
   <script>
-    const backend = "https://wisp-server-w7nx.onrender.com"; // ✅ your backend
+    const backend = "https://wisp-server-w7nx.onrender.com";
 
-    const iframe = document.getElementById("viewer");
-    const input = document.getElementById("url");
-    const goBtn = document.getElementById("go");
-    const backBtn = document.getElementById("back");
-    const forwardBtn = document.getElementById("forward");
+    async function doSearch() {
+      const query = document.getElementById("searchInput").value.trim();
+      if (!query) return;
 
-    let historyStack = [], historyIndex = -1;
+      const url = backend + "/screenshot"; // example endpoint
+      showLoading();
 
-    function formatUrl(query) {
-      if (query.startsWith("http://") || query.startsWith("https://")) return query;
-      if (query.includes(".")) return "https://" + query;
-      return "https://www.google.com/search?q=" + encodeURIComponent(query);
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("Backend error");
+        const contentType = res.headers.get("content-type");
+
+        if (contentType && contentType.includes("image/png")) {
+          const blob = await res.blob();
+          const img = document.createElement("img");
+          img.src = URL.createObjectURL(blob);
+          img.style.maxWidth = "80%";
+          clearOutput();
+          document.getElementById("output").appendChild(img);
+        } else {
+          const text = await res.text();
+          if (text.includes("Browser not ready")) {
+            showLoading("Backend is waking up... retrying in 5s");
+            setTimeout(doSearch, 5000);
+          } else {
+            clearOutput();
+            document.getElementById("output").innerText = text;
+          }
+        }
+      } catch (err) {
+        clearOutput();
+        document.getElementById("output").innerText = "❌ Failed: " + err.message;
+      }
     }
 
-    function navigate(query) {
-      const target = formatUrl(query);
-      iframe.src = backend + "/browse?url=" + encodeURIComponent(target);
-      if (historyIndex < historyStack.length - 1) historyStack = historyStack.slice(0, historyIndex + 1);
-      historyStack.push(query);
-      historyIndex++;
+    function showLoading(msg = "Loading...") {
+      clearOutput();
+      const spinner = document.createElement("div");
+      spinner.className = "spinner";
+      const message = document.createElement("div");
+      message.className = "message";
+      message.innerText = msg;
+      document.getElementById("output").appendChild(spinner);
+      document.getElementById("output").appendChild(message);
     }
 
-    goBtn.onclick = () => navigate(input.value);
-    input.addEventListener("keypress", e => { if (e.key === "Enter") navigate(input.value); });
-    backBtn.onclick = () => { if (historyIndex > 0) { historyIndex--; input.value = historyStack[historyIndex]; navigate(input.value); } };
-    forwardBtn.onclick = () => { if (historyIndex < historyStack.length - 1) { historyIndex++; input.value = historyStack[historyIndex]; navigate(input.value); } };
+    function clearOutput() {
+      document.getElementById("output").innerHTML = "";
+    }
+
+    function navigate(section) {
+      clearOutput();
+      document.getElementById("output").innerText = "📂 " + section + " section (coming soon)";
+    }
+
+    // Support Enter key
+    document.getElementById("searchInput").addEventListener("keydown", e => {
+      if (e.key === "Enter") doSearch();
+    });
   </script>
 </body>
 </html>
