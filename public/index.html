@@ -11,17 +11,16 @@
       display: flex;
       flex-direction: column;
       height: 100vh;
-      background-color: #121212;
-      color: white;
+      background-color: #111;
+      color: #fff;
     }
 
     header {
       background-color: #1a1a1a;
-      padding: 0.5rem;
       display: flex;
       align-items: center;
-      gap: 0.5rem;
-      transition: all 0.3s;
+      gap: 0.25rem;
+      padding: 0.25rem;
     }
 
     input[type="text"] {
@@ -30,6 +29,8 @@
       border-radius: 4px;
       border: none;
       font-size: 1rem;
+      background-color: #222;
+      color: #fff;
     }
 
     button {
@@ -37,20 +38,10 @@
       border: none;
       border-radius: 4px;
       background-color: #333;
-      color: white;
+      color: #fff;
       cursor: pointer;
       font-size: 1rem;
-      height: 2.5rem;
-      width: 2.5rem;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      box-sizing: border-box;
-    }
-
-    button#go, button#fullscreen {
-      width: auto;
-      padding: 0 0.75rem;
+      min-width: 2.5rem;
     }
 
     button:hover {
@@ -62,17 +53,31 @@
       border: none;
       width: 100%;
     }
+
+    /* Fullscreen styles */
+    .fullscreen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 9999;
+    }
+
+    .hide-header {
+      display: none;
+    }
   </style>
 </head>
 <body>
-  <header id="header">
+  <header id="navHeader">
     <button id="back">◀</button>
     <button id="forward">▶</button>
     <button id="reload">⟳</button>
     <button id="home">🏠</button>
+    <button id="fullscreen">⛶</button>
     <input type="text" id="url" placeholder="Search or type URL..." />
     <button id="go">Go</button>
-    <button id="fullscreen">⛶</button>
   </header>
 
   <iframe id="browser"></iframe>
@@ -86,7 +91,7 @@
     const homeBtn = document.getElementById('home');
     const goBtn = document.getElementById('go');
     const fullscreenBtn = document.getElementById('fullscreen');
-    const headerEl = document.getElementById('header');
+    const navHeader = document.getElementById('navHeader');
 
     const backendURL = 'https://wisp-server-w7nx.onrender.com/browse';
     const homePage = 'https://www.google.com';
@@ -94,16 +99,19 @@
     let currentIndex = -1;
     let isFullscreen = false;
 
-    function buildSearchURL(query) {
-      if (/^https?:\/\//i.test(query)) return query;
-      return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+    function normalizeURL(url) {
+      if (!/^https?:\/\//i.test(url)) {
+        // Treat as search
+        return 'https://www.google.com/search?q=' + encodeURIComponent(url);
+      }
+      return url;
     }
 
     async function loadURL(url) {
-      url = buildSearchURL(url);
-
+      url = normalizeURL(url);
       iframe.src = `${backendURL}?url=${encodeURIComponent(url)}`;
 
+      // Update history
       if (currentIndex < historyStack.length - 1) {
         historyStack.splice(currentIndex + 1);
       }
@@ -149,24 +157,25 @@
     homeBtn.addEventListener('click', () => loadURL(homePage));
 
     fullscreenBtn.addEventListener('click', () => {
-      if (!isFullscreen) {
-        iframe.requestFullscreen();
-        headerEl.style.display = 'none';
-      } else {
-        document.exitFullscreen();
-        headerEl.style.display = 'flex';
-      }
       isFullscreen = !isFullscreen;
+      if (isFullscreen) {
+        iframe.classList.add('fullscreen');
+        navHeader.classList.add('hide-header');
+      } else {
+        iframe.classList.remove('fullscreen');
+        navHeader.classList.remove('hide-header');
+      }
     });
 
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && isFullscreen) {
-        document.exitFullscreen();
-        headerEl.style.display = 'flex';
         isFullscreen = false;
+        iframe.classList.remove('fullscreen');
+        navHeader.classList.remove('hide-header');
       }
     });
 
+    // Load home page initially
     loadURL(homePage);
   </script>
 </body>
