@@ -12,7 +12,7 @@
     flex-direction: column;
     height: 100vh;
     background-color: #121212;
-    color: #ffffff;
+    color: #fff;
   }
 
   header {
@@ -21,6 +21,8 @@
     display: flex;
     align-items: center;
     gap: 0.5rem;
+    transition: opacity 0.3s;
+    z-index: 1000;
   }
 
   input[type="text"] {
@@ -60,21 +62,39 @@
     flex: 1;
     border: none;
     width: 100%;
+    transition: all 0.3s;
   }
 
   .fullscreen {
-    position: fixed;
+    position: fixed !important;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
     z-index: 9999;
   }
+
+  .hidden {
+    display: none;
+  }
+
+  #error-msg {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #ff5555;
+    font-size: 1.2rem;
+    background: #222;
+    padding: 1rem 2rem;
+    border-radius: 8px;
+    display: none;
+  }
 </style>
 </head>
 <body>
 
-<header>
+<header id="header">
   <button id="back">◀</button>
   <button id="forward">▶</button>
   <button id="reload">⟳</button>
@@ -85,6 +105,7 @@
 </header>
 
 <iframe id="browser"></iframe>
+<div id="error-msg">Error loading page</div>
 
 <script>
 const iframe = document.getElementById('browser');
@@ -95,6 +116,8 @@ const reloadBtn = document.getElementById('reload');
 const homeBtn = document.getElementById('home');
 const goBtn = document.getElementById('go');
 const fullscreenBtn = document.getElementById('fullscreen');
+const header = document.getElementById('header');
+const errorMsg = document.getElementById('error-msg');
 
 const backendURL = 'https://wisp-server-w7nx.onrender.com/browse';
 const homePage = 'https://www.google.com';
@@ -112,6 +135,7 @@ function encodeURL(url) {
 async function loadURL(url) {
   const encoded = encodeURL(url);
   iframe.src = `${backendURL}?url=${encoded}`;
+  showError(false);
 
   if (currentIndex < historyStack.length - 1) {
     historyStack.splice(currentIndex + 1);
@@ -119,6 +143,18 @@ async function loadURL(url) {
   historyStack.push(url);
   currentIndex = historyStack.length - 1;
 }
+
+function showError(show) {
+  errorMsg.style.display = show ? 'block' : 'none';
+}
+
+iframe.addEventListener('load', () => {
+  showError(false);
+});
+
+iframe.addEventListener('error', () => {
+  showError(true);
+});
 
 goBtn.addEventListener('click', () => {
   const url = urlInput.value.trim();
@@ -154,11 +190,16 @@ reloadBtn.addEventListener('click', () => {
 
 homeBtn.addEventListener('click', () => loadURL(homePage));
 
-fullscreenBtn.addEventListener('click', () => {
-  isFullscreen = !isFullscreen;
-  if (isFullscreen) iframe.classList.add('fullscreen');
-  else iframe.classList.remove('fullscreen');
+fullscreenBtn.addEventListener('click', toggleFullscreen);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && isFullscreen) toggleFullscreen();
 });
+
+function toggleFullscreen() {
+  isFullscreen = !isFullscreen;
+  iframe.classList.toggle('fullscreen', isFullscreen);
+  header.classList.toggle('hidden', isFullscreen);
+}
 
 // Load home page initially
 loadURL(homePage);
