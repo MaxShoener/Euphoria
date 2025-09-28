@@ -1,145 +1,168 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Euphoria</title>
   <style>
-    /* Global styling */
-    body {
-      margin: 0;
-      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-      background-color: #121212;
-      color: #fff;
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
+    :root{
+      --bg:#0f0f10; --panel:#1b1b1b; --accent:#2a9d8f; --muted:#9aa0a6; --btn:#2c2c2c;
     }
-
-    /* Header / navigation bar */
-    header {
-      display: flex;
-      align-items: center;
-      padding: 0.5rem;
-      gap: 0.5rem;
-      background-color: #1f1f1f;
+    *{box-sizing:border-box}
+    body{
+      margin:0; height:100vh; display:flex; flex-direction:column;
+      font-family:Inter, "Segoe UI", Roboto, Arial, sans-serif;
+      background:linear-gradient(180deg,#0b0b0c,#0f1112);
+      color:#fff;
     }
-
-    input[type="text"] {
-      flex: 1;
-      padding: 0.5rem;
-      border-radius: 4px;
-      border: none;
-      font-size: 1rem;
-      background-color: #2a2a2a;
-      color: #fff;
+    header{
+      display:flex; gap:8px; align-items:center; padding:10px;
+      background:var(--panel); box-shadow:0 1px 0 rgba(255,255,255,0.02);
     }
-
-    button {
-      padding: 0.5rem 0.75rem;
-      border: none;
-      border-radius: 4px;
-      background-color: #333;
-      color: #fff;
-      cursor: pointer;
-      font-size: 0.9rem;
-      transition: background-color 0.2s;
+    .nav-btn{
+      background:var(--btn); border:none; color:#fff; padding:8px 10px; border-radius:6px; cursor:pointer;
+      font-size:16px;
     }
-
-    button:hover {
-      background-color: #555;
+    .nav-btn:hover{filter:brightness(1.1)}
+    #url{
+      flex:1; padding:10px 12px; border-radius:8px; border:none; outline:none;
+      background:#121212; color:#fff; font-size:15px;
     }
-
-    /* Browser iframe */
-    iframe {
-      flex: 1;
-      border: none;
-      width: 100%;
-      background-color: #000;
+    #go{background:var(--accent); border:none; padding:8px 14px; border-radius:8px; color:#fff; cursor:pointer}
+    #go:hover{filter:brightness(1.05)}
+    iframe{
+      flex:1; border:none; width:100%; background:#000;
+      /* optional: ensure the iframe takes the full viewport height minus header */
+      min-height:0;
+    }
+    .status{
+      padding:8px 12px; color:var(--muted); font-size:13px;
     }
   </style>
 </head>
 <body>
   <header>
-    <button id="back">◀</button>
-    <button id="forward">▶</button>
-    <button id="reload">⟳</button>
-    <button id="home">🏠</button>
-    <input type="text" id="url" placeholder="Search or type URL..." />
+    <button id="home" class="nav-btn">🏠</button>
+    <button id="back" class="nav-btn">◀</button>
+    <button id="forward" class="nav-btn">▶</button>
+    <button id="reload" class="nav-btn">⟳</button>
+    <input id="url" type="text" placeholder="Search or type URL (e.g. chess.com)" />
     <button id="go">Go</button>
   </header>
 
+  <div class="status" id="status">Initializing…</div>
   <iframe id="browser" src=""></iframe>
 
   <script>
-    const backendURL = 'https://wisp-server-w7nx.onrender.com/browse';
-    const homePage = 'https://www.google.com';
+    const BACKEND_BASE = "https://wisp-server-w7nx.onrender.com";
+    const BROWSE_ENDPOINT = BACKEND_BASE + "/browse?url=";
+    const PING_ENDPOINT = BACKEND_BASE + "/ping";
+    const HOME = "https://www.google.com";
 
-    const iframe = document.getElementById('browser');
-    const urlInput = document.getElementById('url');
-    const backBtn = document.getElementById('back');
-    const forwardBtn = document.getElementById('forward');
-    const reloadBtn = document.getElementById('reload');
-    const homeBtn = document.getElementById('home');
-    const goBtn = document.getElementById('go');
+    const iframe = document.getElementById("browser");
+    const urlInput = document.getElementById("url");
+    const status = document.getElementById("status");
 
-    const historyStack = [];
+    const backBtn = document.getElementById("back");
+    const forwardBtn = document.getElementById("forward");
+    const reloadBtn = document.getElementById("reload");
+    const homeBtn = document.getElementById("home");
+    const goBtn = document.getElementById("go");
+
+    let historyStack = [];
     let currentIndex = -1;
 
-    function updateHistory(url) {
+    function setStatus(txt) { status.innerText = txt; }
+
+    // Wake backend once on load
+    async function wakeBackend() {
+      setStatus("Waking backend...");
+      try {
+        const r = await fetch(PING_ENDPOINT, { mode: "cors", credentials: "include" });
+        if (r.ok) setStatus("Backend ready");
+        else setStatus("Backend ping returned " + r.status);
+      } catch (e) {
+        setStatus("Backend unreachable (will still attempt on go)");
+      }
+    }
+
+    wakeBackend();
+
+    function normalizeUrl(u) {
+      if (!u) return u;
+      if (!/^https?:\/\//i.test(u)) {
+        return "https://www.google.com/search?q=" + encodeURIComponent(u);
+      }
+      return u;
+    }
+
+    function pushHistory(url) {
+      // cut forward history
       if (currentIndex < historyStack.length - 1) {
-        historyStack.splice(currentIndex + 1);
+        historyStack = historyStack.slice(0, currentIndex + 1);
       }
       historyStack.push(url);
       currentIndex = historyStack.length - 1;
+      updateNavButtons();
     }
 
-    function navigateTo(url) {
-      // If input is not a URL, treat as search
-      if (!/^https?:\/\//i.test(url)) {
-        url = 'https://www.google.com/search?q=' + encodeURIComponent(url);
-      }
-
-      iframe.src = `${backendURL}?url=${encodeURIComponent(url)}`;
-      updateHistory(url);
+    function updateNavButtons() {
+      backBtn.disabled = currentIndex <= 0;
+      forwardBtn.disabled = currentIndex >= historyStack.length - 1;
+      reloadBtn.disabled = currentIndex < 0;
     }
 
-    goBtn.addEventListener('click', () => {
-      const url = urlInput.value.trim();
-      if (url) navigateTo(url);
+    function navigateTo(raw) {
+      const url = normalizeUrl(raw);
+      if (!url) return;
+      iframe.src = BROWSE_ENDPOINT + encodeURIComponent(url);
+      pushHistory(url);
+      urlInput.value = raw;
+      setStatus("Loading " + url);
+    }
+
+    goBtn.addEventListener("click", () => navigateTo(urlInput.value.trim()));
+    urlInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") navigateTo(urlInput.value.trim());
     });
 
-    urlInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') {
-        const url = urlInput.value.trim();
-        if (url) navigateTo(url);
-      }
-    });
-
-    backBtn.addEventListener('click', () => {
+    backBtn.addEventListener("click", () => {
       if (currentIndex > 0) {
         currentIndex--;
-        iframe.src = `${backendURL}?url=${encodeURIComponent(historyStack[currentIndex])}`;
+        const u = historyStack[currentIndex];
+        iframe.src = BROWSE_ENDPOINT + encodeURIComponent(u);
+        urlInput.value = u;
+        updateNavButtons();
       }
     });
 
-    forwardBtn.addEventListener('click', () => {
+    forwardBtn.addEventListener("click", () => {
       if (currentIndex < historyStack.length - 1) {
         currentIndex++;
-        iframe.src = `${backendURL}?url=${encodeURIComponent(historyStack[currentIndex])}`;
+        const u = historyStack[currentIndex];
+        iframe.src = BROWSE_ENDPOINT + encodeURIComponent(u);
+        urlInput.value = u;
+        updateNavButtons();
       }
     });
 
-    reloadBtn.addEventListener('click', () => {
+    reloadBtn.addEventListener("click", () => {
       if (currentIndex >= 0) {
-        iframe.src = `${backendURL}?url=${encodeURIComponent(historyStack[currentIndex])}`;
+        const u = historyStack[currentIndex];
+        iframe.src = BROWSE_ENDPOINT + encodeURIComponent(u);
+        setStatus("Reloading...");
       }
     });
 
-    homeBtn.addEventListener('click', () => navigateTo(homePage));
+    homeBtn.addEventListener("click", () => navigateTo(HOME));
 
-    // Load home page on start
-    navigateTo(homePage);
+    // iframe message to detect when loaded (best-effort)
+    iframe.addEventListener("load", () => {
+      setStatus("Loaded");
+    });
+
+    // Start at home
+    navigateTo(HOME);
   </script>
 </body>
 </html>
