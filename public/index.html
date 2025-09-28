@@ -8,105 +8,162 @@
     body {
       margin: 0;
       font-family: Arial, sans-serif;
-      background: #121212;
-      color: white;
       display: flex;
       flex-direction: column;
       height: 100vh;
+      background-color: #121212;
+      color: white;
     }
+
     header {
-      background: #1a1a1a;
+      background-color: #1a1a1a;
+      padding: 0.5rem;
       display: flex;
       align-items: center;
-      padding: 0.5rem;
       gap: 0.5rem;
+      transition: all 0.3s;
     }
-    button {
-      flex: 0 0 auto;
-      padding: 0.5rem;
-      font-size: 1rem;
-      border: none;
-      border-radius: 4px;
-      background: #333;
-      color: white;
-      cursor: pointer;
-    }
-    button:hover { background: #555; }
-    input {
+
+    input[type="text"] {
       flex: 1;
       padding: 0.5rem;
       border-radius: 4px;
       border: none;
       font-size: 1rem;
     }
+
+    button {
+      padding: 0.5rem;
+      border: none;
+      border-radius: 4px;
+      background-color: #333;
+      color: white;
+      cursor: pointer;
+      font-size: 1rem;
+      height: 2.5rem;
+      width: 2.5rem;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      box-sizing: border-box;
+    }
+
+    button#go, button#fullscreen {
+      width: auto;
+      padding: 0 0.75rem;
+    }
+
+    button:hover {
+      background-color: #555;
+    }
+
     iframe {
       flex: 1;
       border: none;
       width: 100%;
     }
-    .hidden { display: none; }
   </style>
 </head>
 <body>
-  <header id="navbar">
+  <header id="header">
     <button id="back">◀</button>
     <button id="forward">▶</button>
     <button id="reload">⟳</button>
     <button id="home">🏠</button>
-    <input id="url" placeholder="Search or type URL..." />
+    <input type="text" id="url" placeholder="Search or type URL..." />
     <button id="go">Go</button>
     <button id="fullscreen">⛶</button>
   </header>
+
   <iframe id="browser"></iframe>
 
   <script>
-    const iframe = document.getElementById("browser");
-    const urlInput = document.getElementById("url");
-    const backendURL = "https://wisp-server-w7nx.onrender.com/browse";
-    const homePage = "https://www.google.com";
+    const iframe = document.getElementById('browser');
+    const urlInput = document.getElementById('url');
+    const backBtn = document.getElementById('back');
+    const forwardBtn = document.getElementById('forward');
+    const reloadBtn = document.getElementById('reload');
+    const homeBtn = document.getElementById('home');
+    const goBtn = document.getElementById('go');
+    const fullscreenBtn = document.getElementById('fullscreen');
+    const headerEl = document.getElementById('header');
 
+    const backendURL = 'https://wisp-server-w7nx.onrender.com/browse';
+    const homePage = 'https://www.google.com';
     const historyStack = [];
     let currentIndex = -1;
+    let isFullscreen = false;
 
-    function loadURL(url) {
-      if (!/^https?:\/\//i.test(url)) {
-        url = "https://www.google.com/search?q=" + encodeURIComponent(url);
+    function buildSearchURL(query) {
+      if (/^https?:\/\//i.test(query)) return query;
+      return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+    }
+
+    async function loadURL(url) {
+      url = buildSearchURL(url);
+
+      iframe.src = `${backendURL}?url=${encodeURIComponent(url)}`;
+
+      if (currentIndex < historyStack.length - 1) {
+        historyStack.splice(currentIndex + 1);
       }
-      iframe.src = backendURL + "?url=" + encodeURIComponent(url);
-      if (currentIndex < historyStack.length - 1) historyStack.splice(currentIndex + 1);
       historyStack.push(url);
       currentIndex = historyStack.length - 1;
       urlInput.value = url;
     }
 
-    document.getElementById("go").onclick = () => {
-      const val = urlInput.value.trim();
-      if (val) loadURL(val);
-    };
-    urlInput.addEventListener("keypress", e => { if (e.key === "Enter") loadURL(urlInput.value.trim()); });
-    document.getElementById("back").onclick = () => { if (currentIndex > 0) iframe.src = backendURL + "?url=" + encodeURIComponent(historyStack[--currentIndex]); };
-    document.getElementById("forward").onclick = () => { if (currentIndex < historyStack.length - 1) iframe.src = backendURL + "?url=" + encodeURIComponent(historyStack[++currentIndex]); };
-    document.getElementById("reload").onclick = () => { if (currentIndex >= 0) iframe.src = backendURL + "?url=" + encodeURIComponent(historyStack[currentIndex]); };
-    document.getElementById("home").onclick = () => loadURL(homePage);
+    goBtn.addEventListener('click', () => {
+      const url = urlInput.value.trim();
+      if (url) loadURL(url);
+    });
 
-    // Fullscreen
-    const navbar = document.getElementById("navbar");
-    const fsBtn = document.getElementById("fullscreen");
-    let fullscreen = false;
-    fsBtn.onclick = () => {
-      fullscreen = !fullscreen;
-      navbar.classList.toggle("hidden", fullscreen);
-      if (fullscreen) {
-        iframe.requestFullscreen?.();
-      } else {
-        document.exitFullscreen?.();
+    urlInput.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        const url = urlInput.value.trim();
+        if (url) loadURL(url);
       }
-    };
-    document.addEventListener("keydown", e => {
-      if (e.key === "Escape" && fullscreen) {
-        fullscreen = false;
-        navbar.classList.remove("hidden");
-        document.exitFullscreen?.();
+    });
+
+    backBtn.addEventListener('click', () => {
+      if (currentIndex > 0) {
+        currentIndex--;
+        iframe.src = `${backendURL}?url=${encodeURIComponent(historyStack[currentIndex])}`;
+        urlInput.value = historyStack[currentIndex];
+      }
+    });
+
+    forwardBtn.addEventListener('click', () => {
+      if (currentIndex < historyStack.length - 1) {
+        currentIndex++;
+        iframe.src = `${backendURL}?url=${encodeURIComponent(historyStack[currentIndex])}`;
+        urlInput.value = historyStack[currentIndex];
+      }
+    });
+
+    reloadBtn.addEventListener('click', () => {
+      if (currentIndex >= 0) {
+        iframe.src = `${backendURL}?url=${encodeURIComponent(historyStack[currentIndex])}`;
+      }
+    });
+
+    homeBtn.addEventListener('click', () => loadURL(homePage));
+
+    fullscreenBtn.addEventListener('click', () => {
+      if (!isFullscreen) {
+        iframe.requestFullscreen();
+        headerEl.style.display = 'none';
+      } else {
+        document.exitFullscreen();
+        headerEl.style.display = 'flex';
+      }
+      isFullscreen = !isFullscreen;
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && isFullscreen) {
+        document.exitFullscreen();
+        headerEl.style.display = 'flex';
+        isFullscreen = false;
       }
     });
 
