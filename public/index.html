@@ -34,18 +34,27 @@
     }
 
     button {
-      padding: 0.5rem;
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       border: none;
       border-radius: 4px;
       background-color: #333;
       color: #fff;
       cursor: pointer;
-      font-size: 1rem;
-      min-width: 2.5rem;
+      font-size: 1.1rem;
     }
 
     button:hover {
       background-color: #555;
+    }
+
+    #go {
+      width: auto;
+      padding: 0 12px;
+      font-size: 1rem;
     }
 
     iframe {
@@ -101,7 +110,6 @@
 
     function normalizeURL(url) {
       if (!/^https?:\/\//i.test(url)) {
-        // Treat as search
         return 'https://www.google.com/search?q=' + encodeURIComponent(url);
       }
       return url;
@@ -111,7 +119,6 @@
       url = normalizeURL(url);
       iframe.src = `${backendURL}?url=${encodeURIComponent(url)}`;
 
-      // Update history
       if (currentIndex < historyStack.length - 1) {
         historyStack.splice(currentIndex + 1);
       }
@@ -175,7 +182,6 @@
       }
     });
 
-    // Load home page initially
     loadURL(homePage);
   </script>
 </body>
