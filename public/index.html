@@ -19,8 +19,13 @@
       background-color: #1a1a1a;
       display: flex;
       align-items: center;
-      padding: 0.5rem;
       gap: 0.5rem;
+      padding: 0.5rem;
+      transition: transform 0.3s;
+    }
+
+    header.hidden {
+      transform: translateY(-100%);
     }
 
     input[type="text"] {
@@ -29,20 +34,20 @@
       border-radius: 4px;
       border: none;
       font-size: 1rem;
-      background-color: #333;
-      color: white;
+      background-color: #222;
+      color: #fff;
     }
 
     button {
-      padding: 0.5rem;
+      padding: 0.5rem 0.75rem;
       border: none;
       border-radius: 4px;
       background-color: #333;
-      color: white;
+      color: #fff;
       cursor: pointer;
       font-size: 0.9rem;
-      width: 2.5rem;
-      height: 2.5rem;
+      min-width: 40px;
+      height: 40px;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -56,15 +61,12 @@
       flex: 1;
       border: none;
       width: 100%;
-    }
-
-    .fullscreen header {
-      display: none;
+      transition: all 0.3s;
     }
   </style>
 </head>
 <body>
-  <header>
+  <header id="header">
     <button id="back">◀</button>
     <button id="forward">▶</button>
     <button id="reload">⟳</button>
@@ -77,9 +79,6 @@
   <iframe id="browser"></iframe>
 
   <script>
-    const backendURL = 'https://wisp-server-w7nx.onrender.com/browse';
-    const homePage = 'https://www.google.com';
-
     const iframe = document.getElementById('browser');
     const urlInput = document.getElementById('url');
     const backBtn = document.getElementById('back');
@@ -88,21 +87,21 @@
     const homeBtn = document.getElementById('home');
     const goBtn = document.getElementById('go');
     const fullscreenBtn = document.getElementById('fullscreen');
-    const body = document.body;
+    const header = document.getElementById('header');
+
+    const backendURL = 'https://wisp-server-w7nx.onrender.com/browse';
+    const homePage = 'https://www.google.com';
 
     const historyStack = [];
     let currentIndex = -1;
     let isFullscreen = false;
 
-    function updateIframe(url) {
-      iframe.src = `${backendURL}?url=${encodeURIComponent(url)}`;
-    }
-
-    function loadURL(url) {
+    async function loadURL(url) {
       if (!/^https?:\/\//i.test(url)) {
-        url = `https://www.google.com/search?q=${encodeURIComponent(url)}`;
+        url = 'https://www.google.com/search?q=' + encodeURIComponent(url);
       }
-      updateIframe(url);
+
+      iframe.src = `${backendURL}?url=${encodeURIComponent(url)}`;
 
       if (currentIndex < historyStack.length - 1) {
         historyStack.splice(currentIndex + 1);
@@ -126,45 +125,40 @@
     backBtn.addEventListener('click', () => {
       if (currentIndex > 0) {
         currentIndex--;
-        updateIframe(historyStack[currentIndex]);
+        iframe.src = `${backendURL}?url=${encodeURIComponent(historyStack[currentIndex])}`;
       }
     });
 
     forwardBtn.addEventListener('click', () => {
       if (currentIndex < historyStack.length - 1) {
         currentIndex++;
-        updateIframe(historyStack[currentIndex]);
+        iframe.src = `${backendURL}?url=${encodeURIComponent(historyStack[currentIndex])}`;
       }
     });
 
     reloadBtn.addEventListener('click', () => {
       if (currentIndex >= 0) {
-        updateIframe(historyStack[currentIndex]);
+        iframe.src = `${backendURL}?url=${encodeURIComponent(historyStack[currentIndex])}`;
       }
     });
 
     homeBtn.addEventListener('click', () => loadURL(homePage));
 
-    fullscreenBtn.addEventListener('click', () => {
+    fullscreenBtn.addEventListener('click', toggleFullscreen);
+
+    function toggleFullscreen() {
       isFullscreen = !isFullscreen;
-      if (isFullscreen) {
-        body.classList.add('fullscreen');
-        iframe.requestFullscreen?.();
-      } else {
-        body.classList.remove('fullscreen');
-        document.exitFullscreen?.();
-      }
-    });
+      header.classList.toggle('hidden', isFullscreen);
+      iframe.style.height = isFullscreen ? '100vh' : 'auto';
+    }
 
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && isFullscreen) {
-        isFullscreen = false;
-        body.classList.remove('fullscreen');
-        document.exitFullscreen?.();
+        toggleFullscreen();
       }
     });
 
-    // Load home page initially
+    // Load home page on start
     loadURL(homePage);
   </script>
 </body>
