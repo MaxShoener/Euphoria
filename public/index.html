@@ -58,6 +58,19 @@
       background: #2b2b2b;
       border-radius: 6px;
     }
+
+    input, button {
+      padding: 6px 10px;
+      font-size: 14px;
+      border-radius: 4px;
+      border: 1px solid #444;
+      background: #1f1f1f;
+      color: white;
+    }
+
+    button:hover {
+      background: #3d3d3d;
+    }
   </style>
 </head>
 <body>
@@ -79,7 +92,10 @@
 
     <div id="profile" class="page hidden">
       <h1>Profile Page</h1>
-      <p>User profile information will go here.</p>
+      <p>Enter your username to fetch profile data:</p>
+      <input id="username-input" placeholder="Username">
+      <button id="fetch-profile">Fetch Profile</button>
+      <pre id="profile-output"></pre>
     </div>
 
     <div id="settings" class="page hidden">
@@ -101,10 +117,8 @@
     buttons.forEach(btn => {
       btn.addEventListener("click", () => {
         const target = btn.dataset.page;
-
         pages.forEach(p => p.classList.add("hidden"));
         document.getElementById(target).classList.remove("hidden");
-
         buttons.forEach(b => b.classList.remove("active"));
         btn.classList.add("active");
       });
@@ -113,7 +127,7 @@
     // Set Home as default
     buttons[0].classList.add("active");
 
-    // Backend status check
+    // Backend health check
     async function checkBackend() {
       try {
         const res = await fetch("/health");
@@ -123,7 +137,6 @@
         document.getElementById("backend-status").textContent = "Cannot connect!";
       }
     }
-
     checkBackend();
 
     // Fullscreen functionality
@@ -134,6 +147,26 @@
         document.documentElement.webkitRequestFullscreen();
       } else if (document.documentElement.msRequestFullscreen) {
         document.documentElement.msRequestFullscreen();
+      }
+    });
+
+    // Profile fetch functionality
+    document.getElementById("fetch-profile").addEventListener("click", async () => {
+      const username = document.getElementById("username-input").value.trim();
+      const output = document.getElementById("profile-output");
+
+      if (!username) {
+        output.textContent = "Enter a username!";
+        return;
+      }
+
+      try {
+        const res = await fetch(`/profile?username=${encodeURIComponent(username)}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        output.textContent = JSON.stringify(data, null, 2);
+      } catch (err) {
+        output.textContent = "Failed to fetch profile: " + err.message;
       }
     });
   </script>
