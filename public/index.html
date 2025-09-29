@@ -36,6 +36,10 @@
       transition: background-color 0.2s;
     }
 
+    .nav-button.active {
+      background-color: #4caf50;
+    }
+
     .nav-button:hover {
       background-color: #3d3d3d;
     }
@@ -43,19 +47,95 @@
     main {
       padding: 20px;
     }
+
+    .hidden {
+      display: none;
+    }
+
+    .status {
+      margin-top: 20px;
+      padding: 10px;
+      background: #2b2b2b;
+      border-radius: 6px;
+    }
   </style>
 </head>
 <body>
   <header>
-    <button class="nav-button">Home</button>
-    <button class="nav-button">Profile</button>
-    <button class="nav-button">Settings</button>
-    <button class="nav-button">Fullscreen</button>
+    <button class="nav-button" data-page="home">Home</button>
+    <button class="nav-button" data-page="profile">Profile</button>
+    <button class="nav-button" data-page="settings">Settings</button>
+    <button class="nav-button" data-page="fullscreen">Fullscreen</button>
   </header>
 
   <main>
-    <h1>Welcome to Euphoria</h1>
-    <p>The backend is running. Use /health to check status.</p>
+    <div id="home" class="page">
+      <h1>Welcome to Euphoria</h1>
+      <p>This is the home page.</p>
+      <div class="status">
+        <strong>Backend status:</strong> <span id="backend-status">Checking...</span>
+      </div>
+    </div>
+
+    <div id="profile" class="page hidden">
+      <h1>Profile Page</h1>
+      <p>User profile information will go here.</p>
+    </div>
+
+    <div id="settings" class="page hidden">
+      <h1>Settings Page</h1>
+      <p>Adjust your preferences here.</p>
+    </div>
+
+    <div id="fullscreen" class="page hidden">
+      <h1>Fullscreen Mode</h1>
+      <button id="enter-fullscreen">Enter Fullscreen</button>
+    </div>
   </main>
+
+  <script>
+    const buttons = document.querySelectorAll(".nav-button");
+    const pages = document.querySelectorAll(".page");
+
+    // Navigation function
+    buttons.forEach(btn => {
+      btn.addEventListener("click", () => {
+        const target = btn.dataset.page;
+
+        pages.forEach(p => p.classList.add("hidden"));
+        document.getElementById(target).classList.remove("hidden");
+
+        buttons.forEach(b => b.classList.remove("active"));
+        btn.classList.add("active");
+      });
+    });
+
+    // Set Home as default
+    buttons[0].classList.add("active");
+
+    // Backend status check
+    async function checkBackend() {
+      try {
+        const res = await fetch("/health");
+        const data = await res.json();
+        document.getElementById("backend-status").textContent = data.message;
+      } catch (err) {
+        document.getElementById("backend-status").textContent = "Cannot connect!";
+      }
+    }
+
+    checkBackend();
+
+    // Fullscreen functionality
+    document.getElementById("enter-fullscreen").addEventListener("click", () => {
+      if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen();
+      } else if (document.documentElement.webkitRequestFullscreen) {
+        document.documentElement.webkitRequestFullscreen();
+      } else if (document.documentElement.msRequestFullscreen) {
+        document.documentElement.msRequestFullscreen();
+      }
+    });
+  </script>
 </body>
 </html>
