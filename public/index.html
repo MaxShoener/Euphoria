@@ -1,165 +1,166 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Euphoria</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Euphoria Browser</title>
   <style>
     body {
       margin: 0;
       font-family: Arial, sans-serif;
+      background-color: #121212;
+      color: #fff;
       display: flex;
       flex-direction: column;
       height: 100vh;
-      background-color: #121212;
-      color: #fff;
+      overflow: hidden;
     }
 
     header {
-      background-color: #1a1a1a;
+      background: #1f1f1f;
+      padding: 6px;
       display: flex;
       align-items: center;
-      gap: 0.5rem;
-      padding: 0.5rem;
-      transition: transform 0.3s;
-    }
-
-    header.hidden {
-      transform: translateY(-100%);
-    }
-
-    input[type="text"] {
-      flex: 1;
-      padding: 0.5rem;
-      border-radius: 4px;
-      border: none;
-      font-size: 1rem;
-      background-color: #222;
-      color: #fff;
+      gap: 6px;
     }
 
     button {
-      padding: 0.5rem 0.75rem;
-      border: none;
-      border-radius: 4px;
-      background-color: #333;
-      color: #fff;
-      cursor: pointer;
-      font-size: 0.9rem;
-      min-width: 40px;
+      flex: 0 0 40px;
       height: 40px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      background: #2a2a2a;
+      border: none;
+      border-radius: 5px;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
     }
 
     button:hover {
-      background-color: #555;
+      background: #3a3a3a;
+    }
+
+    input {
+      flex: 1;
+      height: 40px;
+      border: none;
+      border-radius: 5px;
+      padding: 0 10px;
+      font-size: 16px;
+      background: #2a2a2a;
+      color: white;
     }
 
     iframe {
       flex: 1;
-      border: none;
       width: 100%;
-      transition: all 0.3s;
+      border: none;
+      background: #000;
+    }
+
+    .fullscreen header {
+      display: none;
     }
   </style>
 </head>
 <body>
-  <header id="header">
-    <button id="back">◀</button>
-    <button id="forward">▶</button>
+  <header>
+    <button id="back">⟵</button>
+    <button id="forward">⟶</button>
     <button id="reload">⟳</button>
-    <button id="home">🏠</button>
+    <button id="home">⌂</button>
+    <input id="addressBar" type="text" placeholder="Search or enter URL" />
     <button id="fullscreen">⛶</button>
-    <input type="text" id="url" placeholder="Search or type URL..." />
-    <button id="go">Go</button>
   </header>
-
   <iframe id="browser"></iframe>
 
   <script>
-    const iframe = document.getElementById('browser');
-    const urlInput = document.getElementById('url');
-    const backBtn = document.getElementById('back');
-    const forwardBtn = document.getElementById('forward');
-    const reloadBtn = document.getElementById('reload');
-    const homeBtn = document.getElementById('home');
-    const goBtn = document.getElementById('go');
-    const fullscreenBtn = document.getElementById('fullscreen');
-    const header = document.getElementById('header');
+    const iframe = document.getElementById("browser");
+    const backBtn = document.getElementById("back");
+    const forwardBtn = document.getElementById("forward");
+    const reloadBtn = document.getElementById("reload");
+    const homeBtn = document.getElementById("home");
+    const fullscreenBtn = document.getElementById("fullscreen");
+    const addressBar = document.getElementById("addressBar");
 
-    const backendURL = 'https://wisp-server-w7nx.onrender.com/browse';
-    const homePage = 'https://www.google.com';
-
-    const historyStack = [];
+    let historyStack = [];
     let currentIndex = -1;
-    let isFullscreen = false;
 
-    async function loadURL(url) {
-      if (!/^https?:\/\//i.test(url)) {
-        url = 'https://www.google.com/search?q=' + encodeURIComponent(url);
+    const backend = "https://wisp-server-w7nx.onrender.com";
+
+    function navigateTo(url) {
+      if (!url.startsWith("http")) {
+        if (url.includes(".")) {
+          url = "https://" + url;
+        } else {
+          url = "https://www.google.com/search?q=" + encodeURIComponent(url);
+        }
       }
 
-      iframe.src = `${backendURL}?url=${encodeURIComponent(url)}`;
+      const proxied = `${backend}/proxy?url=${encodeURIComponent(url)}`;
+      iframe.src = proxied;
 
-      if (currentIndex < historyStack.length - 1) {
-        historyStack.splice(currentIndex + 1);
+      if (currentIndex === -1 || historyStack[currentIndex] !== url) {
+        historyStack = historyStack.slice(0, currentIndex + 1);
+        historyStack.push(url);
+        currentIndex++;
       }
-      historyStack.push(url);
-      currentIndex = historyStack.length - 1;
+
+      addressBar.value = url;
     }
 
-    goBtn.addEventListener('click', () => {
-      const url = urlInput.value.trim();
-      if (url) loadURL(url);
-    });
-
-    urlInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') {
-        const url = urlInput.value.trim();
-        if (url) loadURL(url);
-      }
-    });
-
-    backBtn.addEventListener('click', () => {
+    // Navigation controls
+    backBtn.onclick = () => {
       if (currentIndex > 0) {
         currentIndex--;
-        iframe.src = `${backendURL}?url=${encodeURIComponent(historyStack[currentIndex])}`;
+        navigateTo(historyStack[currentIndex]);
       }
-    });
+    };
 
-    forwardBtn.addEventListener('click', () => {
+    forwardBtn.onclick = () => {
       if (currentIndex < historyStack.length - 1) {
         currentIndex++;
-        iframe.src = `${backendURL}?url=${encodeURIComponent(historyStack[currentIndex])}`;
+        navigateTo(historyStack[currentIndex]);
       }
-    });
+    };
 
-    reloadBtn.addEventListener('click', () => {
+    reloadBtn.onclick = () => {
       if (currentIndex >= 0) {
-        iframe.src = `${backendURL}?url=${encodeURIComponent(historyStack[currentIndex])}`;
+        navigateTo(historyStack[currentIndex]);
+      }
+    };
+
+    homeBtn.onclick = () => {
+      navigateTo("https://www.google.com");
+    };
+
+    // Address bar input
+    addressBar.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        navigateTo(addressBar.value);
       }
     });
 
-    homeBtn.addEventListener('click', () => loadURL(homePage));
+    // Fullscreen toggle
+    fullscreenBtn.onclick = () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen();
+        document.body.classList.add("fullscreen");
+      } else {
+        document.exitFullscreen();
+        document.body.classList.remove("fullscreen");
+      }
+    };
 
-    fullscreenBtn.addEventListener('click', toggleFullscreen);
-
-    function toggleFullscreen() {
-      isFullscreen = !isFullscreen;
-      header.classList.toggle('hidden', isFullscreen);
-      iframe.style.height = isFullscreen ? '100vh' : 'auto';
-    }
-
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && isFullscreen) {
-        toggleFullscreen();
+    // ESC exits fullscreen
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && document.fullscreenElement) {
+        document.exitFullscreen();
+        document.body.classList.remove("fullscreen");
       }
     });
 
-    // Load home page on start
-    loadURL(homePage);
+    // Load home on start
+    navigateTo("https://www.google.com");
   </script>
 </body>
 </html>
