@@ -1,141 +1,77 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Euphoria Browser</title>
-  <style>
-    /* Reset & body */
-    body, html {
-      margin: 0;
-      padding: 0;
-      height: 100%;
-      overflow: hidden;
-      font-family: sans-serif;
-    }
-
-    /* Top bar */
-    #topbar {
-      display: flex;
-      align-items: center;
-      background: #000;
-      color: #fff;
-      padding: 5px;
-      gap: 5px;
-    }
-
-    #topbar button {
-      background: #222;
-      color: #fff;
-      border: none;
-      padding: 8px 12px;
-      cursor: pointer;
-      font-size: 14px;
-    }
-
-    #topbar button:hover {
-      background: #444;
-    }
-
-    #urlInput {
-      flex: 1;
-      padding: 8px;
-      font-size: 14px;
-      border: none;
-      outline: none;
-    }
-
-    /* Iframe */
-    #browserFrame {
-      width: 100%;
-      height: calc(100% - 42px); /* top bar height */
-      border: none;
-    }
-
-    /* Fullscreen mode */
-    .fullscreen #topbar {
-      display: none;
-    }
-
-    .fullscreen #browserFrame {
-      height: 100%;
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Euphoria Browser</title>
+<style>
+  body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    overflow: hidden;
+  }
+  #topbar {
+    background: #000;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    padding: 5px;
+  }
+  #topbar button, #topbar input {
+    margin: 0 2px;
+    padding: 5px 10px;
+    height: 35px;
+    font-size: 14px;
+  }
+  #url {
+    flex: 1;
+    font-size: 14px;
+  }
+  #browser-frame {
+    width: 100%;
+    height: calc(100vh - 45px);
+    border: none;
+  }
+  .fullscreen #topbar { display: none; }
+  .fullscreen #browser-frame { height: 100vh; }
+</style>
 </head>
 <body>
-  <div id="topbar">
-    <button id="backBtn">Back</button>
-    <button id="forwardBtn">Forward</button>
-    <button id="homeBtn">Home</button>
-    <button id="fullscreenBtn">Fullscreen</button>
-    <input type="text" id="urlInput" placeholder="Enter URL here" />
-    <button id="goBtn">Go</button>
-  </div>
+<div id="topbar">
+  <button id="back">◀ Back</button>
+  <button id="forward">Forward ▶</button>
+  <button id="home">🏠 Home</button>
+  <button id="fullscreen">⛶ Fullscreen</button>
+  <input id="url" type="text" placeholder="Enter URL">
+  <button id="go">Go</button>
+</div>
+<iframe id="browser-frame" src="https://www.google.com"></iframe>
 
-  <iframe id="browserFrame" src="https://www.example.com"></iframe>
+<script>
+const iframe = document.getElementById("browser-frame");
+const urlInput = document.getElementById("url");
 
-  <script>
-    const iframe = document.getElementById("browserFrame");
-    const backBtn = document.getElementById("backBtn");
-    const forwardBtn = document.getElementById("forwardBtn");
-    const homeBtn = document.getElementById("homeBtn");
-    const fullscreenBtn = document.getElementById("fullscreenBtn");
-    const goBtn = document.getElementById("goBtn");
-    const urlInput = document.getElementById("urlInput");
-    const body = document.body;
+document.getElementById("back").onclick = () => iframe.contentWindow.history.back();
+document.getElementById("forward").onclick = () => iframe.contentWindow.history.forward();
+document.getElementById("home").onclick = () => iframe.src = "https://www.google.com";
+document.getElementById("go").onclick = () => loadUrl(urlInput.value);
 
-    // Navigation history for iframe
-    const historyStack = [];
-    let historyIndex = -1;
+urlInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") loadUrl(urlInput.value);
+});
 
-    function loadURL(url) {
-      if (!url.startsWith("http")) url = "https://" + url;
-      iframe.src = url;
+function loadUrl(url) {
+  if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+  iframe.src = `/proxy?url=${encodeURIComponent(url)}`;
+  urlInput.value = url;
+}
 
-      // Save to history if not navigating back/forward
-      if (historyIndex === -1 || historyStack[historyIndex] !== url) {
-        historyStack.splice(historyIndex + 1);
-        historyStack.push(url);
-        historyIndex = historyStack.length - 1;
-      }
-      urlInput.value = url;
-    }
-
-    // Buttons
-    backBtn.onclick = () => {
-      if (historyIndex > 0) {
-        historyIndex--;
-        iframe.src = historyStack[historyIndex];
-        urlInput.value = historyStack[historyIndex];
-      }
-    };
-
-    forwardBtn.onclick = () => {
-      if (historyIndex < historyStack.length - 1) {
-        historyIndex++;
-        iframe.src = historyStack[historyIndex];
-        urlInput.value = historyStack[historyIndex];
-      }
-    };
-
-    homeBtn.onclick = () => loadURL("https://www.example.com");
-
-    goBtn.onclick = () => loadURL(urlInput.value);
-
-    urlInput.addEventListener("keypress", (e) => {
-      if (e.key === "Enter") loadURL(urlInput.value);
-    });
-
-    // Fullscreen toggle
-    fullscreenBtn.onclick = () => {
-      body.classList.add("fullscreen");
-    };
-
-    document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") {
-        body.classList.remove("fullscreen");
-      }
-    });
-  </script>
+document.getElementById("fullscreen").onclick = () => {
+  document.body.classList.add("fullscreen");
+});
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") document.body.classList.remove("fullscreen");
+});
+</script>
 </body>
 </html>
