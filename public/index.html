@@ -1,166 +1,61 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Euphoria Browser</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Euphoria App</title>
   <style>
     body {
-      margin: 0;
       font-family: Arial, sans-serif;
-      background-color: #121212;
-      color: #fff;
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-      overflow: hidden;
+      background: #121212;
+      color: #ffffff;
+      margin: 0;
+      padding: 0;
     }
 
     header {
+      display: flex;
       background: #1f1f1f;
-      padding: 6px;
+      padding: 10px;
+      gap: 10px;
+    }
+
+    .nav-button {
+      height: 40px;
+      min-width: 80px;
+      padding: 0 12px;
       display: flex;
       align-items: center;
-      gap: 6px;
-    }
-
-    button {
-      flex: 0 0 40px;
-      height: 40px;
-      background: #2a2a2a;
+      justify-content: center;
+      font-size: 14px;
       border: none;
-      border-radius: 5px;
+      border-radius: 6px;
+      background-color: #2b2b2b;
       color: white;
-      font-size: 16px;
       cursor: pointer;
+      transition: background-color 0.2s;
     }
 
-    button:hover {
-      background: #3a3a3a;
+    .nav-button:hover {
+      background-color: #3d3d3d;
     }
 
-    input {
-      flex: 1;
-      height: 40px;
-      border: none;
-      border-radius: 5px;
-      padding: 0 10px;
-      font-size: 16px;
-      background: #2a2a2a;
-      color: white;
-    }
-
-    iframe {
-      flex: 1;
-      width: 100%;
-      border: none;
-      background: #000;
-    }
-
-    .fullscreen header {
-      display: none;
+    main {
+      padding: 20px;
     }
   </style>
 </head>
 <body>
   <header>
-    <button id="back">⟵</button>
-    <button id="forward">⟶</button>
-    <button id="reload">⟳</button>
-    <button id="home">⌂</button>
-    <input id="addressBar" type="text" placeholder="Search or enter URL" />
-    <button id="fullscreen">⛶</button>
+    <button class="nav-button">Home</button>
+    <button class="nav-button">Profile</button>
+    <button class="nav-button">Settings</button>
+    <button class="nav-button">Fullscreen</button>
   </header>
-  <iframe id="browser"></iframe>
 
-  <script>
-    const iframe = document.getElementById("browser");
-    const backBtn = document.getElementById("back");
-    const forwardBtn = document.getElementById("forward");
-    const reloadBtn = document.getElementById("reload");
-    const homeBtn = document.getElementById("home");
-    const fullscreenBtn = document.getElementById("fullscreen");
-    const addressBar = document.getElementById("addressBar");
-
-    let historyStack = [];
-    let currentIndex = -1;
-
-    const backend = "https://wisp-server-w7nx.onrender.com";
-
-    function navigateTo(url) {
-      if (!url.startsWith("http")) {
-        if (url.includes(".")) {
-          url = "https://" + url;
-        } else {
-          url = "https://www.google.com/search?q=" + encodeURIComponent(url);
-        }
-      }
-
-      const proxied = `${backend}/proxy?url=${encodeURIComponent(url)}`;
-      iframe.src = proxied;
-
-      if (currentIndex === -1 || historyStack[currentIndex] !== url) {
-        historyStack = historyStack.slice(0, currentIndex + 1);
-        historyStack.push(url);
-        currentIndex++;
-      }
-
-      addressBar.value = url;
-    }
-
-    // Navigation controls
-    backBtn.onclick = () => {
-      if (currentIndex > 0) {
-        currentIndex--;
-        navigateTo(historyStack[currentIndex]);
-      }
-    };
-
-    forwardBtn.onclick = () => {
-      if (currentIndex < historyStack.length - 1) {
-        currentIndex++;
-        navigateTo(historyStack[currentIndex]);
-      }
-    };
-
-    reloadBtn.onclick = () => {
-      if (currentIndex >= 0) {
-        navigateTo(historyStack[currentIndex]);
-      }
-    };
-
-    homeBtn.onclick = () => {
-      navigateTo("https://www.google.com");
-    };
-
-    // Address bar input
-    addressBar.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        navigateTo(addressBar.value);
-      }
-    });
-
-    // Fullscreen toggle
-    fullscreenBtn.onclick = () => {
-      if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen();
-        document.body.classList.add("fullscreen");
-      } else {
-        document.exitFullscreen();
-        document.body.classList.remove("fullscreen");
-      }
-    };
-
-    // ESC exits fullscreen
-    document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && document.fullscreenElement) {
-        document.exitFullscreen();
-        document.body.classList.remove("fullscreen");
-      }
-    });
-
-    // Load home on start
-    navigateTo("https://www.google.com");
-  </script>
+  <main>
+    <h1>Welcome to Euphoria</h1>
+    <p>The backend is running. Use /health to check status.</p>
+  </main>
 </body>
 </html>
