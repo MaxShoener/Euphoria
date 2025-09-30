@@ -25,7 +25,7 @@
   <input id="url" type="text" placeholder="Enter URL">
   <button id="go">Go</button>
 </div>
-<iframe id="browser-frame" src="https://www.google.com"></iframe>
+<iframe id="browser-frame"></iframe>
 
 <script>
 const iframe = document.getElementById("browser-frame");
@@ -34,12 +34,10 @@ const urlInput = document.getElementById("url");
 let historyStack = [];
 let historyIndex = -1;
 
-// Load a URL and update history
 function loadUrl(url) {
   if (!/^https?:\/\//i.test(url)) url = "https://" + url;
   iframe.src = `/proxy?url=${encodeURIComponent(url)}`;
 
-  // Push to history if different
   if (historyIndex === -1 || historyStack[historyIndex] !== url) {
     historyStack = historyStack.slice(0, historyIndex + 1);
     historyStack.push(url);
@@ -48,7 +46,6 @@ function loadUrl(url) {
   urlInput.value = url;
 }
 
-// Navigation buttons
 document.getElementById("back").onclick = () => {
   if (historyIndex > 0) {
     historyIndex--;
@@ -67,11 +64,9 @@ document.getElementById("home").onclick = () => loadUrl("https://www.google.com"
 document.getElementById("go").onclick = () => loadUrl(urlInput.value);
 urlInput.addEventListener("keydown", e => { if (e.key === "Enter") loadUrl(urlInput.value); });
 
-// Fullscreen toggle
 document.getElementById("fullscreen").onclick = () => document.body.classList.add("fullscreen");
 document.addEventListener("keydown", e => { if (e.key === "Escape") document.body.classList.remove("fullscreen"); });
 
-// Initialize
 loadUrl("https://www.google.com");
 </script>
 </body>
