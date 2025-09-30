@@ -1,76 +1,64 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Euphoria</title>
-<style>
-  body {
-    margin: 0;
-    font-family: Arial, sans-serif;
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
-    background-color: #121212;
-    color: #ffffff;
-  }
-
-  header {
-    background-color: #1a1a1a;
-    padding: 0.5rem;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-
-  input[type="text"] {
-    flex: 1;
-    padding: 0.5rem;
-    border-radius: 4px;
-    border: none;
-    font-size: 1rem;
-    background-color: #222;
-    color: #fff;
-  }
-
-  button {
-    width: 40px;
-    height: 40px;
-    border: none;
-    border-radius: 4px;
-    background-color: #333;
-    color: #fff;
-    cursor: pointer;
-    font-size: 1rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  button:hover {
-    background-color: #555;
-  }
-
-  #go {
-    width: auto;
-    padding: 0 12px;
-  }
-
-  iframe {
-    flex: 1;
-    border: none;
-    width: 100%;
-  }
-
-  .fullscreen {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    z-index: 9999;
-  }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Euphoria</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      background-color: #121212;
+      color: #ffffff;
+    }
+    header {
+      background-color: #1a1a1a;
+      padding: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    input[type="text"] {
+      flex: 1;
+      padding: 0.5rem;
+      border-radius: 4px;
+      border: none;
+      font-size: 1rem;
+      background-color: #222;
+      color: #fff;
+    }
+    button {
+      width: 40px;
+      height: 40px;
+      border: none;
+      border-radius: 4px;
+      background-color: #333;
+      color: #fff;
+      cursor: pointer;
+      font-size: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    button:hover { background-color: #555; }
+    #go { width: auto; padding: 0 12px; }
+    iframe {
+      flex: 1;
+      border: none;
+      width: 100%;
+    }
+    .fullscreen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 9999;
+    }
+  </style>
 </head>
 <body>
 
@@ -96,36 +84,30 @@ const homeBtn = document.getElementById('home');
 const goBtn = document.getElementById('go');
 const fullscreenBtn = document.getElementById('fullscreen');
 
-const backendURL = '/proxy'; // use our working backend proxy
+// 🔹 Backend URL (frontend uses separate backend deployment)
+const backendURL = 'https://wisp-server-w7nx.onrender.com/proxy';
 const homePage = 'https://www.google.com';
 
 const historyStack = [];
 let currentIndex = -1;
 let isFullscreen = false;
 
-function normalizeUrl(url) {
-  if (!url) return '';
-  // If it's just words, make it a Google search
-  if (!/^https?:\/\//i.test(url) && !url.includes('.')) {
-    return 'https://www.google.com/search?q=' + encodeURIComponent(url);
-  }
-  // If missing protocol, add https://
+function encodeURL(url) {
   if (!/^https?:\/\//i.test(url)) {
-    url = 'https://' + url;
+    return encodeURIComponent('https://www.google.com/search?q=' + url);
   }
-  return url;
+  return encodeURIComponent(url);
 }
 
-function loadURL(url) {
-  const fullUrl = normalizeUrl(url);
-  iframe.src = `${backendURL}?url=${encodeURIComponent(fullUrl)}`;
+async function loadURL(url) {
+  const encoded = encodeURL(url);
+  iframe.src = `${backendURL}?url=${encoded}`;
 
   if (currentIndex < historyStack.length - 1) {
     historyStack.splice(currentIndex + 1);
   }
-  historyStack.push(fullUrl);
+  historyStack.push(url);
   currentIndex = historyStack.length - 1;
-  urlInput.value = fullUrl;
 }
 
 goBtn.addEventListener('click', () => {
@@ -143,22 +125,20 @@ urlInput.addEventListener('keypress', (e) => {
 backBtn.addEventListener('click', () => {
   if (currentIndex > 0) {
     currentIndex--;
-    iframe.src = `${backendURL}?url=${encodeURIComponent(historyStack[currentIndex])}`;
-    urlInput.value = historyStack[currentIndex];
+    iframe.src = `${backendURL}?url=${encodeURL(historyStack[currentIndex])}`;
   }
 });
 
 forwardBtn.addEventListener('click', () => {
   if (currentIndex < historyStack.length - 1) {
     currentIndex++;
-    iframe.src = `${backendURL}?url=${encodeURIComponent(historyStack[currentIndex])}`;
-    urlInput.value = historyStack[currentIndex];
+    iframe.src = `${backendURL}?url=${encodeURL(historyStack[currentIndex])}`;
   }
 });
 
 reloadBtn.addEventListener('click', () => {
   if (currentIndex >= 0) {
-    iframe.src = `${backendURL}?url=${encodeURIComponent(historyStack[currentIndex])}`;
+    iframe.src = `${backendURL}?url=${encodeURL(historyStack[currentIndex])}`;
   }
 });
 
@@ -170,9 +150,9 @@ fullscreenBtn.addEventListener('click', () => {
   else iframe.classList.remove('fullscreen');
 });
 
-// Escape exits fullscreen
-document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') {
+// ESC key exits fullscreen
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && isFullscreen) {
     isFullscreen = false;
     iframe.classList.remove('fullscreen');
   }
