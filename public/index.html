@@ -3,71 +3,184 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Euphoria Browser</title>
+<title>Euphoria</title>
 <style>
-  body { margin: 0; font-family: Arial, sans-serif; overflow: hidden; }
-  #topbar { background: #000; color: #fff; display: flex; align-items: center; padding: 5px; }
-  #topbar button, #topbar input {
-    margin: 0 2px; padding: 5px 10px; height: 35px; font-size: 14px;
+  body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    background-color: #121212;
+    color: #ffffff;
   }
-  #url { flex: 1; font-size: 14px; }
-  #browser-frame { width: 100%; height: calc(100vh - 45px); border: none; }
-  .fullscreen #topbar { display: none; }
-  .fullscreen #browser-frame { height: 100vh; }
+
+  header {
+    background-color: #1a1a1a;
+    padding: 0.5rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  input[type="text"] {
+    flex: 1;
+    padding: 0.5rem;
+    border-radius: 4px;
+    border: none;
+    font-size: 1rem;
+    background-color: #222;
+    color: #fff;
+  }
+
+  button {
+    width: 40px;
+    height: 40px;
+    border: none;
+    border-radius: 4px;
+    background-color: #333;
+    color: #fff;
+    cursor: pointer;
+    font-size: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  button:hover {
+    background-color: #555;
+  }
+
+  #go {
+    width: auto;
+    padding: 0 12px;
+  }
+
+  iframe {
+    flex: 1;
+    border: none;
+    width: 100%;
+  }
+
+  .fullscreen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 9999;
+  }
 </style>
 </head>
 <body>
-<div id="topbar">
-  <button id="back">◀ Back</button>
-  <button id="forward">Forward ▶</button>
-  <button id="home">🏠 Home</button>
-  <button id="fullscreen">⛶ Fullscreen</button>
-  <input id="url" type="text" placeholder="Enter URL">
+
+<header>
+  <button id="back">◀</button>
+  <button id="forward">▶</button>
+  <button id="reload">⟳</button>
+  <button id="home">🏠</button>
+  <input type="text" id="url" placeholder="Search or type URL..." />
   <button id="go">Go</button>
-</div>
-<iframe id="browser-frame"></iframe>
+  <button id="fullscreen">⛶</button>
+</header>
+
+<iframe id="browser"></iframe>
 
 <script>
-const iframe = document.getElementById("browser-frame");
-const urlInput = document.getElementById("url");
+const iframe = document.getElementById('browser');
+const urlInput = document.getElementById('url');
+const backBtn = document.getElementById('back');
+const forwardBtn = document.getElementById('forward');
+const reloadBtn = document.getElementById('reload');
+const homeBtn = document.getElementById('home');
+const goBtn = document.getElementById('go');
+const fullscreenBtn = document.getElementById('fullscreen');
 
-let historyStack = [];
-let historyIndex = -1;
+const backendURL = '/proxy'; // use our working backend proxy
+const homePage = 'https://www.google.com';
 
-function loadUrl(url) {
-  if (!/^https?:\/\//i.test(url)) url = "https://" + url;
-  iframe.src = `/proxy?url=${encodeURIComponent(url)}`;
+const historyStack = [];
+let currentIndex = -1;
+let isFullscreen = false;
 
-  if (historyIndex === -1 || historyStack[historyIndex] !== url) {
-    historyStack = historyStack.slice(0, historyIndex + 1);
-    historyStack.push(url);
-    historyIndex++;
+function normalizeUrl(url) {
+  if (!url) return '';
+  // If it's just words, make it a Google search
+  if (!/^https?:\/\//i.test(url) && !url.includes('.')) {
+    return 'https://www.google.com/search?q=' + encodeURIComponent(url);
   }
-  urlInput.value = url;
+  // If missing protocol, add https://
+  if (!/^https?:\/\//i.test(url)) {
+    url = 'https://' + url;
+  }
+  return url;
 }
 
-document.getElementById("back").onclick = () => {
-  if (historyIndex > 0) {
-    historyIndex--;
-    iframe.src = `/proxy?url=${encodeURIComponent(historyStack[historyIndex])}`;
-    urlInput.value = historyStack[historyIndex];
-  }
-};
-document.getElementById("forward").onclick = () => {
-  if (historyIndex < historyStack.length - 1) {
-    historyIndex++;
-    iframe.src = `/proxy?url=${encodeURIComponent(historyStack[historyIndex])}`;
-    urlInput.value = historyStack[historyIndex];
-  }
-};
-document.getElementById("home").onclick = () => loadUrl("https://www.google.com");
-document.getElementById("go").onclick = () => loadUrl(urlInput.value);
-urlInput.addEventListener("keydown", e => { if (e.key === "Enter") loadUrl(urlInput.value); });
+function loadURL(url) {
+  const fullUrl = normalizeUrl(url);
+  iframe.src = `${backendURL}?url=${encodeURIComponent(fullUrl)}`;
 
-document.getElementById("fullscreen").onclick = () => document.body.classList.add("fullscreen");
-document.addEventListener("keydown", e => { if (e.key === "Escape") document.body.classList.remove("fullscreen"); });
+  if (currentIndex < historyStack.length - 1) {
+    historyStack.splice(currentIndex + 1);
+  }
+  historyStack.push(fullUrl);
+  currentIndex = historyStack.length - 1;
+  urlInput.value = fullUrl;
+}
 
-loadUrl("https://www.google.com");
+goBtn.addEventListener('click', () => {
+  const url = urlInput.value.trim();
+  if (url) loadURL(url);
+});
+
+urlInput.addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') {
+    const url = urlInput.value.trim();
+    if (url) loadURL(url);
+  }
+});
+
+backBtn.addEventListener('click', () => {
+  if (currentIndex > 0) {
+    currentIndex--;
+    iframe.src = `${backendURL}?url=${encodeURIComponent(historyStack[currentIndex])}`;
+    urlInput.value = historyStack[currentIndex];
+  }
+});
+
+forwardBtn.addEventListener('click', () => {
+  if (currentIndex < historyStack.length - 1) {
+    currentIndex++;
+    iframe.src = `${backendURL}?url=${encodeURIComponent(historyStack[currentIndex])}`;
+    urlInput.value = historyStack[currentIndex];
+  }
+});
+
+reloadBtn.addEventListener('click', () => {
+  if (currentIndex >= 0) {
+    iframe.src = `${backendURL}?url=${encodeURIComponent(historyStack[currentIndex])}`;
+  }
+});
+
+homeBtn.addEventListener('click', () => loadURL(homePage));
+
+fullscreenBtn.addEventListener('click', () => {
+  isFullscreen = !isFullscreen;
+  if (isFullscreen) iframe.classList.add('fullscreen');
+  else iframe.classList.remove('fullscreen');
+});
+
+// Escape exits fullscreen
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    isFullscreen = false;
+    iframe.classList.remove('fullscreen');
+  }
+});
+
+// Load home page initially
+loadURL(homePage);
 </script>
+
 </body>
 </html>
