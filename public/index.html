@@ -51,7 +51,8 @@
       padding: 0 12px;
     }
     iframe {
-      flex: 1;
+      flex: 1 1 auto;  /* prevent layout breaking */
+      min-height: 0;
       border: none;
       width: 100%;
     }
@@ -88,7 +89,7 @@
     const goBtn = document.getElementById("go");
     const fullscreenBtn = document.getElementById("fullscreen");
 
-    // ONLY CHANGE: backend URL points to your deployed backend
+    // Updated backend URL to deployed Render server
     const backendURL = "https://wisp-server-w7nx.onrender.com/proxy";
     const homePage = "https://www.google.com";
 
@@ -120,7 +121,8 @@
       if (url) loadURL(url);
     });
 
-    urlInput.addEventListener("keypress", (e) => {
+    // FIX: use 'keydown' instead of 'keypress' for Enter key
+    urlInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         const url = urlInput.value.trim();
         if (url) loadURL(url);
