@@ -1,80 +1,162 @@
-<script>
-  const iframe = document.getElementById("browser");
-  const urlInput = document.getElementById("url");
-  const backBtn = document.getElementById("back");
-  const forwardBtn = document.getElementById("forward");
-  const reloadBtn = document.getElementById("reload");
-  const homeBtn = document.getElementById("home");
-  const goBtn = document.getElementById("go");
-  const fullscreenBtn = document.getElementById("fullscreen");
-
-  const backendURL = "/proxy"; // single route now
-  const homePage = "https://www.google.com";
-
-  const historyStack = [];
-  let currentIndex = -1;
-  let isFullscreen = false;
-
-  function encodeURL(url) {
-    if (!/^https?:\/\//i.test(url)) {
-      return encodeURIComponent("https://www.google.com/search?q=" + encodeURIComponent(url));
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Euphoria</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      background-color: #121212;
+      color: #fff;
     }
-    return encodeURIComponent(url);
-  }
-
-  async function loadURL(url) {
-    const encoded = encodeURL(url);
-    iframe.src = `${backendURL}?url=${encoded}`;
-
-    if (currentIndex < historyStack.length - 1) {
-      historyStack.splice(currentIndex + 1);
+    header {
+      background-color: #1a1a1a;
+      padding: 0.5rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
     }
-    historyStack.push(url);
-    currentIndex = historyStack.length - 1;
-    urlInput.value = url;
-  }
+    input[type="text"] {
+      flex: 1;
+      padding: 0.5rem;
+      border-radius: 4px;
+      border: none;
+      font-size: 1rem;
+      background-color: #222;
+      color: #fff;
+    }
+    button {
+      width: 40px;
+      height: 40px;
+      border: none;
+      border-radius: 4px;
+      background-color: #333;
+      color: #fff;
+      cursor: pointer;
+      font-size: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    button:hover {
+      background-color: #555;
+    }
+    #go {
+      width: auto;
+      padding: 0 12px;
+    }
+    iframe {
+      flex: 1;
+      border: none;
+      width: 100%;
+    }
+    .fullscreen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 9999;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <button id="back">◀</button>
+    <button id="forward">▶</button>
+    <button id="reload">⟳</button>
+    <button id="home">🏠</button>
+    <input type="text" id="url" placeholder="Search or type URL..." />
+    <button id="go">Go</button>
+    <button id="fullscreen">⛶</button>
+  </header>
 
-  goBtn.addEventListener("click", () => {
-    const url = urlInput.value.trim();
-    if (url) loadURL(url);
-  });
+  <iframe id="browser"></iframe>
 
-  urlInput.addEventListener("keypress", (e) => {
-    if (e.key === "Enter") {
+  <script>
+    const iframe = document.getElementById("browser");
+    const urlInput = document.getElementById("url");
+    const backBtn = document.getElementById("back");
+    const forwardBtn = document.getElementById("forward");
+    const reloadBtn = document.getElementById("reload");
+    const homeBtn = document.getElementById("home");
+    const goBtn = document.getElementById("go");
+    const fullscreenBtn = document.getElementById("fullscreen");
+
+    const backendURL = "/proxy"; // always Playwright
+    const homePage = "https://www.google.com";
+
+    const historyStack = [];
+    let currentIndex = -1;
+    let isFullscreen = false;
+
+    function encodeURL(url) {
+      if (!/^https?:\/\//i.test(url)) {
+        return encodeURIComponent("https://www.google.com/search?q=" + encodeURIComponent(url));
+      }
+      return encodeURIComponent(url);
+    }
+
+    async function loadURL(url) {
+      const encoded = encodeURL(url);
+      iframe.src = `${backendURL}?url=${encoded}`;
+
+      if (currentIndex < historyStack.length - 1) {
+        historyStack.splice(currentIndex + 1);
+      }
+      historyStack.push(url);
+      currentIndex = historyStack.length - 1;
+      urlInput.value = url;
+    }
+
+    goBtn.addEventListener("click", () => {
       const url = urlInput.value.trim();
       if (url) loadURL(url);
-    }
-  });
+    });
 
-  backBtn.addEventListener("click", () => {
-    if (currentIndex > 0) {
-      currentIndex--;
-      iframe.src = `${backendURL}?url=${encodeURL(historyStack[currentIndex])}`;
-      urlInput.value = historyStack[currentIndex];
-    }
-  });
+    urlInput.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") {
+        const url = urlInput.value.trim();
+        if (url) loadURL(url);
+      }
+    });
 
-  forwardBtn.addEventListener("click", () => {
-    if (currentIndex < historyStack.length - 1) {
-      currentIndex++;
-      iframe.src = `${backendURL}?url=${encodeURL(historyStack[currentIndex])}`;
-      urlInput.value = historyStack[currentIndex];
-    }
-  });
+    backBtn.addEventListener("click", () => {
+      if (currentIndex > 0) {
+        currentIndex--;
+        iframe.src = `${backendURL}?url=${encodeURL(historyStack[currentIndex])}`;
+        urlInput.value = historyStack[currentIndex];
+      }
+    });
 
-  reloadBtn.addEventListener("click", () => {
-    if (currentIndex >= 0) {
-      iframe.src = `${backendURL}?url=${encodeURL(historyStack[currentIndex])}`;
-    }
-  });
+    forwardBtn.addEventListener("click", () => {
+      if (currentIndex < historyStack.length - 1) {
+        currentIndex++;
+        iframe.src = `${backendURL}?url=${encodeURL(historyStack[currentIndex])}`;
+        urlInput.value = historyStack[currentIndex];
+      }
+    });
 
-  homeBtn.addEventListener("click", () => loadURL(homePage));
+    reloadBtn.addEventListener("click", () => {
+      if (currentIndex >= 0) {
+        iframe.src = `${backendURL}?url=${encodeURL(historyStack[currentIndex])}`;
+      }
+    });
 
-  fullscreenBtn.addEventListener("click", () => {
-    isFullscreen = !isFullscreen;
-    iframe.classList.toggle("fullscreen", isFullscreen);
-  });
+    homeBtn.addEventListener("click", () => loadURL(homePage));
 
-  // Load home page initially
-  loadURL(homePage);
-</script>
+    fullscreenBtn.addEventListener("click", () => {
+      isFullscreen = !isFullscreen;
+      iframe.classList.toggle("fullscreen", isFullscreen);
+    });
+
+    // Load home page initially
+    loadURL(homePage);
+  </script>
+</body>
+</html>
