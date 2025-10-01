@@ -1,162 +1,88 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Euphoria</title>
-  <style>
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      display: flex;
-      flex-direction: column;
-      height: 100vh;
-      background-color: #121212;
-      color: #fff;
-    }
-    header {
-      background-color: #1a1a1a;
-      padding: 0.5rem;
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-    }
-    input[type="text"] {
-      flex: 1;
-      padding: 0.5rem;
-      border-radius: 4px;
-      border: none;
-      font-size: 1rem;
-      background-color: #222;
-      color: #fff;
-    }
-    button {
-      width: 40px;
-      height: 40px;
-      border: none;
-      border-radius: 4px;
-      background-color: #333;
-      color: #fff;
-      cursor: pointer;
-      font-size: 1rem;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    button:hover {
-      background-color: #555;
-    }
-    #go {
-      width: auto;
-      padding: 0 12px;
-    }
-    iframe {
-      flex: 1;
-      border: none;
-      width: 100%;
-    }
-    .fullscreen {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      z-index: 9999;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Euphoria Proxy</title>
+    <style>
+        /* Keep your UI styling intact */
+        body {
+            font-family: Arial, sans-serif;
+            background: #f5f5f5;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        header {
+            width: 100%;
+            background: #4a90e2;
+            color: white;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        main {
+            margin-top: 2rem;
+            width: 90%;
+            max-width: 800px;
+        }
+
+        input[type="text"] {
+            width: 70%;
+            padding: 0.5rem;
+            font-size: 1rem;
+        }
+
+        button {
+            padding: 0.5rem 1rem;
+            font-size: 1rem;
+            margin-left: 0.5rem;
+            cursor: pointer;
+        }
+
+        #output {
+            margin-top: 1rem;
+            padding: 1rem;
+            background: white;
+            border: 1px solid #ccc;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+    </style>
 </head>
 <body>
-  <header>
-    <button id="back">◀</button>
-    <button id="forward">▶</button>
-    <button id="reload">⟳</button>
-    <button id="home">🏠</button>
-    <input type="text" id="url" placeholder="Search or type URL..." />
-    <button id="go">Go</button>
-    <button id="fullscreen">⛶</button>
-  </header>
+    <header>
+        <h1>Euphoria Proxy</h1>
+    </header>
+    <main>
+        <div>
+            <input type="text" id="url" placeholder="Enter URL to proxy">
+            <button id="fetchBtn">Fetch</button>
+        </div>
+        <div id="output"></div>
+    </main>
 
-  <iframe id="browser"></iframe>
+    <script>
+        // Updated backend URL
+        const backendURL = 'https://wisp-server-w7nx.onrender.com/proxy';
 
-  <script>
-    const iframe = document.getElementById("browser");
-    const urlInput = document.getElementById("url");
-    const backBtn = document.getElementById("back");
-    const forwardBtn = document.getElementById("forward");
-    const reloadBtn = document.getElementById("reload");
-    const homeBtn = document.getElementById("home");
-    const goBtn = document.getElementById("go");
-    const fullscreenBtn = document.getElementById("fullscreen");
+        document.getElementById('fetchBtn').addEventListener('click', () => {
+            const targetUrl = document.getElementById('url').value;
+            if (!targetUrl) return alert('Please enter a URL');
 
-    const backendURL = "/proxy"; // always Playwright
-    const homePage = "https://www.google.com";
-
-    const historyStack = [];
-    let currentIndex = -1;
-    let isFullscreen = false;
-
-    function encodeURL(url) {
-      if (!/^https?:\/\//i.test(url)) {
-        return encodeURIComponent("https://www.google.com/search?q=" + encodeURIComponent(url));
-      }
-      return encodeURIComponent(url);
-    }
-
-    async function loadURL(url) {
-      const encoded = encodeURL(url);
-      iframe.src = `${backendURL}?url=${encoded}`;
-
-      if (currentIndex < historyStack.length - 1) {
-        historyStack.splice(currentIndex + 1);
-      }
-      historyStack.push(url);
-      currentIndex = historyStack.length - 1;
-      urlInput.value = url;
-    }
-
-    goBtn.addEventListener("click", () => {
-      const url = urlInput.value.trim();
-      if (url) loadURL(url);
-    });
-
-    urlInput.addEventListener("keypress", (e) => {
-      if (e.key === "Enter") {
-        const url = urlInput.value.trim();
-        if (url) loadURL(url);
-      }
-    });
-
-    backBtn.addEventListener("click", () => {
-      if (currentIndex > 0) {
-        currentIndex--;
-        iframe.src = `${backendURL}?url=${encodeURL(historyStack[currentIndex])}`;
-        urlInput.value = historyStack[currentIndex];
-      }
-    });
-
-    forwardBtn.addEventListener("click", () => {
-      if (currentIndex < historyStack.length - 1) {
-        currentIndex++;
-        iframe.src = `${backendURL}?url=${encodeURL(historyStack[currentIndex])}`;
-        urlInput.value = historyStack[currentIndex];
-      }
-    });
-
-    reloadBtn.addEventListener("click", () => {
-      if (currentIndex >= 0) {
-        iframe.src = `${backendURL}?url=${encodeURL(historyStack[currentIndex])}`;
-      }
-    });
-
-    homeBtn.addEventListener("click", () => loadURL(homePage));
-
-    fullscreenBtn.addEventListener("click", () => {
-      isFullscreen = !isFullscreen;
-      iframe.classList.toggle("fullscreen", isFullscreen);
-    });
-
-    // Load home page initially
-    loadURL(homePage);
-  </script>
+            fetch(`${backendURL}?url=${encodeURIComponent(targetUrl)}`)
+                .then(res => res.text())
+                .then(data => {
+                    document.getElementById('output').textContent = data;
+                })
+                .catch(err => {
+                    document.getElementById('output').textContent = 'Error: ' + err;
+                });
+        });
+    </script>
 </body>
 </html>
