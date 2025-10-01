@@ -11,9 +11,8 @@ const PORT = process.env.PORT || 10000;
 
 app.use(cors());
 app.use(bodyParser.json());
-app.use(express.static("public")); // serve index.html frontend
+app.use(express.static("public")); // serves index.html
 
-// Proxy endpoint
 app.post("/proxy", async (req, res) => {
   const { url, mode } = req.body;
 
@@ -21,15 +20,11 @@ app.post("/proxy", async (req, res) => {
 
   try {
     if (mode === "uv") {
-      // Ultraviolet engine
       const uv = new UV();
       return uv.request(url, req, res);
-
     } else if (mode === "scramjet") {
-      // Scramjet engine
       const scramjet = new Scramjet();
       return scramjet.request(url, req, res);
-
     } else {
       return res.status(400).send("Invalid proxy mode. Use 'uv' or 'scramjet'.");
     }
@@ -40,5 +35,5 @@ app.post("/proxy", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Backend running on port ${PORT}`);
+  console.log(`✅ Euphoria backend running on port ${PORT}`);
 });
