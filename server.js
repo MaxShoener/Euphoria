@@ -10,10 +10,10 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 10000;
 
-// Serve static frontend from /public
+// Serve frontend (only index.html inside /public)
 app.use(express.static(path.join(__dirname, "public")));
 
-// Proxy route
+// Playwright proxy
 app.get("/proxy", async (req, res) => {
   let targetUrl = req.query.url;
   if (!targetUrl) return res.status(400).send("Missing ?url=");
