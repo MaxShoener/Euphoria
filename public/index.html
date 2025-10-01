@@ -51,7 +51,7 @@
       padding: 0 12px;
     }
     iframe {
-      flex: 1 1 auto;  /* prevent layout breaking */
+      flex: 1 1 auto;
       min-height: 0;
       border: none;
       width: 100%;
@@ -89,7 +89,7 @@
     const goBtn = document.getElementById("go");
     const fullscreenBtn = document.getElementById("fullscreen");
 
-    // Updated backend URL to deployed Render server
+    // Set backend URL to deployed backend
     const backendURL = "https://wisp-server-w7nx.onrender.com/proxy";
     const homePage = "https://www.google.com";
 
@@ -121,7 +121,7 @@
       if (url) loadURL(url);
     });
 
-    // FIX: use 'keydown' instead of 'keypress' for Enter key
+    // FIX: Enter key now works
     urlInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         const url = urlInput.value.trim();
