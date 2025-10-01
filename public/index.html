@@ -20,38 +20,42 @@
       display: flex;
       align-items: center;
       gap: 0.5rem;
-    }
-    input, select, button {
-      border-radius: 4px;
-      border: none;
-      background-color: #222;
-      color: #fff;
-      font-size: 1rem;
+      z-index: 1001;
     }
     input[type="text"] {
       flex: 1;
       padding: 0.5rem;
+      border-radius: 4px;
+      border: none;
+      font-size: 1rem;
+      background-color: #222;
+      color: #fff;
     }
     select {
-      padding: 0.5rem;
+      background-color: #222;
+      color: #fff;
+      border-radius: 4px;
+      border: none;
+      padding: 0.4rem;
     }
     button {
       width: 40px;
       height: 40px;
+      border: none;
+      border-radius: 4px;
+      background-color: #333;
+      color: #fff;
       cursor: pointer;
+      font-size: 1rem;
       display: flex;
       align-items: center;
       justify-content: center;
     }
-    button:hover {
-      background-color: #555;
-    }
-    #go {
-      width: auto;
-      padding: 0 12px;
-    }
+    button:hover { background-color: #555; }
+    #go { width: auto; padding: 0 12px; }
     iframe {
-      flex: 1;
+      flex: 1 1 auto;
+      min-height: 0;
       border: none;
       width: 100%;
     }
@@ -59,28 +63,30 @@
       position: fixed;
       top: 0;
       left: 0;
-      width: 100%;
-      height: 100%;
-      z-index: 9999;
+      width: 100vw;
+      height: 100vh;
+      z-index: 1000;
     }
+    /* hide header when iframe fullscreen */
+    .fullscreen ~ header { display: none; }
   </style>
 </head>
 <body>
   <header>
-    <button id="back">◀</button>
-    <button id="forward">▶</button>
-    <button id="reload">⟳</button>
-    <button id="home">🏠</button>
+    <button id="back" title="Back">◀</button>
+    <button id="forward" title="Forward">▶</button>
+    <button id="reload" title="Reload">⟳</button>
+    <button id="home" title="Home">🏠</button>
     <input type="text" id="url" placeholder="Search or type URL..." />
-    <select id="mode">
-      <option value="uv">Ultraviolet</option>
+    <select id="mode" title="Proxy mode">
       <option value="scramjet">Scramjet</option>
+      <option value="uv">Ultraviolet</option>
     </select>
-    <button id="go">Go</button>
-    <button id="fullscreen">⛶</button>
+    <button id="go" title="Go">Go</button>
+    <button id="fullscreen" title="Fullscreen">⛶</button>
   </header>
 
-  <iframe id="browser"></iframe>
+  <iframe id="browser" sandbox="allow-same-origin allow-forms allow-scripts"></iframe>
 
   <script>
     const iframe = document.getElementById("browser");
@@ -93,29 +99,32 @@
     const goBtn = document.getElementById("go");
     const fullscreenBtn = document.getElementById("fullscreen");
 
-    const backendURL = "/proxy";
+    // single endpoint (GET-friendly for iframe)
+    const proxyBase = "/proxy";
     const homePage = "https://www.google.com";
 
     const historyStack = [];
     let currentIndex = -1;
     let isFullscreen = false;
 
-    async function loadURL(url) {
-      const mode = modeSelect.value;
-      iframe.srcdoc = "<p style='color:white;text-align:center;'>Loading...</p>";
-
-      const res = await fetch(backendURL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url, mode })
-      });
-
-      const html = await res.text();
-      iframe.srcdoc = html;
-
-      if (currentIndex < historyStack.length - 1) {
-        historyStack.splice(currentIndex + 1);
+    function encodeURLForQuery(url) {
+      if (!/^https?:\/\//i.test(url)) {
+        return encodeURIComponent("https://www.google.com/search?q=" + encodeURIComponent(url));
       }
+      return encodeURIComponent(url);
+    }
+
+    function buildProxyUrl(url, mode) {
+      return `${proxyBase}?url=${encodeURLForQuery(url)}&mode=${encodeURIComponent(mode)}`;
+    }
+
+    async function loadURL(url) {
+      const mode = modeSelect.value || "scramjet";
+      // Use iframe GET so the upstream can stream directly
+      iframe.src = buildProxyUrl(url, mode);
+
+      // update history
+      if (currentIndex < historyStack.length - 1) historyStack.splice(currentIndex + 1);
       historyStack.push(url);
       currentIndex = historyStack.length - 1;
       urlInput.value = url;
@@ -126,7 +135,7 @@
       if (url) loadURL(url);
     });
 
-    urlInput.addEventListener("keypress", (e) => {
+    urlInput.addEventListener("keydown", (e) => {
       if (e.key === "Enter") {
         const url = urlInput.value.trim();
         if (url) loadURL(url);
@@ -158,9 +167,22 @@
     fullscreenBtn.addEventListener("click", () => {
       isFullscreen = !isFullscreen;
       iframe.classList.toggle("fullscreen", isFullscreen);
+      if (isFullscreen) {
+        document.addEventListener("keydown", escListener);
+      } else {
+        document.removeEventListener("keydown", escListener);
+      }
     });
 
-    // Load home page initially
+    function escListener(e) {
+      if (e.key === "Escape") {
+        isFullscreen = false;
+        iframe.classList.remove("fullscreen");
+        document.removeEventListener("keydown", escListener);
+      }
+    }
+
+    // load home initially
     loadURL(homePage);
   </script>
 </body>
