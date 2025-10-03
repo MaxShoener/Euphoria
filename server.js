@@ -1,51 +1,37 @@
-const express = require("express");
-const cors = require("cors");
-const path = require("path");
-const fetch = require("node-fetch");
-
-const { createBareServer } = require("@tomphttp/bare-server-node");
-const { uvPath, UVServer } = require("@titaniumnetwork-dev/ultraviolet");
-const scramjet = require("@titaniumnetwork-dev/scramjet");
+import express from "express";
+import cors from "cors";
+import fetch from "node-fetch";
+import { createScramjetProxy } from "@titaniumnetwork-dev/scramjet";
+import { createUVProxy } from "@titaniumnetwork-dev/ultraviolet";
 
 const app = express();
-const bare = createBareServer("/bare/");
-
 app.use(cors());
-app.use(express.static(path.join(__dirname)));
+app.use(express.static("public"));
 
-// Ultraviolet
-const uv = new UVServer({
-  prefix: "/proxy/uv/",
-  bare: "/bare/",
-});
-app.use(uvPath, uv.app);
+const PORT = process.env.PORT || 8080;
 
-// Scramjet route
-app.get("/proxy/scramjet/:url", async (req, res) => {
+// Scramjet and UV proxies
+const scramjetProxy = createScramjetProxy();
+const uvProxy = createUVProxy();
+
+// /proxy endpoint with engine selection
+app.get("/proxy", async (req, res) => {
+  const { url, engine } = req.query;
+  if (!url) return res.status(400).send("Missing url");
+
   try {
-    const target = decodeURIComponent(req.params.url);
-    const response = await scramjet.fetch(target);
-    const text = await response.text();
-
-    res.set("content-type", response.headers.get("content-type") || "text/html");
-    res.send(text);
+    if (engine === "uv") {
+      uvProxy.web(req, res, { target: decodeURIComponent(url) });
+    } else {
+      // default to Scramjet
+      scramjetProxy.web(req, res, { target: decodeURIComponent(url) });
+    }
   } catch (err) {
-    res.status(500).send("Scramjet Error: " + err.message);
+    console.error("Proxy failed:", err);
+    res.status(500).send("Proxy failed: " + err.message);
   }
 });
 
-// Serve index.html
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "index.html"));
-});
-
-const PORT = process.env.PORT || 3000;
-
-const server = app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
-
-// Bare server upgrade (needed for UV)
-server.on("upgrade", (req, socket, head) => {
-  bare.handleUpgrade(req, socket, head);
+app.listen(PORT, () => {
+  console.log(`Backend running on port ${PORT}`);
 });
