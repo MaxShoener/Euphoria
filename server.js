@@ -8,16 +8,17 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Import UV server files
-import * as uv from "./node_modules/ultraviolet/index.js";
-
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Serve frontend
-app.use(express.static("./"));
+// ---------------------------
+// Serve static frontend
+// ---------------------------
+app.use(express.static(__dirname));
 
-// API endpoint
+// ---------------------------
+// Scramjet API Example
+// ---------------------------
 app.get("/api", async (req, res) => {
   const targetUrl = req.query.url;
   if (!targetUrl) return res.status(400).json({ error: "No URL provided" });
@@ -37,6 +38,21 @@ app.get("/api", async (req, res) => {
   }
 });
 
+// ---------------------------
+// Ultraviolet Proxy
+// ---------------------------
+import { createBareServer } from "./node_modules/ultraviolet/bare/server/index.js";
+
+const bare = createBareServer("/bare/");
+app.use("/bare/", (req, res) => {
+  bare.routeRequest(req, res);
+});
+
+// ---------------------------
+// Start server
+// ---------------------------
 app.listen(PORT, () => {
-  console.log(`✅ Server running at http://localhost:${PORT}`);
+  console.log(`✅ Server running on http://localhost:${PORT}`);
+  console.log(`🌐 Ultraviolet proxy available at /bare/`);
+  console.log(`⚡ Scramjet API available at /api?url=https://example.com`);
 });
