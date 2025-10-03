@@ -1,37 +1,30 @@
-// Get engine choice from env variable, default to scramjet
-const ENGINE = process.env.ENGINE || 'scramjet';
+const express = require('express');
+const path = require('path');
+const fetch = require('node-fetch');
 
-let engine;
+const app = express();
+const PORT = process.env.PORT || 3000;
 
-try {
-    if (ENGINE === 'scramjet') {
-        console.log('Using Scramjet engine...');
-        engine = require('scramjet');
-    } else if (ENGINE === 'uv') {
-        console.log('Using UV engine...');
-        engine = require('uv');
-    } else {
-        throw new Error(`Unknown ENGINE value: ${ENGINE}`);
-    }
-} catch (err) {
-    console.error('Failed to load engine:', err.message);
-    process.exit(1);
-}
+// Serve frontend files
+app.use(express.static(__dirname));
 
-// Example usage (replace with your actual logic)
-async function main() {
-    console.log(`Engine "${ENGINE}" is ready to use!`);
+// Proxy route to backend
+app.get('/api', async (req, res) => {
+  try {
+    // Replace with your backend website URL
+    const backendUrl = 'https://example.com/api';
+    const response = await fetch(backendUrl);
+    const data = await response.json();
 
-    // Example: create a simple stream or run engine-specific code
-    if (ENGINE === 'scramjet') {
-        // Example Scramjet usage
-        const { DataStream } = engine;
-        const ds = new DataStream([1,2,3,4,5]);
-        ds.map(x => x * 2).each(x => console.log('Scramjet output:', x));
-    } else if (ENGINE === 'uv') {
-        // Example UV usage (replace with actual UV logic)
-        console.log('UV engine loaded. Ready to process streams...');
-    }
-}
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
-main();
+// Fallback route
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
