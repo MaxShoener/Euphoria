@@ -13,6 +13,19 @@ const PORT = process.env.PORT || 3000;
 // Serve frontend files
 app.use(express.static(__dirname));
 
+// Utility to flatten nested JSON
+function flattenJson(obj, parentKey = '', result = {}) {
+  for (const [key, value] of Object.entries(obj)) {
+    const newKey = parentKey ? `${parentKey}.${key}` : key;
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      flattenJson(value, newKey, result);
+    } else {
+      result[newKey] = value;
+    }
+  }
+  return result;
+}
+
 // API endpoint using Ultraviolet + Scramjet
 app.get('/api', async (req, res) => {
   const targetUrl = req.query.url;
@@ -23,15 +36,20 @@ app.get('/api', async (req, res) => {
     const response = await client.get(targetUrl);
     const contentType = response.headers.get('content-type') || '';
 
-    // If response is JSON
+    // JSON response
     if (contentType.includes('application/json')) {
       const jsonData = await response.json();
-      // Stream through Scramjet for any advanced processing if needed
-      const processed = await new DataStream(jsonData).toArray();
+
+      // Flatten and remove empty/null values
+      const processed = await new DataStream([jsonData])
+        .map(item => flattenJson(item))
+        .map(item => Object.fromEntries(Object.entries(item).filter(([_, v]) => v != null && v !== '')))
+        .toArray();
+
       return res.json({ url: targetUrl, data: processed });
     }
 
-    // Otherwise treat as text
+    // Text response
     const text = await response.text();
     const processed = await new DataStream.StringStream(text)
       .lines()
