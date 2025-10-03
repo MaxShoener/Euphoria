@@ -4,13 +4,12 @@
   <meta charset="UTF-8" />
   <title>Euphoria Proxy UI</title>
   <style>
-    /* Base reset */
     html, body {
       margin: 0;
       padding: 0;
       height: 100%;
       font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-      background-color: #1e1e2f; /* dark background from old UI */
+      background-color: #1e1e2f;
       color: #fff;
     }
 
@@ -24,7 +23,7 @@
     .header {
       text-align: center;
       padding: 1rem;
-      background-color: #28293d; /* old UI header color */
+      background-color: #28293d;
       border-bottom: 1px solid #444;
     }
 
@@ -36,9 +35,10 @@
 
     .controls {
       display: flex;
+      flex-wrap: wrap;
       justify-content: center;
       gap: 0.5rem;
-      padding: 1rem;
+      padding: 0.8rem;
       background-color: #2a2b42;
       border-bottom: 1px solid #444;
     }
@@ -66,7 +66,7 @@
     }
 
     iframe {
-      flex: 1; /* fills remaining vertical space */
+      flex: 1;
       width: 100%;
       border: none;
       background-color: #fff;
@@ -83,18 +83,86 @@
   <div class="header">
     <h1>Euphoria Proxy</h1>
   </div>
+  
   <div class="controls">
+    <button onclick="goBack()">◀ Back</button>
+    <button onclick="goForward()">▶ Forward</button>
+    <button onclick="refresh()">⟳ Refresh</button>
+    <button onclick="goHome()">🏠 Home</button>
     <input type="text" id="url" placeholder="Enter URL to proxy" />
     <button onclick="loadProxy()">Go</button>
+    <button onclick="toggleFullscreen()">⛶ Fullscreen</button>
+    <button onclick="switchProxy()">🔀 Switch Proxy</button>
   </div>
-  <iframe id="frame"></iframe>
+  
+  <iframe id="frame" src=""></iframe>
 
   <script>
+    const iframe = document.getElementById("frame");
+    const homeURL = "https://example.com"; // Set your default home URL
+    let proxyIndex = 0;
+    const proxies = ["/proxy1?url=", "/proxy2?url="]; // Example proxy endpoints
+
+    let historyStack = [];
+    let historyIndex = -1;
+
     function loadProxy() {
       const url = document.getElementById("url").value.trim();
       if (!url) return alert("Please enter a URL");
-      document.getElementById("frame").src = `/proxy?url=${encodeURIComponent(url)}`;
+
+      const fullURL = proxies[proxyIndex] + encodeURIComponent(url);
+      iframe.src = fullURL;
+
+      // Manage history
+      historyStack = historyStack.slice(0, historyIndex + 1);
+      historyStack.push(fullURL);
+      historyIndex++;
     }
+
+    function goBack() {
+      if (historyIndex > 0) {
+        historyIndex--;
+        iframe.src = historyStack[historyIndex];
+      }
+    }
+
+    function goForward() {
+      if (historyIndex < historyStack.length - 1) {
+        historyIndex++;
+        iframe.src = historyStack[historyIndex];
+      }
+    }
+
+    function refresh() {
+      iframe.src = iframe.src;
+    }
+
+    function goHome() {
+      iframe.src = homeURL;
+      historyStack = [homeURL];
+      historyIndex = 0;
+    }
+
+    function toggleFullscreen() {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen();
+      } else {
+        document.exitFullscreen();
+      }
+    }
+
+    function switchProxy() {
+      proxyIndex = (proxyIndex + 1) % proxies.length;
+      if (historyIndex >= 0) {
+        const url = new URL(historyStack[historyIndex]);
+        const realURL = url.searchParams.get("url");
+        iframe.src = proxies[proxyIndex] + encodeURIComponent(realURL);
+        historyStack[historyIndex] = iframe.src;
+      }
+    }
+
+    // Initialize
+    goHome();
   </script>
 </body>
 </html>
