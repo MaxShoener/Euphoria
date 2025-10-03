@@ -1,21 +1,23 @@
-# Use Node.js 20 slim image
+# Use Node.js slim image
 FROM node:20-slim
 
-# Install git + dependencies for npm install from GitHub
+# Install git (needed for github URLs)
 RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
 
-# Create app directory
+# Set working directory
 WORKDIR /app
 
-# Install dependencies first
+# Copy package.json first for caching
 COPY package.json package-lock.json* ./
+
+# Install dependencies
 RUN npm install --legacy-peer-deps
 
-# Copy rest of the app
+# Copy the rest of the app
 COPY . .
 
-# Expose port (Koyeb will route traffic here)
+# Expose port
 EXPOSE 3000
 
-# Start app
+# Start the server
 CMD ["npm", "start"]
