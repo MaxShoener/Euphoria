@@ -1,8 +1,8 @@
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
-import { createBareServer } from "ultraviolet/bare";
-import scramjet from "scramjet";
+import { Ultraviolet } from "ultraviolet";
+import { DataStream } from "scramjet";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -10,41 +10,30 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Serve frontend (UI)
-app.use(express.static(path.join(__dirname, "public")));
+// Serve index.html
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "index.html"));
+});
 
-// Mode switch (default: UV)
-let proxyMode = process.env.PROXY_MODE || "uv";
+// Example proxy route using Ultraviolet + Scramjet
+app.get("/proxy", async (req, res) => {
+  const target = req.query.url;
+  if (!target) return res.status(400).send("Missing url query parameter");
 
-// Ultraviolet setup
-let bareServer = createBareServer("/bare/");
+  try {
+    // Fetch with Ultraviolet
+    const response = await Ultraviolet.fetch(target);
+    const buffer = await response.buffer();
 
-// Scramjet setup (mock example)
-function scramjetProxy(req, res) {
-  res.send("Scramjet proxy is running (example placeholder)");
-}
-
-// Switch endpoint
-app.get("/switch/:mode", (req, res) => {
-  const { mode } = req.params;
-  if (mode !== "uv" && mode !== "scramjet") {
-    return res.status(400).send("Invalid mode");
+    // Stream response via Scramjet
+    const stream = new DataStream(buffer);
+    stream.toArray().then(data => {
+      res.setHeader("Content-Type", response.headers.get("content-type") || "text/plain");
+      res.send(Buffer.concat(data));
+    });
+  } catch (err) {
+    res.status(500).send("Proxy error: " + err.message);
   }
-  proxyMode = mode;
-  res.send(`Proxy mode switched to ${mode}`);
 });
 
-// Proxy route
-app.use("/proxy", (req, res, next) => {
-  if (proxyMode === "uv") {
-    return bareServer.handleRequest(req, res);
-  } else if (proxyMode === "scramjet") {
-    return scramjetProxy(req, res);
-  }
-  next();
-});
-
-// Start server
-app.listen(PORT, () => {
-  console.log(`Server running on http://localhost:${PORT}`);
-});
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
