@@ -1,23 +1,32 @@
 {
   "name": "euphoria",
   "version": "1.0.0",
-  "description": "Euphoria project",
+  "description": "Euphoria app with engine switchable between Scramjet and UV",
   "main": "index.js",
+  "type": "module",
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js",
-    "build": "echo 'No build step configured'"
+    "start:scramjet": "ENGINE=scramjet node index.js",
+    "start:uv": "ENGINE=uv node index.js",
+    "test": "echo \"No tests defined\" && exit 0",
+    "lint": "eslint . --ext .js"
   },
+  "keywords": [
+    "euphoria",
+    "scramjet",
+    "uv",
+    "engine-switch"
+  ],
+  "author": "Max Shoener",
+  "license": "MIT",
   "dependencies": {
-    "scramjet": "git+https://${GITHUB_TOKEN}@github.com/TitaniumNetwork-Dev/scramjet.git",
-    "uv": "^1.0.0"
+    "scramjet": "^4.0.0",
+    "uv": "^0.2.1" 
   },
   "devDependencies": {
-    "nodemon": "^3.0.2"
+    "eslint": "^8.50.0"
   },
   "engines": {
-    "node": ">=20"
-  },
-  "author": "Max Shoener",
-  "license": "MIT"
+    "node": ">=20.0.0"
+  }
 }
