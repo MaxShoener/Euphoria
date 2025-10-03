@@ -1,15 +1,23 @@
 {
-  "name": "euphoria-backend",
+  "name": "euphoria",
   "version": "1.0.0",
-  "type": "module",
+  "description": "Euphoria project",
+  "main": "index.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "build": "echo 'No build step configured'"
   },
   "dependencies": {
-    "@titaniumnetwork-dev/scramjet": "github:TitaniumNetwork-Dev/scramjet",
-    "@titaniumnetwork-dev/ultraviolet": "github:TitaniumNetwork-Dev/ultraviolet",
-    "express": "^4.18.2",
-    "cors": "^2.8.5",
-    "node-fetch": "^3.3.2"
-  }
+    "scramjet": "git+https://${GITHUB_TOKEN}@github.com/TitaniumNetwork-Dev/scramjet.git",
+    "uv": "^1.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "author": "Max Shoener",
+  "license": "MIT"
 }
