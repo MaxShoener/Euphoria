@@ -1,20 +1,16 @@
-# Use Node.js 18+ slim
 FROM node:20-slim
 
-# Set working directory
 WORKDIR /app
 
-# Copy package files
+# Install git (needed for GitHub packages)
+RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+
 COPY package*.json ./
 
-# Install dependencies
 RUN npm install
 
-# Copy source
 COPY . .
 
-# Expose the port Koyeb provides
-EXPOSE 3000
+EXPOSE 8080
 
-# Start the app
 CMD ["npm", "start"]
