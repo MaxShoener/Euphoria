@@ -19,19 +19,28 @@ app.get('/api', async (req, res) => {
   if (!targetUrl) return res.status(400).json({ error: 'Missing URL parameter' });
 
   try {
-    // Ultraviolet fetch
     const client = new HttpClient();
     const response = await client.get(targetUrl);
+    const contentType = response.headers.get('content-type') || '';
 
-    // Scramjet stream for processing response body line by line
-    const textStream = new DataStream.StringStream(await response.text());
-    const processed = await textStream
+    // If response is JSON
+    if (contentType.includes('application/json')) {
+      const jsonData = await response.json();
+      // Stream through Scramjet for any advanced processing if needed
+      const processed = await new DataStream(jsonData).toArray();
+      return res.json({ url: targetUrl, data: processed });
+    }
+
+    // Otherwise treat as text
+    const text = await response.text();
+    const processed = await new DataStream.StringStream(text)
       .lines()
       .map(line => line.trim())
       .filter(line => line.length > 0)
       .toArray();
 
     res.json({ url: targetUrl, data: processed });
+
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
