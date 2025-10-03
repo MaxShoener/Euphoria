@@ -1,15 +1,15 @@
 {
-  "name": "proxy-app",
+  "name": "euphoria-proxy",
   "version": "1.0.0",
-  "description": "Proxy server with Ultraviolet + Scramjet backend",
+  "description": "Proxy server with Ultraviolet and Scramjet backends + frontend UI",
   "main": "server.js",
+  "type": "module",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
     "express": "^4.18.2",
-    "scramjet": "^4.1.2",
-    "node-fetch": "^3.3.2"
-  },
-  "type": "module"
+    "scramjet": "^4.36.5",
+    "ultraviolet": "github:titaniumnetwork-dev/Ultraviolet"
+  }
 }
