@@ -4,7 +4,7 @@ FROM node:20-slim
 # Create app directory
 WORKDIR /app
 
-# Install dependencies first (cache layer)
+# Install dependencies first
 COPY package.json package-lock.json* ./
 RUN npm install --legacy-peer-deps
 
