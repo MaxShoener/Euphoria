@@ -1,69 +1,50 @@
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
-
-// Import Ultraviolet Bare Server
-import { createBareServer } from "ultraviolet/bare-server-node";
-import http from "http";
-
-// Import Scramjet (basic stream proxy example)
-import { StringStream } from "scramjet";
+import { createBareServer } from "ultraviolet/bare";
+import scramjet from "scramjet";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const port = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3000;
 
-// Serve frontend
-app.use(express.static(__dirname));
+// Serve frontend (UI)
+app.use(express.static(path.join(__dirname, "public")));
 
-// Create Ultraviolet bare server
-const bare = createBareServer("/bare/");
+// Mode switch (default: UV)
+let proxyMode = process.env.PROXY_MODE || "uv";
 
-// Route: Proxy using Ultraviolet
-app.get("/proxy/uv", (req, res) => {
-  const target = req.query.url;
-  if (!target) return res.status(400).send("Missing url parameter");
-  res.redirect(`/bare/${encodeURIComponent(target)}`);
-});
+// Ultraviolet setup
+let bareServer = createBareServer("/bare/");
 
-// Route: Proxy using Scramjet (basic passthrough)
-app.get("/proxy/scramjet", async (req, res) => {
-  const target = req.query.url;
-  if (!target) return res.status(400).send("Missing url parameter");
+// Scramjet setup (mock example)
+function scramjetProxy(req, res) {
+  res.send("Scramjet proxy is running (example placeholder)");
+}
 
-  try {
-    const response = await fetch(target);
-    const body = await response.text();
-
-    // Simple Scramjet stream
-    await StringStream.from(body)
-      .map(str => str.replace(/Euphoria/gi, "Euphoria Proxy")) // Example transform
-      .pipe(res);
-  } catch (err) {
-    res.status(500).send("Scramjet proxy error: " + err.message);
+// Switch endpoint
+app.get("/switch/:mode", (req, res) => {
+  const { mode } = req.params;
+  if (mode !== "uv" && mode !== "scramjet") {
+    return res.status(400).send("Invalid mode");
   }
+  proxyMode = mode;
+  res.send(`Proxy mode switched to ${mode}`);
 });
 
-// Create HTTP server that handles both Express + Bare
-const server = http.createServer((req, res) => {
-  if (bare.shouldRoute(req)) {
-    bare.routeRequest(req, res);
-  } else {
-    app(req, res);
+// Proxy route
+app.use("/proxy", (req, res, next) => {
+  if (proxyMode === "uv") {
+    return bareServer.handleRequest(req, res);
+  } else if (proxyMode === "scramjet") {
+    return scramjetProxy(req, res);
   }
+  next();
 });
 
-// WebSocket upgrade support for Bare
-server.on("upgrade", (req, socket, head) => {
-  if (bare.shouldRoute(req)) {
-    bare.routeUpgrade(req, socket, head);
-  } else {
-    socket.destroy();
-  }
-});
-
-server.listen(port, () => {
-  console.log(`✅ Server running at http://localhost:${port}`);
+// Start server
+app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
 });
