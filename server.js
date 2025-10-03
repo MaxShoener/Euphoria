@@ -1,37 +1,37 @@
-import express from "express";
-import cors from "cors";
-import fetch from "node-fetch";
-import { createScramjetProxy } from "@titaniumnetwork-dev/scramjet";
-import { createUVProxy } from "@titaniumnetwork-dev/ultraviolet";
+// Get engine choice from env variable, default to scramjet
+const ENGINE = process.env.ENGINE || 'scramjet';
 
-const app = express();
-app.use(cors());
-app.use(express.static("public"));
+let engine;
 
-const PORT = process.env.PORT || 8080;
-
-// Scramjet and UV proxies
-const scramjetProxy = createScramjetProxy();
-const uvProxy = createUVProxy();
-
-// /proxy endpoint with engine selection
-app.get("/proxy", async (req, res) => {
-  const { url, engine } = req.query;
-  if (!url) return res.status(400).send("Missing url");
-
-  try {
-    if (engine === "uv") {
-      uvProxy.web(req, res, { target: decodeURIComponent(url) });
+try {
+    if (ENGINE === 'scramjet') {
+        console.log('Using Scramjet engine...');
+        engine = require('scramjet');
+    } else if (ENGINE === 'uv') {
+        console.log('Using UV engine...');
+        engine = require('uv');
     } else {
-      // default to Scramjet
-      scramjetProxy.web(req, res, { target: decodeURIComponent(url) });
+        throw new Error(`Unknown ENGINE value: ${ENGINE}`);
     }
-  } catch (err) {
-    console.error("Proxy failed:", err);
-    res.status(500).send("Proxy failed: " + err.message);
-  }
-});
+} catch (err) {
+    console.error('Failed to load engine:', err.message);
+    process.exit(1);
+}
 
-app.listen(PORT, () => {
-  console.log(`Backend running on port ${PORT}`);
-});
+// Example usage (replace with your actual logic)
+async function main() {
+    console.log(`Engine "${ENGINE}" is ready to use!`);
+
+    // Example: create a simple stream or run engine-specific code
+    if (ENGINE === 'scramjet') {
+        // Example Scramjet usage
+        const { DataStream } = engine;
+        const ds = new DataStream([1,2,3,4,5]);
+        ds.map(x => x * 2).each(x => console.log('Scramjet output:', x));
+    } else if (ENGINE === 'uv') {
+        // Example UV usage (replace with actual UV logic)
+        console.log('UV engine loaded. Ready to process streams...');
+    }
+}
+
+main();
