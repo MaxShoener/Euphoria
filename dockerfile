@@ -1,7 +1,7 @@
-# Use official Node.js 20 slim image
+# Use official Node.js slim image
 FROM node:20-slim
 
-# Install git (needed for GitHub dependencies)
+# Install git
 RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
@@ -13,10 +13,10 @@ COPY package.json package-lock.json* ./
 # Install dependencies
 RUN npm install --legacy-peer-deps
 
-# Copy the rest of your app
+# Copy the rest of the app
 COPY . .
 
-# Expose port (adjust if different)
+# Expose default port (optional)
 EXPOSE 3000
 
 # Start the server
