@@ -2,79 +2,108 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Old Frontend UI</title>
+  <title>Proxy UI</title>
   <style>
     body {
-      background: #f2f2f2;
       font-family: Arial, sans-serif;
+      background: #1e1e1e;
+      color: #f0f0f0;
       display: flex;
-      justify-content: center;
+      flex-direction: column;
       align-items: center;
-      height: 100vh;
-      margin: 0;
+      padding: 20px;
     }
-    .container {
-      background: white;
-      padding: 30px;
-      border-radius: 8px;
-      box-shadow: 0 0 10px rgba(0,0,0,0.1);
-      text-align: center;
-      width: 400px;
-    }
-    input {
-      width: 100%;
-      padding: 10px;
-      margin-bottom: 10px;
-      font-size: 14px;
-    }
-    button {
-      padding: 10px 20px;
-      font-size: 16px;
-      cursor: pointer;
-    }
-    #output {
+    h1 { margin-bottom: 10px; }
+    input, button { padding: 10px; margin: 5px; border-radius: 4px; border: none; }
+    input { width: 300px; }
+    button { cursor: pointer; background: #0077ff; color: white; }
+    table {
+      border-collapse: collapse;
       margin-top: 20px;
-      text-align: left;
-      max-height: 300px;
-      overflow-y: auto;
-      background: #f9f9f9;
-      padding: 10px;
-      border-radius: 4px;
-      font-family: monospace;
-      font-size: 14px;
+      width: 90%;
+      max-width: 800px;
     }
+    th, td {
+      border: 1px solid #555;
+      padding: 8px;
+      text-align: left;
+    }
+    th {
+      background: #333;
+    }
+    tr:nth-child(even) { background: #2a2a2a; }
+    pre { white-space: pre-wrap; word-break: break-word; }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>Old Frontend UI</h1>
-    <input id="backendUrl" type="text" placeholder="Enter backend URL" value="https://example.com/api"/>
-    <button id="fetchData">Fetch Backend Data</button>
-    <div id="output"></div>
-  </div>
+
+  <h1>Proxy Viewer</h1>
+  <input type="text" id="urlInput" placeholder="Enter URL to fetch" />
+  <button onclick="fetchData()">Fetch</button>
+
+  <div id="output"></div>
 
   <script>
-    const button = document.getElementById('fetchData');
-    const output = document.getElementById('output');
-    const backendInput = document.getElementById('backendUrl');
+    async function fetchData() {
+      const url = document.getElementById('urlInput').value.trim();
+      if (!url) return alert('Please enter a URL!');
 
-    button.addEventListener('click', async () => {
-      const url = backendInput.value.trim();
-      if (!url) return alert('Enter a backend URL');
-      
-      output.innerHTML = 'Loading...';
+      const outputDiv = document.getElementById('output');
+      outputDiv.innerHTML = '<p>Loading...</p>';
 
       try {
         const response = await fetch(`/api?url=${encodeURIComponent(url)}`);
-        if (!response.ok) throw new Error('Network response was not ok');
+        if (!response.ok) throw new Error('Failed to fetch data');
 
-        const data = await response.json();
-        output.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+        const result = await response.json();
+
+        // Check if data is an array of objects (JSON)
+        if (Array.isArray(result.data) && result.data.length && typeof result.data[0] === 'object') {
+          const keys = [...new Set(result.data.flatMap(obj => Object.keys(obj)))];
+          const table = document.createElement('table');
+
+          // Header
+          const thead = document.createElement('thead');
+          const headerRow = document.createElement('tr');
+          keys.forEach(key => {
+            const th = document.createElement('th');
+            th.textContent = key;
+            headerRow.appendChild(th);
+          });
+          thead.appendChild(headerRow);
+          table.appendChild(thead);
+
+          // Body
+          const tbody = document.createElement('tbody');
+          result.data.forEach(item => {
+            const row = document.createElement('tr');
+            keys.forEach(key => {
+              const td = document.createElement('td');
+              td.textContent = item[key] ?? '';
+              row.appendChild(td);
+            });
+            tbody.appendChild(row);
+          });
+          table.appendChild(tbody);
+
+          outputDiv.innerHTML = '';
+          outputDiv.appendChild(table);
+
+        } else if (Array.isArray(result.data)) {
+          // If it's text lines
+          const pre = document.createElement('pre');
+          pre.textContent = result.data.join('\n');
+          outputDiv.innerHTML = '';
+          outputDiv.appendChild(pre);
+        } else {
+          outputDiv.innerHTML = '<p>No data returned.</p>';
+        }
+
       } catch (err) {
-        output.innerHTML = `Error: ${err.message}`;
+        outputDiv.innerHTML = `<p style="color:red;">Error: ${err.message}</p>`;
       }
-    });
+    }
   </script>
+
 </body>
 </html>
