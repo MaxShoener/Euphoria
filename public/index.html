@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Old Frontend UI</title>
   <style>
-    /* Keep your old UI styles */
     body {
       background: #f2f2f2;
       font-family: Arial, sans-serif;
@@ -21,6 +20,13 @@
       border-radius: 8px;
       box-shadow: 0 0 10px rgba(0,0,0,0.1);
       text-align: center;
+      width: 400px;
+    }
+    input {
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 10px;
+      font-size: 14px;
     }
     button {
       padding: 10px 20px;
@@ -43,6 +49,7 @@
 <body>
   <div class="container">
     <h1>Old Frontend UI</h1>
+    <input id="backendUrl" type="text" placeholder="Enter backend URL" value="https://example.com/api"/>
     <button id="fetchData">Fetch Backend Data</button>
     <div id="output"></div>
   </div>
@@ -50,18 +57,22 @@
   <script>
     const button = document.getElementById('fetchData');
     const output = document.getElementById('output');
+    const backendInput = document.getElementById('backendUrl');
 
     button.addEventListener('click', async () => {
+      const url = backendInput.value.trim();
+      if (!url) return alert('Enter a backend URL');
+      
       output.innerHTML = 'Loading...';
 
       try {
-        const response = await fetch('/api'); // Node.js proxy route
+        const response = await fetch(`/api?url=${encodeURIComponent(url)}`);
         if (!response.ok) throw new Error('Network response was not ok');
 
         const data = await response.json();
         output.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
-      } catch (error) {
-        output.innerHTML = `Error: ${error.message}`;
+      } catch (err) {
+        output.innerHTML = `Error: ${err.message}`;
       }
     });
   </script>
