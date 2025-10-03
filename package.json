@@ -1,21 +1,13 @@
 {
-  "name": "euphoria",
+  "name": "frontend-backend-app",
   "version": "1.0.0",
-  "description": "Dual-engine Node.js project supporting scramjet and uv",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "NODE_ENV=development node index.js",
-    "install:scramjet": "npm install scramjet --omit=dev",
-    "install:uv": "npm install github:MaxShoener/uv --omit=dev"
+    "start": "node server.js"
   },
   "dependencies": {
-    "express": "^4.18.2"
+    "express": "^4.18.2",
+    "node-fetch": "^3.3.2"
   },
-  "engines": {
-    "node": ">=20"
-  },
-  "optionalDependencies": {
-  },
-  "license": "MIT"
+  "type": "module"
 }
