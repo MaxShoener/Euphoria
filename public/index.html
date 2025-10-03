@@ -2,90 +2,69 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Proxy Portal</title>
+  <title>Euphoria Proxy UI</title>
   <style>
-    body {
-      background: #111;
-      color: #fff;
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
       font-family: Arial, sans-serif;
+    }
+
+    body {
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      height: 100vh;
-      margin: 0;
+      min-height: 100vh;
+      box-sizing: border-box;
+      background-color: #f5f5f5;
     }
+
     h1 {
-      margin-bottom: 20px;
+      margin-bottom: 1rem;
     }
-    input, select, button {
-      padding: 10px;
-      margin: 5px;
-      border: none;
-      border-radius: 4px;
-      font-size: 16px;
-    }
-    input {
+
+    input, button {
+      padding: 0.5em;
+      margin: 0.5em;
       width: 300px;
+      max-width: 80%;
+      font-size: 1rem;
     }
-    button {
-      background: #4caf50;
-      color: white;
-      cursor: pointer;
-    }
-    button:hover {
-      background: #45a049;
-    }
+
     iframe {
-      width: 90%;
-      height: 70vh;
-      margin-top: 20px;
-      border: 2px solid #444;
-      border-radius: 8px;
-      background: #fff;
+      width: 80%;
+      height: 60%;
+      max-height: 70vh;
+      border: 1px solid #ccc;
+      margin-top: 1em;
+      background-color: #fff;
+    }
+
+    @media (max-width: 600px) {
+      input, button {
+        width: 90%;
+      }
+
+      iframe {
+        width: 90%;
+        height: 50%;
+      }
     }
   </style>
 </head>
 <body>
-  <h1>🌐 Proxy Portal</h1>
-
-  <div>
-    <input id="urlInput" type="text" placeholder="Enter a URL..." />
-    <select id="modeSelect">
-      <option value="uv">Ultraviolet</option>
-      <option value="scramjet">Scramjet</option>
-    </select>
-    <button onclick="loadProxy()">Go</button>
-  </div>
-
-  <iframe id="outputFrame"></iframe>
+  <h1>Euphoria Proxy</h1>
+  <input type="text" id="url" placeholder="Enter URL to proxy" />
+  <button onclick="loadProxy()">Go</button>
+  <iframe id="frame"></iframe>
 
   <script>
     function loadProxy() {
-      const url = document.getElementById("urlInput").value.trim();
-      const mode = document.getElementById("modeSelect").value;
-      const frame = document.getElementById("outputFrame");
-
-      if (!url) {
-        alert("Please enter a URL");
-        return;
-      }
-
-      if (mode === "uv") {
-        // Ultraviolet: proxy path through /bare/
-        frame.src = "/bare/" + url;
-      } else if (mode === "scramjet") {
-        // Scramjet: fetch processed JSON
-        fetch("/api?url=" + encodeURIComponent(url))
-          .then(res => res.json())
-          .then(data => {
-            frame.srcdoc = "<pre>" + JSON.stringify(data, null, 2) + "</pre>";
-          })
-          .catch(err => {
-            frame.srcdoc = "<pre>Error: " + err.message + "</pre>";
-          });
-      }
+      const url = document.getElementById("url").value;
+      if (!url) return alert("Please enter a URL");
+      document.getElementById("frame").src = `/proxy?url=${encodeURIComponent(url)}`;
     }
   </script>
 </body>
