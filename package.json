@@ -1,7 +1,7 @@
 {
   "name": "proxy-app",
   "version": "1.0.0",
-  "description": "Proxy server with frontend UI",
+  "description": "Proxy server with Ultraviolet + Scramjet backend",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
