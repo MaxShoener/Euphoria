@@ -1,23 +1,20 @@
-# Use Node.js slim image
 FROM node:20-slim
 
-# Install git (needed for github URLs)
+# Install git
 RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
 WORKDIR /app
 
-# Copy package.json first for caching
+# Copy package.json first
 COPY package.json package-lock.json* ./
+
+# Upgrade npm
+RUN npm install -g npm@11.6.1
 
 # Install dependencies
 RUN npm install --legacy-peer-deps
 
-# Copy the rest of the app
+# Copy rest of app
 COPY . .
 
-# Expose port
-EXPOSE 3000
-
-# Start the server
 CMD ["npm", "start"]
