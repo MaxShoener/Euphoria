@@ -1,14 +1,16 @@
 {
-  "name": "frontend-backend-app",
+  "name": "proxy-app",
   "version": "1.0.0",
-  "type": "module",
+  "description": "Proxy server with frontend UI",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
     "express": "^4.18.2",
-    "@ultraviolet/http": "^0.3.5",
-    "scramjet": "^4.6.1"
-  }
+    "ultraviolet": "^1.0.0",
+    "scramjet": "^4.1.2",
+    "node-fetch": "^3.3.2"
+  },
+  "type": "module"
 }
