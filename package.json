@@ -1,14 +1,15 @@
 {
   "name": "euphoria-backend",
   "version": "1.0.0",
-  "description": "Proxy backend with Ultraviolet and Scramjet support",
+  "description": "Proxy backend with Ultraviolet + Scramjet support",
   "main": "server.js",
+  "type": "module",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
     "express": "^4.18.2",
-    "ultraviolet": "https://github.com/titaniumnetwork-dev/Ultraviolet/archive/refs/heads/main.tar.gz",
-    "scramjet": "https://github.com/titaniumnetwork-dev/scramjet/archive/refs/heads/main.tar.gz"
+    "ultraviolet": "https://github.com/titaniumnetwork-dev/Ultraviolet.git",
+    "scramjet": "https://github.com/JustOptimize/scramjet.git"
   }
 }
