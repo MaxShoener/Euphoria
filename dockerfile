@@ -1,23 +1,14 @@
-# Use official Node.js slim image
 FROM node:20-slim
 
-# Install git
-RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y git curl && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
 WORKDIR /app
 
-# Copy package files first (for caching)
-COPY package.json package-lock.json* ./
+COPY package.json ./
 
-# Install dependencies
 RUN npm install --legacy-peer-deps
 
-# Copy the rest of the app
 COPY . .
 
-# Expose default port (optional)
 EXPOSE 3000
-
-# Start the server
 CMD ["npm", "start"]
