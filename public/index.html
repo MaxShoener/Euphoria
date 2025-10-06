@@ -1,89 +1,149 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Euphoria Proxy</title>
   <style>
+    * { box-sizing: border-box; }
     body {
-      font-family: Arial, sans-serif;
-      background: #0e0e0e;
-      color: #f1f1f1;
+      margin: 0;
+      font-family: "Inter", sans-serif;
+      background-color: #0b0c10;
+      color: #fff;
+      height: 100vh;
       display: flex;
       flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
-      margin: 0;
     }
-    #toolbar {
+    header {
+      background: #1f2833;
       display: flex;
-      gap: 10px;
-      margin-bottom: 20px;
-    }
-    input {
-      width: 300px;
+      align-items: center;
+      justify-content: space-between;
       padding: 8px;
-      border-radius: 4px;
-      border: none;
+      gap: 6px;
+    }
+    #controls {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      flex-wrap: wrap;
     }
     button {
-      padding: 8px 12px;
-      background: #202020;
-      color: #fff;
+      background: #45a29e;
       border: none;
+      color: white;
+      padding: 8px 12px;
       border-radius: 4px;
       cursor: pointer;
+      transition: background 0.2s;
     }
     button:hover {
-      background: #333;
+      background: #66fcf1;
+      color: #0b0c10;
+    }
+    input {
+      flex: 1;
+      padding: 8px;
+      border: none;
+      border-radius: 4px;
+      font-size: 15px;
+      background: #c5c6c7;
+      color: #0b0c10;
+      min-width: 200px;
     }
     iframe {
-      width: 90%;
-      height: 70vh;
+      flex-grow: 1;
+      width: 100%;
       border: none;
-      background: #fff;
+      background: white;
+    }
+    #status {
+      font-size: 13px;
+      color: #66fcf1;
+      margin-left: 10px;
     }
   </style>
 </head>
 <body>
-  <h1>Euphoria Proxy</h1>
-  <div id="toolbar">
-    <button id="back">←</button>
-    <button id="forward">→</button>
-    <button id="refresh">⟳</button>
-    <button id="home">🏠</button>
-    <input id="url" type="text" placeholder="Enter URL..." />
-    <button id="go">Go</button>
-    <button id="fullscreen">⛶</button>
-    <button id="switch">Switch Proxy</button>
-  </div>
-  <iframe id="viewer"></iframe>
+  <header>
+    <div id="controls">
+      <button id="back">⟵</button>
+      <button id="forward">⟶</button>
+      <button id="refresh">⟳</button>
+      <button id="home">🏠</button>
+      <input id="url" type="text" placeholder="Enter a URL..." />
+      <button id="go">Go</button>
+      <button id="fullscreen">⛶</button>
+      <button id="switch">Switch: UV</button>
+    </div>
+    <span id="status"></span>
+  </header>
+  <iframe id="view"></iframe>
 
   <script>
-    const iframe = document.getElementById('viewer');
-    const input = document.getElementById('url');
-    const switchBtn = document.getElementById('switch');
-    let mode = 'uv';
+    const backend = location.origin; // automatically detect deployed or local
+    const iframe = document.getElementById("view");
+    const urlInput = document.getElementById("url");
+    const status = document.getElementById("status");
+    const switchBtn = document.getElementById("switch");
 
-    async function loadMode() {
-      const res = await fetch('/api/proxy-mode');
-      const data = await res.json();
-      mode = data.current;
-      switchBtn.textContent = `Proxy: ${mode.toUpperCase()}`;
+    let currentProxy = "uv";
+    let historyStack = [];
+    let historyIndex = -1;
+
+    function loadURL(u) {
+      if (!u.startsWith("http")) u = "https://" + u;
+      historyStack = historyStack.slice(0, historyIndex + 1);
+      historyStack.push(u);
+      historyIndex++;
+      urlInput.value = u;
+      refresh();
     }
 
-    switchBtn.addEventListener('click', async () => {
-      const newMode = mode === 'uv' ? 'scramjet' : 'uv';
-      await fetch(`/api/proxy-mode/${newMode}`, { method: 'POST' });
-      await loadMode();
-    });
+    function refresh() {
+      const u = historyStack[historyIndex];
+      status.textContent = `Loading via ${currentProxy.toUpperCase()}...`;
+      if (currentProxy === "uv") {
+        iframe.src = `${backend}/proxy?url=${encodeURIComponent(u)}`;
+      } else {
+        iframe.src = `${backend}/scramjet?url=${encodeURIComponent(u)}`;
+      }
+    }
 
-    document.getElementById('go').addEventListener('click', () => {
-      const url = input.value.startsWith('http') ? input.value : 'https://' + input.value;
-      iframe.src = `/bare/${url}`;
-    });
+    document.getElementById("go").onclick = () => loadURL(urlInput.value);
+    document.getElementById("home").onclick = () => loadURL("https://example.com");
+    document.getElementById("refresh").onclick = refresh;
 
-    loadMode();
+    document.getElementById("back").onclick = () => {
+      if (historyIndex > 0) {
+        historyIndex--;
+        urlInput.value = historyStack[historyIndex];
+        refresh();
+      }
+    };
+
+    document.getElementById("forward").onclick = () => {
+      if (historyIndex < historyStack.length - 1) {
+        historyIndex++;
+        urlInput.value = historyStack[historyIndex];
+        refresh();
+      }
+    };
+
+    document.getElementById("fullscreen").onclick = () => {
+      if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+      else document.exitFullscreen();
+    };
+
+    switchBtn.onclick = () => {
+      currentProxy = currentProxy === "uv" ? "scramjet" : "uv";
+      switchBtn.textContent = `Switch: ${currentProxy.toUpperCase()}`;
+      refresh();
+    };
+
+    // Default load
+    loadURL("https://example.com");
   </script>
 </body>
 </html>
