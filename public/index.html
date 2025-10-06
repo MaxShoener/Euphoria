@@ -1,108 +1,89 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Euphoria Proxy</title>
   <style>
-    body, html {
-      margin: 0;
-      padding: 0;
-      height: 100%;
+    body {
+      font-family: Arial, sans-serif;
+      background: #0e0e0e;
+      color: #f1f1f1;
       display: flex;
       flex-direction: column;
-      font-family: Arial, sans-serif;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
     }
-
     #toolbar {
       display: flex;
-      flex-wrap: wrap;
-      background-color: #222;
-      padding: 8px;
-      gap: 4px;
+      gap: 10px;
+      margin-bottom: 20px;
     }
-
-    #toolbar button, #toolbar input, #toolbar select {
-      padding: 6px 10px;
+    input {
+      width: 300px;
+      padding: 8px;
+      border-radius: 4px;
+      border: none;
+    }
+    button {
+      padding: 8px 12px;
+      background: #202020;
+      color: #fff;
       border: none;
       border-radius: 4px;
-      font-size: 14px;
-    }
-
-    #toolbar button {
-      background-color: #555;
-      color: white;
       cursor: pointer;
     }
-
-    #toolbar button:hover {
-      background-color: #777;
+    button:hover {
+      background: #333;
     }
-
-    #url-input {
-      flex: 1;
-      min-width: 200px;
-    }
-
-    #browser-frame {
-      flex: 1;
-      width: 100%;
+    iframe {
+      width: 90%;
+      height: 70vh;
       border: none;
+      background: #fff;
     }
   </style>
 </head>
 <body>
+  <h1>Euphoria Proxy</h1>
   <div id="toolbar">
-    <button id="back">◀ Back</button>
-    <button id="forward">▶ Forward</button>
-    <button id="refresh">⟳ Refresh</button>
-    <button id="home">🏠 Home</button>
-    <input type="text" id="url-input" placeholder="Enter URL" />
+    <button id="back">←</button>
+    <button id="forward">→</button>
+    <button id="refresh">⟳</button>
+    <button id="home">🏠</button>
+    <input id="url" type="text" placeholder="Enter URL..." />
     <button id="go">Go</button>
-    <button id="fullscreen">⛶ Fullscreen</button>
-    <select id="proxy-switch">
-      <option value="default">Default Proxy</option>
-      <option value="proxy1">Proxy 1</option>
-      <option value="proxy2">Proxy 2</option>
-    </select>
+    <button id="fullscreen">⛶</button>
+    <button id="switch">Switch Proxy</button>
   </div>
-
-  <iframe id="browser-frame" src="about:blank"></iframe>
+  <iframe id="viewer"></iframe>
 
   <script>
-    const iframe = document.getElementById('browser-frame');
-    const urlInput = document.getElementById('url-input');
-    
-    document.getElementById('back').addEventListener('click', () => iframe.contentWindow.history.back());
-    document.getElementById('forward').addEventListener('click', () => iframe.contentWindow.history.forward());
-    document.getElementById('refresh').addEventListener('click', () => iframe.contentWindow.location.reload());
-    document.getElementById('home').addEventListener('click', () => iframe.src = 'https://example.com');
-    
+    const iframe = document.getElementById('viewer');
+    const input = document.getElementById('url');
+    const switchBtn = document.getElementById('switch');
+    let mode = 'uv';
+
+    async function loadMode() {
+      const res = await fetch('/api/proxy-mode');
+      const data = await res.json();
+      mode = data.current;
+      switchBtn.textContent = `Proxy: ${mode.toUpperCase()}`;
+    }
+
+    switchBtn.addEventListener('click', async () => {
+      const newMode = mode === 'uv' ? 'scramjet' : 'uv';
+      await fetch(`/api/proxy-mode/${newMode}`, { method: 'POST' });
+      await loadMode();
+    });
+
     document.getElementById('go').addEventListener('click', () => {
-      let url = urlInput.value.trim();
-      if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
-      iframe.src = url;
+      const url = input.value.startsWith('http') ? input.value : 'https://' + input.value;
+      iframe.src = `/bare/${url}`;
     });
 
-    document.getElementById('fullscreen').addEventListener('click', () => {
-      if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen();
-      } else {
-        document.exitFullscreen();
-      }
-    });
-
-    document.getElementById('proxy-switch').addEventListener('change', (e) => {
-      const proxy = e.target.value;
-      // Example: change the proxy URL or backend endpoint dynamically
-      // Adjust this part based on your backend API
-      console.log('Switching to proxy:', proxy);
-    });
-
-    // Optional: Enter key in URL input triggers "Go"
-    urlInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') document.getElementById('go').click();
-    });
+    loadMode();
   </script>
 </body>
 </html>
