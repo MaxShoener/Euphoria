@@ -1,58 +1,22 @@
-import express from "express";
-import fetch from "node-fetch";
-import cors from "cors";
-import pkg from "scramjet";
-const { StringStream } = pkg;
-
+import express from 'express';
+import fetch from 'node-fetch';
 const app = express();
-const PORT = process.env.PORT || 3000;
 
-app.use(cors());
-app.use(express.json());
-app.use(express.static("public"));
+app.get('/proxy', async (req, res) => {
+    const targetURL = req.query.url;
+    if(!targetURL) return res.status(400).send("Missing url");
 
-// Main proxy route
-app.get("/proxy", async (req, res) => {
-  let url = req.query.url;
-  if (!url) return res.status(400).send("Missing url");
-
-  if (!/^https?:\/\//i.test(url)) url = "https://" + url;
-
-  try {
-    const response = await fetch(url);
-    res.status(response.status);
-
-    const contentType = response.headers.get("content-type") || "";
-    res.setHeader("content-type", contentType);
-
-    if (contentType.includes("text/html") && response.body) {
-      let html = await response.text();
-
-      // Rewrite all links, scripts, forms, images to go through proxy
-      html = html.replace(/(href|src|action)=["'](?!https?:\/\/|\/\/)([^"']+)["']/gi, (m, attr, path) => {
-        const absolute = new URL(path, url).href;
-        return `${attr}="/proxy?url=${encodeURIComponent(absolute)}"`;
-      });
-
-      // Rewrite absolute HTTP URLs to go through proxy
-      html = html.replace(/(href|src|action)=["'](https?:\/\/[^"']+)["']/gi, (m, attr, path) => {
-        return `${attr}="/proxy?url=${encodeURIComponent(path)}"`;
-      });
-
-      res.send(html);
-    } else if (response.body) {
-      // Stream CSS, JS, images directly
-      StringStream.from(response.body).pipe(res);
-    } else {
-      res.end();
+    try {
+        const response = await fetch(targetURL, { redirect: 'manual' });
+        if(response.status >= 300 && response.status < 400 && response.headers.get('location')) {
+            // Follow redirect through proxy
+            return res.redirect(`/proxy?url=${encodeURIComponent(new URL(response.headers.get('location'), targetURL).href)}`);
+        }
+        const body = await response.text();
+        res.send(body);
+    } catch(err) {
+        res.status(500).send("Proxy error: " + err.message);
     }
-  } catch (err) {
-    console.error("Proxy failed:", err);
-    res.status(500).send("Proxy failed: " + err.message);
-  }
 });
 
-// Health check
-app.get("/health", (_, res) => res.json({ ok: true, name: "Euphoria", uptime: process.uptime() }));
-
-app.listen(PORT, () => console.log(`🌐 Euphoria running on port ${PORT}`));
+app.listen(3000, () => console.log("Proxy running on port 3000"));
