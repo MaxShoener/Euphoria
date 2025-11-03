@@ -1,14 +1,15 @@
 {
-  "name": "euphoria-backend",
+  "name": "scramjet-proxy-example",
   "version": "1.0.0",
-  "description": "Proxy backend using Ultraviolet and Scramjet",
+  "description": "Educational Node/Express proxy using scramjet (for lawful use only).",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
     "express": "^4.18.2",
-    "ultraviolet": "github:titaniumnetwork-dev/Ultraviolet",
-    "scramjet": "https://github.com/JustOptimize/scramjet/archive/refs/heads/main.tar.gz"
+    "node-fetch": "^2.6.7",
+    "scramjet": "^4.8.0",
+    "cors": "^2.8.5"
   }
 }
