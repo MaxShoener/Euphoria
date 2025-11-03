@@ -1,5 +1,7 @@
 import express from "express";
-import { Stream } from "scramjet";
+import pkg from "scramjet";      // CommonJS workaround
+const { Stream } = pkg;
+
 import fetch from "node-fetch";
 import cors from "cors";
 
