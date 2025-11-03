@@ -4,61 +4,68 @@
 <meta charset="UTF-8">
 <title>Euphoria Mini Browser</title>
 <style>
-  /* Base layout */
-  html, body { margin:0; padding:0; height:100%; font-family: 'Segoe UI', sans-serif; background:#1e1e2f; color:#f0f0f0; display:flex; flex-direction:column; }
-  #topbar { display:flex; align-items:center; gap:0.5rem; padding:0.5rem; background:#2e2e3e; transition:0.3s; }
+  html, body { margin:0; padding:0; height:100%; font-family:sans-serif; background:#111; color:#fff; display:flex; flex-direction:column; }
+  #topbar { display:flex; align-items:center; gap:0.3rem; padding:0.5rem; background:rgba(30,30,40,0.9); transition:0.3s; }
   #topbar.hidden { display:none; }
 
-  /* Input & buttons */
-  input { flex:1; padding:0.5rem 0.75rem; border-radius:6px; border:none; background:#3e3e50; color:#f0f0f0; font-size:1rem; }
-  input:focus { outline:none; box-shadow:0 0 5px #4cafef; }
-  button { padding:0.5rem 1rem; border:none; border-radius:6px; background:#4cafef; color:white; cursor:pointer; transition:0.2s; font-weight:600; }
+  /* Buttons all same size */
+  button { flex:0 0 40px; height:40px; border:none; border-radius:6px; background:#4cafef; color:white; cursor:pointer; transition:0.2s; font-weight:600; display:flex; align-items:center; justify-content:center; }
   button:hover { background:#3690d9; }
 
+  /* Input field */
+  input { flex:1; padding:0.5rem; border-radius:6px; border:none; background:#3e3e50; color:#fff; font-size:1rem; }
+  input:focus { outline:none; box-shadow:0 0 5px #4cafef; }
+
   /* Browser area */
-  #browser { flex:1; overflow:auto; background:white; color:black; padding:1rem; }
+  #browser { flex:1; overflow:auto; background:#fff; color:#000; padding:0; }
+
   a { color:#4cafef; text-decoration:underline; cursor:pointer; }
 
-  /* Responsive */
-  @media(max-width:600px) { button { padding:0.4rem 0.6rem; font-size:0.9rem; } input { font-size:0.9rem; } }
+  /* Minimal hover effect */
+  button:hover { filter: brightness(1.1); }
 </style>
 </head>
 <body>
 
 <header id="topbar">
-  <button onclick="toggleFullscreen()">⛶</button>
-  <button onclick="goBack()">◀</button>
-  <button onclick="goForward()">▶</button>
-  <button onclick="refreshPage()">⟳</button>
-  <button onclick="goHome()">🏠</button>
+  <button title="Fullscreen" onclick="toggleFullscreen()">⛶</button>
+  <button title="Back" onclick="goBack()">◀</button>
+  <button title="Forward" onclick="goForward()">▶</button>
+  <button title="Refresh" onclick="refreshPage()">⟳</button>
+  <button title="Home" onclick="goHome()">🏠</button>
   <input id="url" type="text" placeholder="Enter URL or search term" onkeypress="handleEnter(event)">
-  <button onclick="navigate()">Go</button>
+  <button title="Go" onclick="navigate()">Go</button>
 </header>
 
-<div id="browser">Welcome to Euphoria! Enter a site above to browse.</div>
+<div id="browser">Welcome to Euphoria!</div>
 
 <script>
 const browser = document.getElementById("browser");
 const urlInput = document.getElementById("url");
+const topbar = document.getElementById("topbar");
 let historyStack = [];
 let historyIndex = -1;
 let fullscreen = false;
 
+// Fullscreen toggle
 function toggleFullscreen() {
     fullscreen = !fullscreen;
-    document.getElementById('topbar').classList.toggle('hidden', fullscreen);
+    topbar.classList.toggle('hidden', fullscreen);
 }
+document.addEventListener('keydown', e => { if(e.key === "Escape" && fullscreen) toggleFullscreen(); });
 
+// URL normalization
 function normalizeURL(input) {
     input = input.trim();
     if(!input) return "https://www.google.com";
-    if(!input.includes(".") && !input.startsWith("http")) {
+    if(!/^https?:\/\//i.test(input)) {
+        if(input.includes(".")) return "https://" + input;
         return `https://www.google.com/search?q=${encodeURIComponent(input)}`;
     }
-    if(!/^https?:\/\//i.test(input)) input = "https://" + input;
     return input;
 }
 
+// Navigation functions
 async function navigate() {
     let url = normalizeURL(urlInput.value);
 
@@ -77,7 +84,7 @@ async function navigate() {
         const html = await res.text();
         browser.innerHTML = html;
 
-        // Intercept internal links to stay in proxy
+        // Rewrite internal links to stay in proxy
         browser.querySelectorAll("a").forEach(a => {
             a.addEventListener("click", e => {
                 e.preventDefault();
@@ -85,44 +92,16 @@ async function navigate() {
                 navigate();
             });
         });
-
     } catch(err) {
         browser.textContent = "Error loading page: " + err.message;
     }
 }
 
-function goBack() {
-    if(historyIndex > 0) {
-        historyIndex--;
-        urlInput.value = historyStack[historyIndex];
-        navigate();
-    }
-}
-
-function goForward() {
-    if(historyIndex < historyStack.length - 1) {
-        historyIndex++;
-        urlInput.value = historyStack[historyIndex];
-        navigate();
-    }
-}
-
-function refreshPage() {
-    if(historyIndex >= 0) navigate();
-}
-
-function goHome() {
-    const home = "https://www.google.com";
-    historyStack = historyStack.slice(0, historyIndex+1);
-    historyStack.push(home);
-    historyIndex++;
-    urlInput.value = home;
-    navigate();
-}
-
-function handleEnter(e) {
-    if(e.key === "Enter") navigate();
-}
+function goBack() { if(historyIndex>0){ historyIndex--; urlInput.value=historyStack[historyIndex]; navigate(); } }
+function goForward() { if(historyIndex<historyStack.length-1){ historyIndex++; urlInput.value=historyStack[historyIndex]; navigate(); } }
+function refreshPage() { if(historyIndex>=0) navigate(); }
+function goHome() { urlInput.value="https://www.google.com"; navigate(); }
+function handleEnter(e) { if(e.key==="Enter") navigate(); }
 </script>
 
 </body>
