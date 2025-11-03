@@ -1,30 +1,47 @@
 import express from "express";
 import fetch from "node-fetch";
 import cors from "cors";
-import pkg from "scramjet";       // <- default import
-const { StringStream } = pkg;     // <- destructure CommonJS exports
+import pkg from "scramjet";
+const { StringStream } = pkg;
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Enable CORS
 app.use(cors());
 app.use(express.json());
 app.use(express.static("public"));
 
-// Proxy GET for mini-browser
+// Main proxy route
 app.get("/proxy", async (req, res) => {
-  const url = req.query.url;
-  if (!url) return res.status(400).send("Missing url parameter");
+  let url = req.query.url;
+  if (!url) return res.status(400).send("Missing url");
+
+  if (!/^https?:\/\//i.test(url)) url = "https://" + url;
 
   try {
     const response = await fetch(url);
     res.status(response.status);
 
-    // Copy headers
-    response.headers.forEach((v, k) => res.setHeader(k, v));
+    const contentType = response.headers.get("content-type") || "";
+    res.setHeader("content-type", contentType);
 
-    if (response.body) {
+    if (contentType.includes("text/html") && response.body) {
+      let html = await response.text();
+
+      // Rewrite all links, scripts, forms, images to go through proxy
+      html = html.replace(/(href|src|action)=["'](?!https?:\/\/|\/\/)([^"']+)["']/gi, (m, attr, path) => {
+        const absolute = new URL(path, url).href;
+        return `${attr}="/proxy?url=${encodeURIComponent(absolute)}"`;
+      });
+
+      // Rewrite absolute HTTP URLs to go through proxy
+      html = html.replace(/(href|src|action)=["'](https?:\/\/[^"']+)["']/gi, (m, attr, path) => {
+        return `${attr}="/proxy?url=${encodeURIComponent(path)}"`;
+      });
+
+      res.send(html);
+    } else if (response.body) {
+      // Stream CSS, JS, images directly
       StringStream.from(response.body).pipe(res);
     } else {
       res.end();
