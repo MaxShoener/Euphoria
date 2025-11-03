@@ -1,134 +1,30 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Euphoria — Simple Web Proxy Frontend</title>
-<style>
-  body { font-family: system-ui, -apple-system, Roboto, "Segoe UI", Arial; margin: 24px; max-width: 900px; }
-  h1 { margin-bottom: 0.25rem; }
-  label { display:block; margin-top: 12px; font-weight:600; }
-  input[type=text], textarea { width:100%; padding:8px; border-radius:6px; border:1px solid #ddd; }
-  textarea { min-height:120px; font-family: monospace; }
-  .controls { margin-top:12px; display:flex; gap:8px; }
-  button { padding:8px 12px; border-radius:6px; border:0; background:#0b74de; color:white; cursor:pointer; }
-  pre { background:#111; color:#eee; padding:12px; border-radius:8px; overflow:auto; }
-  small.note { color:#666; display:block; margin-top:6px; }
-</style>
+  <meta charset="UTF-8" />
+  <title>Euphoria Proxy</title>
 </head>
 <body>
-  <h1>Euphoria — Web Proxy</h1>
-  <p>Enter a target URL and optionally request method and headers. This frontend sends a JSON request to the backend proxy at <code>/proxy</code>.</p>
+  <h1>Euphoria Web Proxy</h1>
+  <input id="url" type="text" placeholder="Enter URL to fetch" size="60" />
+  <button onclick="runProxy()">Go</button>
+  <pre id="output"></pre>
 
-  <label>Target URL
-    <input id="url" type="text" placeholder="https://example.com/path" value="https://httpbin.org/get" />
-  </label>
+  <script>
+    async function runProxy() {
+      const url = document.getElementById("url").value;
+      const out = document.getElementById("output");
+      out.textContent = "Fetching…";
 
-  <label>Method
-    <input id="method" type="text" placeholder="GET" value="GET" />
-  </label>
+      const res = await fetch("/proxy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url })
+      });
 
-  <label>Headers (JSON)
-    <textarea id="headers">{ "Accept": "application/json" }</textarea>
-  </label>
-
-  <label>Body (optional; string or JSON)
-    <textarea id="body"></textarea>
-  </label>
-
-  <div class="controls">
-    <button id="send">Send</button>
-    <button id="download">Download this HTML</button>
-  </div>
-  <small class="note">If you open this file locally (file://) it will attempt to contact the proxy at the host serving this HTML. For cross-origin usage, the server must allow CORS.</small>
-
-  <h3>Response</h3>
-  <pre id="out">No request yet.</pre>
-
-<script>
-const out = document.getElementById('out');
-const urlIn = document.getElementById('url');
-const methodIn = document.getElementById('method');
-const headersIn = document.getElementById('headers');
-const bodyIn = document.getElementById('body');
-const send = document.getElementById('send');
-
-send.onclick = async () => {
-  out.textContent = 'Sending…';
-
-  let hdr = {};
-  try { hdr = JSON.parse(headersIn.value || '{}'); } catch (e) {
-    out.textContent = 'Bad headers JSON: ' + e.message;
-    return;
-  }
-
-  let bodyVal = bodyIn.value;
-  // try to treat as JSON if looks like JSON
-  if (bodyVal.trim()) {
-    try {
-      const parsed = JSON.parse(bodyVal);
-      bodyVal = parsed;
-    } catch (e) {
-      // leave as string
+      const text = await res.text();
+      out.textContent = text;
     }
-  } else {
-    bodyVal = undefined;
-  }
-
-  const payload = {
-    url: urlIn.value,
-    method: methodIn.value || 'GET',
-    headers: hdr
-  };
-  if (bodyVal !== undefined) payload.body = bodyVal;
-
-  try {
-    const resp = await fetch('/proxy', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-
-    // Attempt to stream textual response
-    if (!resp.ok) {
-      const txt = await resp.text();
-      out.textContent = `Upstream returned ${resp.status} ${resp.statusText}\n\n${txt}`;
-      return;
-    }
-
-    // Read as stream if possible
-    if (resp.body && resp.body.getReader) {
-      const reader = resp.body.getReader();
-      const decoder = new TextDecoder();
-      let full = '';
-      for (;;) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        full += decoder.decode(value, { stream: true });
-        // show incremental content
-        out.textContent = full;
-      }
-      out.textContent = full;
-    } else {
-      // fallback
-      out.textContent = await resp.text();
-    }
-
-  } catch (err) {
-    out.textContent = 'Error contacting proxy: ' + err;
-  }
-};
-
-// Download the single-file HTML
-document.getElementById('download').onclick = () => {
-  const blob = new Blob([document.documentElement.outerHTML], { type: 'text/html' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'euphoria.html';
-  a.click();
-  URL.revokeObjectURL(url);
-};
-</script>
+  </script>
 </body>
 </html>
