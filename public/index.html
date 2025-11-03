@@ -1,13 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Euphoria Proxy</title>
+  <meta charset="UTF-8">
+  <title>Euphoria Web Proxy</title>
 </head>
 <body>
-  <h1>Euphoria Web Proxy</h1>
+  <h1>Euphoria Proxy</h1>
   <input id="url" type="text" placeholder="Enter URL to fetch" size="60" />
-  <button onclick="runProxy()">Go</button>
+  <button onclick="runProxy()">Fetch</button>
   <pre id="output"></pre>
 
   <script>
@@ -16,14 +16,18 @@
       const out = document.getElementById("output");
       out.textContent = "Fetching…";
 
-      const res = await fetch("/proxy", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url })
-      });
+      try {
+        const res = await fetch("/proxy", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url })
+        });
 
-      const text = await res.text();
-      out.textContent = text;
+        const text = await res.text();
+        out.textContent = text;
+      } catch (err) {
+        out.textContent = "Error: " + err.message;
+      }
     }
   </script>
 </body>
