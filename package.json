@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "express": "^4.19.2",
-    "@scramjet/core": "^4.36.1"
+    "@scramjet/core": "^4.36.1",
+    "node-fetch": "^3.3.2"
   }
 }
