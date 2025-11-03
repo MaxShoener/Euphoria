@@ -4,24 +4,15 @@
 <meta charset="UTF-8">
 <title>Euphoria</title>
 <style>
-  html, body { margin:0; padding:0; height:100%; font-family:sans-serif; background:#111; color:#fff; display:flex; flex-direction:column; }
-  
-  /* Top bar */
-  #topbar { display:flex; align-items:center; gap:0.3rem; padding:0.3rem; background:rgba(30,30,40,0.9); transition:0.3s; }
-  #topbar.hidden { display:none; }
-
-  /* Buttons same size */
-  button { flex:0 0 40px; height:40px; border:none; border-radius:6px; background:#4cafef; color:white; cursor:pointer; display:flex; align-items:center; justify-content:center; font-weight:600; transition:0.2s; }
-  button:hover { background:#3690d9; }
-
-  /* Input field */
-  input { flex:1; padding:0.5rem; border-radius:6px; border:none; background:#3e3e50; color:#fff; font-size:1rem; }
-  input:focus { outline:none; box-shadow:0 0 5px #4cafef; }
-
-  /* Browser area */
-  #browser { flex:1; overflow:auto; position:relative; background:#fff; color:#000; }
-  #browser * { max-width:100%; word-wrap:break-word; }
-
+html, body { margin:0; padding:0; height:100%; font-family:sans-serif; display:flex; flex-direction:column; background:#111; color:#fff; }
+#topbar { display:flex; align-items:center; gap:0.3rem; padding:0.3rem; background:rgba(30,30,40,0.9); transition:0.3s; }
+#topbar.hidden { display:none; }
+button { flex:0 0 40px; height:40px; border:none; border-radius:6px; background:#4cafef; color:white; cursor:pointer; display:flex; align-items:center; justify-content:center; font-weight:600; transition:0.2s; }
+button:hover { background:#3690d9; }
+input { flex:1; padding:0.5rem; border-radius:6px; border:none; background:#3e3e50; color:#fff; font-size:1rem; }
+input:focus { outline:none; box-shadow:0 0 5px #4cafef; }
+#browser { flex:1; overflow:auto; position:relative; background:#fff; color:#000; }
+#browser * { max-width:100%; word-wrap:break-word; }
 </style>
 </head>
 <body>
@@ -46,7 +37,6 @@ let historyStack = [];
 let historyIndex = -1;
 let fullscreen = false;
 
-// Fullscreen toggle
 function toggleFullscreen() {
     fullscreen = !fullscreen;
     topbar.classList.toggle('hidden', fullscreen);
@@ -55,7 +45,6 @@ document.addEventListener('keydown', e => {
     if(e.key === "Escape" && fullscreen) toggleFullscreen(); 
 });
 
-// Normalize URL or Google search
 function normalizeURL(input) {
     input = input.trim();
     if(!input) return "https://www.google.com";
@@ -66,40 +55,43 @@ function normalizeURL(input) {
     return input;
 }
 
-// Navigation
 async function navigate() {
     let url = normalizeURL(urlInput.value);
-
-    // History management
     if(historyIndex === -1 || historyStack[historyIndex] !== url) {
         historyStack = historyStack.slice(0, historyIndex + 1);
         historyStack.push(url);
         historyIndex++;
     }
-
     urlInput.value = url;
     browser.textContent = "Loading…";
 
     try {
         const res = await fetch(`/proxy?url=${encodeURIComponent(url)}`);
+        if(res.status >= 300 && res.status < 400 && res.headers.get('location')) {
+            urlInput.value = new URL(res.headers.get('location'), url).href;
+            navigate();
+            return;
+        }
         const html = await res.text();
         browser.innerHTML = html;
 
-        // Rewrite all links to use proxy
-        browser.querySelectorAll("a").forEach(a => {
-            const href = a.getAttribute("href");
-            if(href && !href.startsWith("javascript:")) {
-                a.addEventListener("click", e => {
+        // Rewrite links and resources to proxy
+        browser.querySelectorAll('[href], [src]').forEach(el => {
+            const attr = el.hasAttribute('href') ? 'href' : 'src';
+            const link = el.getAttribute(attr);
+            if(link && !link.startsWith('javascript:')) {
+                el.setAttribute(attr, `/proxy?url=${encodeURIComponent(new URL(link, url).href)}`);
+                if(attr==='href') el.addEventListener('click', e => {
                     e.preventDefault();
-                    urlInput.value = new URL(href, url).href;
+                    urlInput.value = new URL(link, url).href;
                     navigate();
                 });
             }
         });
 
-        // Rewrite all forms to submit through proxy
-        browser.querySelectorAll("form").forEach(form => {
-            form.addEventListener("submit", e => {
+        // Rewrite forms to proxy
+        browser.querySelectorAll('form').forEach(form => {
+            form.addEventListener('submit', e => {
                 e.preventDefault();
                 const action = form.action || url;
                 const formData = new FormData(form);
@@ -108,6 +100,7 @@ async function navigate() {
                 navigate();
             });
         });
+
     } catch(err) {
         browser.textContent = "Error loading page: " + err.message;
     }
@@ -121,6 +114,5 @@ function goHome() { urlInput.value="https://www.google.com"; navigate(); }
 function handleEnter(e) { if(e.key==="Enter") navigate(); }
 
 </script>
-
 </body>
 </html>
