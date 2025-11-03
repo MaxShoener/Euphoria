@@ -7,15 +7,19 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Serve frontend
-app.use('/', express.static('public')); // assuming index.html is in ./public
+app.use('/', express.static('public')); // index.html in ./public
 
-// Proxy endpoint
 app.get('/proxy', async (req, res) => {
     const targetURL = req.query.url;
     if(!targetURL) return res.status(400).send("Missing 'url' query parameter");
 
     try {
-        const response = await fetch(targetURL, { redirect: 'manual' });
+        const response = await fetch(targetURL, {
+            redirect: 'manual',
+            headers: { 
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' 
+            }
+        });
 
         // Handle HTTP redirects
         if(response.status >= 300 && response.status < 400 && response.headers.get('location')) {
@@ -26,14 +30,14 @@ app.get('/proxy', async (req, res) => {
         const contentType = response.headers.get('content-type') || '';
         res.set('content-type', contentType);
 
-        // Only stream text/html through Scramjet
         if(contentType.includes('text/html')) {
-            const text = await response.text();
-            // Rewrite all href/src attributes to pass through proxy
-            const rewritten = text.replace(
+            let text = await response.text();
+
+            // Rewrite href/src only if not already rewritten
+            text = text.replace(
                 /(href|src)=["'](.*?)["']/gi,
                 (match, attr, url) => {
-                    if(url.startsWith('javascript:')) return match;
+                    if(url.startsWith('javascript:') || url.startsWith('/proxy?url=')) return match;
                     try {
                         const absolute = new URL(url, targetURL).href;
                         return `${attr}="/proxy?url=${encodeURIComponent(absolute)}"`;
@@ -42,12 +46,11 @@ app.get('/proxy', async (req, res) => {
                     }
                 }
             );
-            // Stream rewritten HTML
-            StringStream.from(rewritten).pipe(res);
+
+            StringStream.from(text).pipe(res).on('end', () => res.end());
         } else {
-            // Stream non-HTML (images, scripts, etc.) directly
-            const arrayBuffer = await response.arrayBuffer();
-            res.send(Buffer.from(arrayBuffer));
+            const buffer = await response.arrayBuffer();
+            res.send(Buffer.from(buffer));
         }
 
     } catch(err) {
