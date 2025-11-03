@@ -26,13 +26,11 @@ app.post("/proxy", async (req, res) => {
       body: body ? JSON.stringify(body) : undefined,
     });
 
-    // Set status and headers from the remote response
+    // Copy status and headers from remote response
     res.status(response.status);
-    response.headers.forEach((value, key) => {
-      res.setHeader(key, value);
-    });
+    response.headers.forEach((value, key) => res.setHeader(key, value));
 
-    // Stream the response body directly to the client
+    // Stream the response directly to the client
     if (response.body) {
       response.body.pipe(res);
     } else {
@@ -44,7 +42,7 @@ app.post("/proxy", async (req, res) => {
   }
 });
 
-// Health check endpoint
+// Health check
 app.get("/health", (_, res) => {
   res.json({ ok: true, name: "Euphoria", uptime: process.uptime() });
 });
