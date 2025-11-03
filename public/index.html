@@ -1,34 +1,80 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Euphoria Web Proxy</title>
+<meta charset="UTF-8">
+<title>Euphoria Proxy</title>
+<style>
+  body { font-family: 'Segoe UI', sans-serif; margin: 2rem; background: #1e1e2f; color: #f0f0f0; }
+  input { width: 60%; padding: 0.5rem; border-radius: 5px; border: none; margin-right: 0.5rem; }
+  button { padding: 0.5rem 1rem; border: none; border-radius: 5px; background: #4cafef; color: white; cursor: pointer; margin-right: 0.5rem; }
+  button:hover { background: #3690d9; }
+  #output { margin-top: 1rem; background: #2e2e3e; padding: 1rem; border-radius: 5px; max-height: 400px; overflow-y: auto; white-space: pre-wrap; }
+  .nav { margin-bottom: 1rem; }
+</style>
 </head>
 <body>
-  <h1>Euphoria Proxy</h1>
-  <input id="url" type="text" placeholder="Enter URL to fetch" size="60" />
-  <button onclick="runProxy()">Fetch</button>
-  <pre id="output"></pre>
 
-  <script>
-    async function runProxy() {
-      const url = document.getElementById("url").value;
-      const out = document.getElementById("output");
-      out.textContent = "Fetching…";
+<h1>Euphoria Proxy</h1>
 
-      try {
-        const res = await fetch("/proxy", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url })
-        });
+<div class="nav">
+  <button onclick="goBack()">◀ Back</button>
+  <button onclick="goForward()">▶ Forward</button>
+</div>
 
-        const text = await res.text();
-        out.textContent = text;
-      } catch (err) {
-        out.textContent = "Error: " + err.message;
-      }
-    }
-  </script>
+<input id="url" type="text" placeholder="Enter URL to fetch">
+<button onclick="fetchURL()">Fetch</button>
+
+<pre id="output">Output will appear here...</pre>
+
+<script>
+let historyStack = [];
+let historyIndex = -1;
+
+async function fetchURL(url) {
+  if (!url) url = document.getElementById("url").value;
+  if (!url) return alert("Enter a URL");
+
+  // Update history
+  if (historyIndex === -1 || historyStack[historyIndex] !== url) {
+    historyStack = historyStack.slice(0, historyIndex + 1);
+    historyStack.push(url);
+    historyIndex++;
+  }
+
+  document.getElementById("output").textContent = "Loading…";
+
+  try {
+    const res = await fetch("/proxy", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url })
+    });
+
+    let text;
+    try { text = await res.text(); } catch(e) { text = "[Binary data cannot be displayed]"; }
+
+    document.getElementById("output").textContent = text;
+  } catch (err) {
+    document.getElementById("output").textContent = "Error: " + err.message;
+  }
+}
+
+function goBack() {
+  if (historyIndex > 0) {
+    historyIndex--;
+    document.getElementById("url").value = historyStack[historyIndex];
+    fetchURL(historyStack[historyIndex]);
+  }
+}
+
+function goForward() {
+  if (historyIndex < historyStack.length - 1) {
+    historyIndex++;
+    document.getElementById("url").value = historyStack[historyIndex];
+    fetchURL(historyStack[historyIndex]);
+  }
+}
+</script>
+
 </body>
 </html>
