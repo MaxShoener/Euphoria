@@ -4,12 +4,12 @@
 <meta charset="UTF-8">
 <title>Euphoria Mini Browser</title>
 <style>
-body { font-family: 'Segoe UI', sans-serif; margin: 0; background: #1e1e2f; color: #f0f0f0; height: 100vh; display: flex; flex-direction: column; }
+body { font-family: 'Segoe UI', sans-serif; margin: 0; background: #1e1e2f; color: #f0f0f0; display: flex; flex-direction: column; height: 100vh; }
 header { padding: 0.5rem; background: #2e2e3e; display: flex; align-items: center; gap: 0.5rem; }
 input { flex: 1; padding: 0.5rem; border-radius: 5px; border: none; }
 button { padding: 0.5rem 1rem; border: none; border-radius: 5px; background: #4cafef; color: white; cursor: pointer; }
 button:hover { background: #3690d9; }
-iframe { flex: 1; border: none; width: 100%; }
+#browser { flex: 1; overflow: auto; background: white; color: black; padding: 1rem; }
 </style>
 </head>
 <body>
@@ -23,51 +23,51 @@ iframe { flex: 1; border: none; width: 100%; }
   <button onclick="navigate()">Go</button>
 </header>
 
-<iframe id="browser" src=""></iframe>
+<div id="browser">Page content will appear here...</div>
 
 <script>
-const iframe = document.getElementById("browser");
+const browser = document.getElementById("browser");
 let historyStack = [];
 let historyIndex = -1;
 
 function normalizeURL(input) {
   input = input.trim();
-  // If input is empty, go home
   if (!input) return "https://www.google.com";
-  
-  // If it doesn't look like a URL, make it a Google search
   if (!input.includes(".") && !input.startsWith("http")) {
     return `https://www.google.com/search?q=${encodeURIComponent(input)}`;
   }
-
-  // Add https:// if missing
-  if (!/^https?:\/\//i.test(input)) {
-    input = "https://" + input;
-  }
+  if (!/^https?:\/\//i.test(input)) input = "https://" + input;
   return input;
 }
 
-function navigate() {
+async function navigate() {
   let url = document.getElementById("url").value;
   url = normalizeURL(url);
 
-  // Update history
   if (historyIndex === -1 || historyStack[historyIndex] !== url) {
     historyStack = historyStack.slice(0, historyIndex + 1);
     historyStack.push(url);
     historyIndex++;
   }
 
-  iframe.src = `/proxy?url=${encodeURIComponent(url)}`;
   document.getElementById("url").value = url;
+  browser.textContent = "Loading…";
+
+  try {
+    const res = await fetch(`/proxy?url=${encodeURIComponent(url)}`);
+    const html = await res.text();
+    browser.innerHTML = html;
+  } catch (err) {
+    browser.textContent = "Error: " + err.message;
+  }
 }
 
 function goBack() {
   if (historyIndex > 0) {
     historyIndex--;
     const url = historyStack[historyIndex];
-    iframe.src = `/proxy?url=${encodeURIComponent(url)}`;
     document.getElementById("url").value = url;
+    navigate();
   }
 }
 
@@ -75,16 +75,13 @@ function goForward() {
   if (historyIndex < historyStack.length - 1) {
     historyIndex++;
     const url = historyStack[historyIndex];
-    iframe.src = `/proxy?url=${encodeURIComponent(url)}`;
     document.getElementById("url").value = url;
+    navigate();
   }
 }
 
 function refreshPage() {
-  if (historyIndex >= 0) {
-    const url = historyStack[historyIndex];
-    iframe.src = `/proxy?url=${encodeURIComponent(url)}`;
-  }
+  if (historyIndex >= 0) navigate();
 }
 
 function goHome() {
@@ -92,14 +89,12 @@ function goHome() {
   historyStack = historyStack.slice(0, historyIndex + 1);
   historyStack.push(home);
   historyIndex++;
-  iframe.src = `/proxy?url=${encodeURIComponent(home)}`;
   document.getElementById("url").value = home;
+  navigate();
 }
 
 function handleEnter(e) {
-  if (e.key === "Enter") {
-    navigate();
-  }
+  if (e.key === "Enter") navigate();
 }
 </script>
 
