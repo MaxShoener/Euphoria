@@ -2,11 +2,11 @@ FROM node:20-alpine
 
 WORKDIR /app
 
-# Copy and install dependencies
+# Copy dependencies and install
 COPY package*.json ./
 RUN npm install --production
 
-# Copy all other files
+# Copy the rest of the app
 COPY . .
 
 EXPOSE 3000
