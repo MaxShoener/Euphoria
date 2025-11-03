@@ -1,7 +1,8 @@
 import express from "express";
 import fetch from "node-fetch";
 import cors from "cors";
-import { StringStream } from "scramjet";
+import pkg from "scramjet";       // <- default import
+const { StringStream } = pkg;     // <- destructure CommonJS exports
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -24,7 +25,6 @@ app.get("/proxy", async (req, res) => {
     response.headers.forEach((v, k) => res.setHeader(k, v));
 
     if (response.body) {
-      // Stream content via Scramjet
       StringStream.from(response.body).pipe(res);
     } else {
       res.end();
