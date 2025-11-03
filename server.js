@@ -1,38 +1,25 @@
 import express from "express";
-import { Stream } from "@scramjet/core";
+import { Stream } from "scramjet";
 import fetch from "node-fetch";
+import cors from "cors";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Serve your static frontend (index.html, etc.)
-app.use(express.static("public"));
-
-// --- Simple Scramjet-powered proxy endpoint ---
+app.use(cors());
 app.use(express.json());
+app.use(express.static("public"));
 
 app.post("/proxy", async (req, res) => {
   try {
     const { url, method = "GET", headers = {}, body = null } = req.body;
+    if (!url) return res.status(400).json({ error: "Missing 'url' field" });
 
-    if (!url) {
-      return res.status(400).json({ error: "Missing 'url' field" });
-    }
+    const response = await fetch(url, { method, headers, body: body ? JSON.stringify(body) : undefined });
 
-    // Fetch remote resource
-    const response = await fetch(url, {
-      method,
-      headers,
-      body: body ? JSON.stringify(body) : undefined,
-    });
-
-    // Stream through Scramjet for flexibility
     const readable = Stream.from(response.body);
     let result = "";
-
-    await readable.each(chunk => {
-      result += chunk.toString();
-    });
+    await readable.each(chunk => (result += chunk.toString()));
 
     res.set("Content-Type", response.headers.get("content-type") || "text/plain");
     res.status(response.status).send(result);
@@ -42,11 +29,6 @@ app.post("/proxy", async (req, res) => {
   }
 });
 
-// Health check endpoint (useful for Koyeb)
-app.get("/health", (_, res) => {
-  res.json({ ok: true, name: "Euphoria", uptime: process.uptime() });
-});
+app.get("/health", (_, res) => res.json({ ok: true, name: "Euphoria", uptime: process.uptime() }));
 
-app.listen(PORT, () => {
-  console.log(`🌐 Euphoria proxy running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`🌐 Euphoria proxy running on port ${PORT}`));
