@@ -1,149 +1,134 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Euphoria Proxy</title>
-  <style>
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: "Inter", sans-serif;
-      background-color: #0b0c10;
-      color: #fff;
-      height: 100vh;
-      display: flex;
-      flex-direction: column;
-    }
-    header {
-      background: #1f2833;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 8px;
-      gap: 6px;
-    }
-    #controls {
-      display: flex;
-      gap: 6px;
-      align-items: center;
-      flex-wrap: wrap;
-    }
-    button {
-      background: #45a29e;
-      border: none;
-      color: white;
-      padding: 8px 12px;
-      border-radius: 4px;
-      cursor: pointer;
-      transition: background 0.2s;
-    }
-    button:hover {
-      background: #66fcf1;
-      color: #0b0c10;
-    }
-    input {
-      flex: 1;
-      padding: 8px;
-      border: none;
-      border-radius: 4px;
-      font-size: 15px;
-      background: #c5c6c7;
-      color: #0b0c10;
-      min-width: 200px;
-    }
-    iframe {
-      flex-grow: 1;
-      width: 100%;
-      border: none;
-      background: white;
-    }
-    #status {
-      font-size: 13px;
-      color: #66fcf1;
-      margin-left: 10px;
-    }
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Euphoria — Simple Web Proxy Frontend</title>
+<style>
+  body { font-family: system-ui, -apple-system, Roboto, "Segoe UI", Arial; margin: 24px; max-width: 900px; }
+  h1 { margin-bottom: 0.25rem; }
+  label { display:block; margin-top: 12px; font-weight:600; }
+  input[type=text], textarea { width:100%; padding:8px; border-radius:6px; border:1px solid #ddd; }
+  textarea { min-height:120px; font-family: monospace; }
+  .controls { margin-top:12px; display:flex; gap:8px; }
+  button { padding:8px 12px; border-radius:6px; border:0; background:#0b74de; color:white; cursor:pointer; }
+  pre { background:#111; color:#eee; padding:12px; border-radius:8px; overflow:auto; }
+  small.note { color:#666; display:block; margin-top:6px; }
+</style>
 </head>
 <body>
-  <header>
-    <div id="controls">
-      <button id="back">⟵</button>
-      <button id="forward">⟶</button>
-      <button id="refresh">⟳</button>
-      <button id="home">🏠</button>
-      <input id="url" type="text" placeholder="Enter a URL..." />
-      <button id="go">Go</button>
-      <button id="fullscreen">⛶</button>
-      <button id="switch">Switch: UV</button>
-    </div>
-    <span id="status"></span>
-  </header>
-  <iframe id="view"></iframe>
+  <h1>Euphoria — Web Proxy</h1>
+  <p>Enter a target URL and optionally request method and headers. This frontend sends a JSON request to the backend proxy at <code>/proxy</code>.</p>
 
-  <script>
-    const backend = location.origin; // automatically detect deployed or local
-    const iframe = document.getElementById("view");
-    const urlInput = document.getElementById("url");
-    const status = document.getElementById("status");
-    const switchBtn = document.getElementById("switch");
+  <label>Target URL
+    <input id="url" type="text" placeholder="https://example.com/path" value="https://httpbin.org/get" />
+  </label>
 
-    let currentProxy = "uv";
-    let historyStack = [];
-    let historyIndex = -1;
+  <label>Method
+    <input id="method" type="text" placeholder="GET" value="GET" />
+  </label>
 
-    function loadURL(u) {
-      if (!u.startsWith("http")) u = "https://" + u;
-      historyStack = historyStack.slice(0, historyIndex + 1);
-      historyStack.push(u);
-      historyIndex++;
-      urlInput.value = u;
-      refresh();
+  <label>Headers (JSON)
+    <textarea id="headers">{ "Accept": "application/json" }</textarea>
+  </label>
+
+  <label>Body (optional; string or JSON)
+    <textarea id="body"></textarea>
+  </label>
+
+  <div class="controls">
+    <button id="send">Send</button>
+    <button id="download">Download this HTML</button>
+  </div>
+  <small class="note">If you open this file locally (file://) it will attempt to contact the proxy at the host serving this HTML. For cross-origin usage, the server must allow CORS.</small>
+
+  <h3>Response</h3>
+  <pre id="out">No request yet.</pre>
+
+<script>
+const out = document.getElementById('out');
+const urlIn = document.getElementById('url');
+const methodIn = document.getElementById('method');
+const headersIn = document.getElementById('headers');
+const bodyIn = document.getElementById('body');
+const send = document.getElementById('send');
+
+send.onclick = async () => {
+  out.textContent = 'Sending…';
+
+  let hdr = {};
+  try { hdr = JSON.parse(headersIn.value || '{}'); } catch (e) {
+    out.textContent = 'Bad headers JSON: ' + e.message;
+    return;
+  }
+
+  let bodyVal = bodyIn.value;
+  // try to treat as JSON if looks like JSON
+  if (bodyVal.trim()) {
+    try {
+      const parsed = JSON.parse(bodyVal);
+      bodyVal = parsed;
+    } catch (e) {
+      // leave as string
+    }
+  } else {
+    bodyVal = undefined;
+  }
+
+  const payload = {
+    url: urlIn.value,
+    method: methodIn.value || 'GET',
+    headers: hdr
+  };
+  if (bodyVal !== undefined) payload.body = bodyVal;
+
+  try {
+    const resp = await fetch('/proxy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    // Attempt to stream textual response
+    if (!resp.ok) {
+      const txt = await resp.text();
+      out.textContent = `Upstream returned ${resp.status} ${resp.statusText}\n\n${txt}`;
+      return;
     }
 
-    function refresh() {
-      const u = historyStack[historyIndex];
-      status.textContent = `Loading via ${currentProxy.toUpperCase()}...`;
-      if (currentProxy === "uv") {
-        iframe.src = `${backend}/proxy?url=${encodeURIComponent(u)}`;
-      } else {
-        iframe.src = `${backend}/scramjet?url=${encodeURIComponent(u)}`;
+    // Read as stream if possible
+    if (resp.body && resp.body.getReader) {
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let full = '';
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        full += decoder.decode(value, { stream: true });
+        // show incremental content
+        out.textContent = full;
       }
+      out.textContent = full;
+    } else {
+      // fallback
+      out.textContent = await resp.text();
     }
 
-    document.getElementById("go").onclick = () => loadURL(urlInput.value);
-    document.getElementById("home").onclick = () => loadURL("https://example.com");
-    document.getElementById("refresh").onclick = refresh;
+  } catch (err) {
+    out.textContent = 'Error contacting proxy: ' + err;
+  }
+};
 
-    document.getElementById("back").onclick = () => {
-      if (historyIndex > 0) {
-        historyIndex--;
-        urlInput.value = historyStack[historyIndex];
-        refresh();
-      }
-    };
-
-    document.getElementById("forward").onclick = () => {
-      if (historyIndex < historyStack.length - 1) {
-        historyIndex++;
-        urlInput.value = historyStack[historyIndex];
-        refresh();
-      }
-    };
-
-    document.getElementById("fullscreen").onclick = () => {
-      if (!document.fullscreenElement) document.documentElement.requestFullscreen();
-      else document.exitFullscreen();
-    };
-
-    switchBtn.onclick = () => {
-      currentProxy = currentProxy === "uv" ? "scramjet" : "uv";
-      switchBtn.textContent = `Switch: ${currentProxy.toUpperCase()}`;
-      refresh();
-    };
-
-    // Default load
-    loadURL("https://example.com");
-  </script>
+// Download the single-file HTML
+document.getElementById('download').onclick = () => {
+  const blob = new Blob([document.documentElement.outerHTML], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'euphoria.html';
+  a.click();
+  URL.revokeObjectURL(url);
+};
+</script>
 </body>
 </html>
