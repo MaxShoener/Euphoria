@@ -6,7 +6,7 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm install --production
 
-# Copy the rest of the app
+# Copy app files
 COPY . .
 
 EXPOSE 3000
