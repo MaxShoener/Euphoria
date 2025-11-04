@@ -1,135 +1,75 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Euphoria</title>
-<style>
-  body {
-    margin: 0;
-    font-family: Inter, Arial, sans-serif;
-    background: #0d0d0d;
-    color: #fff;
-    overflow: hidden;
-  }
-  #topbar {
-    display: flex;
-    align-items: center;
-    background: rgba(20,20,20,0.9);
-    border-radius: 14px;
-    margin: 8px;
-    padding: 6px;
-    position: fixed;
-    top: 0; left: 0; right: 0;
-    z-index: 10;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.4);
-    backdrop-filter: blur(8px);
-  }
-  #topbar button {
-    background: #333;
-    border: none;
-    color: #fff;
-    border-radius: 8px;
-    margin-right: 4px;
-    font-size: 13px;
-    padding: 6px 10px;
-    cursor: pointer;
-  }
-  #topbar button:hover { background: #555; }
-  #searchInput {
-    flex: 1;
-    padding: 6px 10px;
-    border: none;
-    border-radius: 10px;
-    background: #222;
-    color: #fff;
-    font-size: 13px;
-  }
-  #searchInput::placeholder { color: #888; }
+  <head>
+    <meta charset="UTF-8" />
+    <title>Euphoria Proxy</title>
+    <style>
+      body {
+        margin: 0;
+        background-color: #0b0b0b;
+        color: white;
+        font-family: "Segoe UI", sans-serif;
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+      }
 
-  #content {
-    position: absolute;
-    top: 52px; left: 0; right: 0; bottom: 0;
-    overflow: auto;
-    background: #fff;
-    border-radius: 10px;
-  }
+      .top-bar {
+        background: rgba(20, 20, 20, 0.9);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 0.5rem 1rem;
+        border-radius: 0 0 2rem 2rem;
+        position: fixed;
+        top: 0;
+        width: 100%;
+        z-index: 10;
+      }
 
-  #spinnerOverlay {
-    position: absolute;
-    top: 52px; left: 0; right: 0; bottom: 0;
-    background: rgba(0,0,0,0.4);
-    display: none;
-    justify-content: center;
-    align-items: center;
-  }
-  .spinner {
-    width: 36px; height: 36px;
-    border: 5px solid #ccc;
-    border-top-color: #00d47b;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-</style>
-</head>
-<body>
-<div id="topbar">
-  <button id="backBtn">◀</button>
-  <button id="forwardBtn">▶</button>
-  <button id="refreshBtn">⟳</button>
-  <button id="homeBtn">🏠</button>
-  <button id="fullscreenBtn">⛶</button>
-  <input id="searchInput" placeholder="Enter URL or search...">
-  <button id="searchBtn">🔍</button>
-</div>
+      .top-bar input {
+        width: 60%;
+        padding: 0.5rem 1rem;
+        border-radius: 1.5rem;
+        border: none;
+        outline: none;
+        font-size: 1rem;
+      }
 
-<div id="spinnerOverlay"><div class="spinner"></div></div>
-<div id="content"></div>
+      .content {
+        margin-top: 4rem;
+        flex: 1;
+        overflow: hidden;
+      }
 
-<script>
-const content = document.getElementById("content");
-const spinner = document.getElementById("spinnerOverlay");
-const input = document.getElementById("searchInput");
-let historyStack=[], historyIndex=-1;
+      iframe {
+        border: none;
+        width: 100%;
+        height: 100%;
+      }
 
-function normalize(i){
-  i=i.trim();
-  if(!i) return "https://www.google.com";
-  if(!i.startsWith("http")){
-    if(i.includes(" ")) return `https://www.google.com/search?q=${encodeURIComponent(i)}`;
-    return "https://"+i;
-  }
-  return i;
-}
+      .hidden { display: none; }
+    </style>
+  </head>
+  <body>
+    <div class="top-bar">
+      <input id="urlInput" type="text" placeholder="Enter URL (e.g. google.com)" />
+    </div>
+    <div class="content">
+      <iframe id="proxyFrame"></iframe>
+    </div>
 
-async function load(url,push=true){
-  spinner.style.display="flex";
-  try{
-    const res=await fetch(`/proxy?url=${encodeURIComponent(url)}`);
-    if(!res.ok) throw new Error(res.statusText);
-    const html=await res.text();
-    content.innerHTML=html;
-    if(push){
-      historyStack=historyStack.slice(0,historyIndex+1);
-      historyStack.push(url); historyIndex++;
-    }
-  }catch(e){
-    content.innerHTML=`<h3 style='color:red;text-align:center;margin-top:40px;'>${e.message}</h3>`;
-  }finally{
-    spinner.style.display="none";
-  }
-}
+    <script>
+      const input = document.getElementById("urlInput");
+      const frame = document.getElementById("proxyFrame");
 
-document.getElementById("backBtn").onclick=()=>{if(historyIndex>0)load(historyStack[--historyIndex],false);};
-document.getElementById("forwardBtn").onclick=()=>{if(historyIndex<historyStack.length-1)load(historyStack[++historyIndex],false);};
-document.getElementById("refreshBtn").onclick=()=>{if(historyIndex>=0)load(historyStack[historyIndex],false);};
-document.getElementById("homeBtn").onclick=()=>load("https://www.google.com");
-document.getElementById("fullscreenBtn").onclick=()=>{document.fullscreenElement?document.exitFullscreen():document.documentElement.requestFullscreen();};
-document.getElementById("searchBtn").onclick=()=>load(normalize(input.value));
-input.addEventListener("keydown",e=>{if(e.key==="Enter")load(normalize(input.value));});
-
-load("https://www.google.com");
-</script>
-</body>
+      input.addEventListener("keypress", e => {
+        if (e.key === "Enter") {
+          const url = input.value.trim();
+          if (!url) return;
+          frame.src = `/proxy?url=${encodeURIComponent(url)}`;
+        }
+      });
+    </script>
+  </body>
 </html>
