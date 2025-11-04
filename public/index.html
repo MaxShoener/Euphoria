@@ -33,27 +33,32 @@
     background: #444;
     border: none;
     color: white;
-    padding: 8px 12px;
-    margin-right: 6px;
-    border-radius: 8px;
+    padding: 6px 10px;
+    margin-right: 4px;
+    border-radius: 6px;
     cursor: pointer;
-    font-size: 14px;
+    font-size: 13px;
+    flex-shrink: 0;
   }
 
-  #topbar button:hover { background: #666; }
+  #topbar button:hover {
+    background: #666;
+  }
 
   #searchInput {
     flex: 1;
-    padding: 8px 12px;
+    padding: 6px 10px;
     border-radius: 12px;
     border: none;
-    font-size: 14px;
-    margin-right: 6px;
+    font-size: 13px;
+    margin-right: 4px;
     background: #333;
     color: white;
   }
 
-  #searchInput::placeholder { color: #bbb; }
+  #searchInput::placeholder {
+    color: #bbb;
+  }
 
   /* Content container */
   #content {
@@ -65,8 +70,7 @@
     overflow: auto;
     background: #fff;
     border-radius: 8px;
-    padding: 8px;
-    box-sizing: border-box;
+    padding: 4px;
   }
 
   /* Spinner overlay */
@@ -84,11 +88,11 @@
   }
 
   .spinner {
-    border: 6px solid #f3f3f3;
-    border-top: 6px solid #4caf50;
+    border: 5px solid #f3f3f3;
+    border-top: 5px solid #4caf50;
     border-radius: 50%;
-    width: 40px;
-    height: 40px;
+    width: 36px;
+    height: 36px;
     animation: spin 1s linear infinite;
   }
 
@@ -136,22 +140,13 @@ function normalizeInput(input) {
 
 async function loadURL(url, pushHistory = true) {
   spinner.style.display = "flex";
-  content.innerHTML = "";
   try {
     const res = await fetch(`/proxy?url=${encodeURIComponent(url)}`);
     if (!res.ok) throw new Error("Failed to load page");
+    const html = await res.text();
 
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let done = false;
-
-    while (!done) {
-      const { value, done: doneReading } = await reader.read();
-      done = doneReading;
-      if (value) {
-        content.insertAdjacentHTML("beforeend", decoder.decode(value));
-      }
-    }
+    // Inject into content
+    content.innerHTML = html;
 
     if (pushHistory) {
       historyStack = historyStack.slice(0, historyIndex + 1);
@@ -165,7 +160,6 @@ async function loadURL(url, pushHistory = true) {
   }
 }
 
-// Navigation buttons
 document.getElementById("backBtn").onclick = () => { if (historyIndex > 0) loadURL(historyStack[--historyIndex], false); };
 document.getElementById("forwardBtn").onclick = () => { if (historyIndex < historyStack.length - 1) loadURL(historyStack[++historyIndex], false); };
 document.getElementById("refreshBtn").onclick = () => { if (historyIndex >= 0) loadURL(historyStack[historyIndex], false); };
@@ -175,7 +169,6 @@ document.getElementById("fullscreenBtn").onclick = () => {
   else document.exitFullscreen();
 };
 
-// Search
 function doSearch() { loadURL(normalizeInput(searchInput.value)); }
 document.getElementById("searchBtn").onclick = doSearch;
 searchInput.addEventListener("keydown", e => { if (e.key === "Enter") doSearch(); });
