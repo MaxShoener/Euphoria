@@ -1,9 +1,9 @@
 # Base image
 FROM node:20-slim
 
-# Install dependencies for Chromium
+# Install Chromium dependencies
 RUN apt-get update && apt-get install -y \
-    wget \
+    chromium \
     ca-certificates \
     fonts-liberation \
     libx11-6 \
@@ -23,20 +23,16 @@ RUN apt-get update && apt-get install -y \
     libatk-bridge2.0-0 \
     libgtk-3-0 \
     libasound2 \
+    wget \
     && rm -rf /var/lib/apt/lists/*
 
-# Set working directory
 WORKDIR /app
 
-# Copy package files and install
 COPY package*.json ./
 RUN npm install
 
-# Copy app files
 COPY . .
 
-# Expose port
 EXPOSE 3000
 
-# Start server
 CMD ["node", "server.js"]
