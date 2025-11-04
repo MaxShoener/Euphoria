@@ -3,8 +3,8 @@ import fetch from "node-fetch";
 import fs from "fs";
 import path from "path";
 import cors from "cors";
-import scramjetPkg from "scramjet";
-const { StringStream } = scramjetPkg;
+import pkg from "scramjet";
+const { StringStream } = pkg;
 
 const app = express();
 app.use(cors());
@@ -15,7 +15,7 @@ const CACHE_DIR = path.resolve("./cache");
 if (!fs.existsSync(CACHE_DIR)) fs.mkdirSync(CACHE_DIR);
 
 const MEM_CACHE = new Map();
-const CACHE_TTL = 1000 * 60 * 10; // 10 min
+const CACHE_TTL = 1000 * 60 * 10;
 
 function cacheKey(url) {
   return Buffer.from(url).toString("base64url");
@@ -24,24 +24,21 @@ function readDiskCache(url) {
   try {
     const p = path.join(CACHE_DIR, cacheKey(url));
     if (!fs.existsSync(p)) return null;
-    const raw = fs.readFileSync(p, "utf8");
-    const obj = JSON.parse(raw);
+    const obj = JSON.parse(fs.readFileSync(p, "utf8"));
     if (Date.now() - obj.t > CACHE_TTL) {
       fs.unlinkSync(p);
       return null;
     }
     return obj.html;
-  } catch (e) { return null; }
+  } catch { return null; }
 }
 function writeDiskCache(url, html) {
-  try {
-    const p = path.join(CACHE_DIR, cacheKey(url));
-    fs.writeFileSync(p, JSON.stringify({ t: Date.now(), html }), "utf8");
-  } catch (e) {}
+  try { fs.writeFileSync(path.join(CACHE_DIR, cacheKey(url)), JSON.stringify({ t: Date.now(), html }), "utf8"); }
+  catch {}
 }
 function getCached(url) {
-  const m = MEM_CACHE.get(url);
-  if (m && (Date.now() - m.t) < CACHE_TTL) return m.html;
+  const mem = MEM_CACHE.get(url);
+  if (mem && Date.now() - mem.t < CACHE_TTL) return mem.html;
   const disk = readDiskCache(url);
   if (disk) {
     MEM_CACHE.set(url, { html: disk, t: Date.now() });
@@ -76,11 +73,7 @@ app.get("/proxy", async (req, res) => {
     const response = await fetch(target, {
       redirect: "manual",
       signal: controller.signal,
-      headers: {
-        "User-Agent": "Euphoria-Scramjet-Proxy/1.0",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9"
-      }
+      headers: { "User-Agent": "Euphoria-Scramjet-Proxy/1.0", "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8" }
     });
 
     clearTimeout(timeout);
@@ -96,20 +89,23 @@ app.get("/proxy", async (req, res) => {
 
     if (!ctype.includes("text/html")) {
       const buffer = Buffer.from(await response.arrayBuffer());
-      if (buffer.length < 1024 * 100) setCached(target, buffer);
+      if (buffer.length < 1024*100) setCached(target, buffer);
       return res.send(buffer);
     }
 
     let html = await response.text();
 
+    // Remove CSP/meta/integrity/crossorigin
     html = html.replace(/<meta[^>]*http-equiv=["']?content-security-policy["']?[^>]*>/gi, "");
     html = html.replace(/\sintegrity=(["'])(.*?)\1/gi, "");
     html = html.replace(/\scrossorigin=(["'])(.*?)\1/gi, "");
-    html = html.replace(/<head([^>]*)>/i, (m,g) => `<head${g}><base href="${target}"><style>img,video{max-width:100%;height:auto;}body{margin:0;background:transparent;}</style>`);
 
+    // Inject <base>
+    html = html.replace(/<head([^>]*)>/i, (m,g) => `<head${g}><base href="${target}">`);
+
+    // Rewrite href/src/srcset to proxy
     html = html.replace(/(href|src|srcset)=["']([^"']*)["']/gi, (m, attr, val) => {
-      if (!val || /^(javascript:|data:|#)/i.test(val)) return m;
-      if (val.startsWith("/proxy?url=")) return m;
+      if (!val || /^(javascript:|data:|#)/i.test(val) || val.startsWith("/proxy?url=")) return m;
       const abs = toAbsolute(val, target);
       if (!abs) return m;
       return `${attr}="/proxy?url=${encodeURIComponent(abs)}"`;
@@ -122,11 +118,12 @@ app.get("/proxy", async (req, res) => {
       return `url("/proxy?url=${encodeURIComponent(abs)}")`;
     });
 
-    html = html.replace(/<script[^>]*src=["'][^"']*(analytics|gtag|googlesyndication|doubleclick)[^"']*["'][^>]*><\/script>/gi, "");
+    // Inject CSS for images/videos
+    html = html.replace(/<head([^>]*)>/i, (m,g) => `<head${g}><style>img,video{max-width:100%;height:auto;}body{margin:0;background:transparent;}</style>`);
 
     setCached(target, html);
-
     StringStream.from(html).pipe(res);
+
   } catch (err) {
     console.error("Proxy error:", err && err.message ? err.message : String(err));
     res.status(500).send(`<div style="padding:2rem;color:#fff;background:#111;font-family:system-ui;">Proxy error: ${(err && err.message) || String(err)}</div>`);
