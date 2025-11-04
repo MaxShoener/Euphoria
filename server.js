@@ -1,99 +1,61 @@
 import express from "express";
 import fetch from "node-fetch";
-import path from "path";
-import { fileURLToPath } from "url";
-import zlib from "zlib";
 import pkg from "scramjet";
 const { StringStream } = pkg;
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ✅ Correctly serve index.html from /public
-const indexPath = path.join(__dirname, "public", "index.html");
-app.use(express.static(path.join(__dirname, "public")));
+app.use(express.static("public"));
 
-// Serve the UI (homepage)
-app.get("/", (req, res) => {
-  res.sendFile(indexPath, (err) => {
-    if (err) {
-      console.error("❌ Failed to serve index.html:", err);
-      res.status(500).send("Failed to load UI");
-    }
-  });
+// Redirect root requests like /search → /proxy?url=https://www.google.com/search...
+app.get("/search", (req, res) => {
+  const query = req.originalUrl.replace(/^\/+/, ""); // 'search?q=...'
+  const url = `https://www.google.com/${query}`;
+  res.redirect(`/proxy?url=${encodeURIComponent(url)}`);
 });
 
-// ✅ Proxy handler using Scramjet
+// Proxy handler
 app.get("/proxy", async (req, res) => {
-  const targetURL = req.query.url;
-  if (!targetURL) {
-    return res.status(400).send("Missing 'url' query parameter");
-  }
+  const target = req.query.url;
+  if (!target) return res.status(400).send("Missing 'url'");
 
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
-
-    const response = await fetch(targetURL, {
+    const response = await fetch(target, {
       redirect: "manual",
-      signal: controller.signal,
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36",
-      },
+      headers: { "User-Agent": "Mozilla/5.0 (Euphoria Proxy)" },
     });
 
-    clearTimeout(timeout);
+    // Handle redirects
+    if (response.status >= 300 && response.status < 400 && response.headers.get("location")) {
+      const redirectURL = new URL(response.headers.get("location"), target).href;
+      return res.redirect(`/proxy?url=${encodeURIComponent(redirectURL)}`);
+    }
 
     const contentType = response.headers.get("content-type") || "";
     res.set("content-type", contentType);
 
-    // Handle redirects manually
-    if (
-      response.status >= 300 &&
-      response.status < 400 &&
-      response.headers.get("location")
-    ) {
-      const redirectURL = new URL(response.headers.get("location"), targetURL).href;
-      return res.redirect(`/proxy?url=${encodeURIComponent(redirectURL)}`);
-    }
-
-    // Handle HTML rewriting for internal resources
+    // Stream HTML live
     if (contentType.includes("text/html")) {
-      let html = await response.text();
+      const body = await response.text();
 
-      // Rewrite href/src to pass through proxy
-      html = html.replace(/(href|src)=["'](.*?)["']/gi, (m, a, u) => {
-        if (!u || u.startsWith("data:") || u.startsWith("/proxy?url=")) return m;
-        try {
-          const abs = new URL(u, targetURL).href;
-          return `${a}="/proxy?url=${encodeURIComponent(abs)}"`;
-        } catch {
-          return m;
+      const rewritten = body.replace(
+        /(href|src)=["'](.*?)["']/gi,
+        (match, attr, link) => {
+          if (link.startsWith("javascript:")) return match;
+          try {
+            const abs = new URL(link, target).href;
+            return `${attr}="/proxy?url=${encodeURIComponent(abs)}"`;
+          } catch {
+            return match;
+          }
         }
-      });
+      );
 
-      // Rewrite inline CSS url() patterns
-      html = html.replace(/url\((['"]?)(.*?)\1\)/gi, (m, q, u) => {
-        if (!u || u.startsWith("data:")) return m;
-        try {
-          const abs = new URL(u, targetURL).href;
-          return `url("/proxy?url=${encodeURIComponent(abs)}")`;
-        } catch {
-          return m;
-        }
-      });
-
-      // Compress & send
-      const gz = zlib.createGzip();
-      res.set("Content-Encoding", "gzip");
-      StringStream.from(html).pipe(gz).pipe(res);
+      StringStream.from(rewritten).pipe(res);
     } else {
-      // Handle other types (e.g. images, scripts)
-      const buf = await response.arrayBuffer();
-      res.send(Buffer.from(buf));
+      // Stream other types (images, JS, CSS) directly
+      response.body.pipe(res);
     }
   } catch (err) {
     console.error("Proxy error:", err);
@@ -101,6 +63,4 @@ app.get("/proxy", async (req, res) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 Euphoria is running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`Euphoria running on port ${PORT}`));
