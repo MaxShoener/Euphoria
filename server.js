@@ -8,37 +8,52 @@ const { StringStream } = pkg;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Serve from /public if it exists, else from current directory
-const publicDir = path.join(__dirname, "public");
-const serveDir = process.env.NODE_ENV === "production" ? __dirname : publicDir;
+// Try to locate index.html automatically
+const possiblePaths = [
+  path.join(__dirname, "index.html"),
+  path.join(__dirname, "public", "index.html"),
+  path.join(__dirname, "frontend", "index.html"),
+  "/app/index.html",
+  "/app/public/index.html",
+  "/app/frontend/index.html",
+];
 
-// Logging for confirmation
-console.log("Serving static files from:", serveDir);
-
-// Serve index.html explicitly
-app.get("/", (req, res) => {
-  const indexPaths = [
-    path.join(serveDir, "index.html"),
-    path.join(__dirname, "index.html"),
-    "/app/index.html",
-    "/app/public/index.html",
-  ];
-  for (const p of indexPaths) {
-    try {
-      res.sendFile(p);
-      return;
-    } catch {}
+let indexPath = null;
+for (const p of possiblePaths) {
+  try {
+    await Bun.file(p); // bun-style existence check (fails fast)
+  } catch {
+    continue;
   }
-  res.status(404).send("index.html not found");
+  indexPath = p;
+  break;
+}
+
+// If all else fails, fallback
+if (!indexPath) {
+  indexPath = path.join(__dirname, "index.html");
+  console.warn("⚠️ index.html not found in usual locations. Expected at:", indexPath);
+}
+
+console.log("📄 Serving index.html from:", indexPath);
+
+// Serve static assets (for CSS, JS, etc.)
+app.use(express.static(path.dirname(indexPath)));
+
+// Serve UI
+app.get("/", (req, res) => {
+  res.sendFile(indexPath, (err) => {
+    if (err) {
+      console.error("❌ Failed to serve index.html:", err);
+      res.status(500).send("index.html not found or inaccessible.");
+    }
+  });
 });
 
-// Serve static assets
-app.use(express.static(serveDir));
-
+// Main Scramjet proxy route
 app.get("/proxy", async (req, res) => {
   const targetURL = req.query.url;
   if (!targetURL) return res.status(400).send("Missing 'url' query parameter");
