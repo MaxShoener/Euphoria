@@ -1,11 +1,14 @@
-FROM node:20-alpine
+FROM node:20-bullseye
 
 WORKDIR /app
 
+# Copy package.json and install
 COPY package*.json ./
-RUN npm install --production
+RUN npm install
 
+# Copy everything else
 COPY . .
 
 EXPOSE 3000
-CMD ["node", "server.js"]
+
+CMD ["npm", "start"]
