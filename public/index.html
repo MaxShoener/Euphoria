@@ -5,11 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Euphoria Proxy</title>
 <style>
-  body, html { margin: 0; padding: 0; font-family: sans-serif; height: 100%; }
-  #top-bar { display: flex; gap: 5px; padding: 5px; background: #222; color: #fff; }
-  #top-bar input { flex: 1; padding: 5px; border-radius: 4px; border: none; }
-  #top-bar button { padding: 5px 10px; border-radius: 4px; border: none; background: #444; color: #fff; cursor: pointer; }
-  #spinner { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); }
+  body, html { margin: 0; padding: 0; font-family: sans-serif; height: 100%; background: #111; color: #fff; }
+  #top-bar { display: flex; gap: 5px; padding: 5px; background: #222; align-items: center; }
+  #top-bar input {
+    flex: 1; padding: 5px 10px; border-radius: 4px; border: none;
+    background: #333; color: #fff;
+  }
+  #top-bar button {
+    padding: 5px 10px; border-radius: 4px; border: none; background: #444; color: #fff; cursor: pointer;
+  }
+  #spinner { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 999; }
   #proxy-frame { width: 100%; height: calc(100% - 40px); border: none; }
 </style>
 </head>
@@ -22,7 +27,7 @@
   <input id="url" type="text" placeholder="Enter URL or search query"/>
   <button id="go">Go</button>
 </div>
-<img id="spinner" src="spinner.gif" alt="Loading..."/>
+<img id="spinner" src="spinner.gif" alt="Loading..." width="50"/>
 <iframe id="proxy-frame"></iframe>
 
 <script>
@@ -32,10 +37,23 @@ const spinner = document.getElementById("spinner");
 const historyStack = [];
 let historyIndex = -1;
 
+// Auto URL or Google search
+function formatInput(input) {
+  if (!input) return "https://www.google.com";
+  try {
+    new URL(input); 
+    return input.startsWith("http") ? input : "https://" + input;
+  } catch {
+    return "https://www.google.com/search?q=" + encodeURIComponent(input);
+  }
+}
+
+// Load into iframe
 function load(url) {
   spinner.style.display = "block";
   const target = encodeURIComponent(url);
   frame.src = `/proxy?url=${target}`;
+
   // Manage history
   if (historyIndex === -1 || historyStack[historyIndex] !== url) {
     historyStack.splice(historyIndex + 1);
@@ -47,8 +65,8 @@ function load(url) {
 frame.onload = () => spinner.style.display = "none";
 
 // Buttons
-document.getElementById("go").onclick = () => load(urlInput.value || "google.com");
-document.getElementById("home").onclick = () => load("google.com");
+document.getElementById("go").onclick = () => load(formatInput(urlInput.value));
+document.getElementById("home").onclick = () => load("https://www.google.com");
 document.getElementById("refresh").onclick = () => frame.src = frame.src;
 document.getElementById("back").onclick = () => {
   if (historyIndex > 0) load(historyStack[--historyIndex]);
@@ -57,8 +75,11 @@ document.getElementById("forward").onclick = () => {
   if (historyIndex < historyStack.length - 1) load(historyStack[++historyIndex]);
 };
 
-// Enter key triggers Go
-urlInput.addEventListener("keydown", e => { if(e.key === "Enter") load(urlInput.value); });
+// Enter triggers Go
+urlInput.addEventListener("keydown", e => { if(e.key === "Enter") load(formatInput(urlInput.value)); });
+
+// Load homepage by default
+load("https://www.google.com");
 </script>
 </body>
 </html>
