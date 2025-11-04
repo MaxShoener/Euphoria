@@ -5,100 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Euphoria</title>
 <style>
-  body {
-    margin: 0;
-    font-family: Arial, sans-serif;
-    background: #111;
-    color: #fff;
-    overflow: hidden;
-  }
-
-  /* Top bar */
-  #topbar {
-    display: flex;
-    align-items: center;
-    padding: 6px;
-    background: #222;
-    border-radius: 12px;
-    margin: 8px;
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    z-index: 1000;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-  }
-
-  #topbar button {
-    background: #444;
-    border: none;
-    color: white;
-    padding: 8px 12px;
-    margin-right: 6px;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 14px;
-    flex-shrink: 0;
-  }
-
-  #topbar button:hover {
-    background: #666;
-  }
-
-  #searchInput {
-    flex: 1;
-    padding: 8px 12px;
-    border-radius: 12px;
-    border: none;
-    font-size: 14px;
-    margin-right: 6px;
-    background: #333;
-    color: white;
-  }
-
-  #searchInput::placeholder {
-    color: #bbb;
-  }
-
-  /* Content container */
-  #content {
-    position: absolute;
-    top: 48px;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    overflow: auto;
-    background: #fff;
-    border-radius: 8px;
-  }
-
-  /* Spinner overlay */
-  #spinnerOverlay {
-    position: absolute;
-    top: 48px;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0,0,0,0.6);
-    display: none;
-    justify-content: center;
-    align-items: center;
-    z-index: 900;
-  }
-
-  .spinner {
-    border: 6px solid #f3f3f3;
-    border-top: 6px solid #4caf50;
-    border-radius: 50%;
-    width: 40px;
-    height: 40px;
-    animation: spin 1s linear infinite;
-  }
-
-  @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-  }
+  body { margin:0; font-family:Arial,sans-serif; background:#111; color:#fff; overflow:hidden; }
+  #topbar { display:flex; align-items:center; padding:6px; background:#222; border-radius:12px; margin:8px; position:fixed; top:0; left:0; right:0; z-index:1000; box-shadow:0 4px 12px rgba(0,0,0,0.5); }
+  #topbar button { background:#444; border:none; color:white; padding:8px 12px; margin-right:6px; border-radius:8px; cursor:pointer; font-size:14px; flex-shrink:0; }
+  #topbar button:hover { background:#666; }
+  #searchInput { flex:1; padding:8px 12px; border-radius:12px; border:none; font-size:14px; margin-right:6px; background:#333; color:white; }
+  #searchInput::placeholder { color:#bbb; }
+  #content { position:absolute; top:48px; bottom:0; left:0; right:0; overflow:auto; background:#fff; border-radius:8px; }
+  #spinnerOverlay { position:absolute; top:48px; left:0; right:0; bottom:0; background:rgba(0,0,0,0.6); display:none; justify-content:center; align-items:center; z-index:900; }
+  .spinner { border:6px solid #f3f3f3; border-top:6px solid #4caf50; border-radius:50%; width:40px; height:40px; animation:spin 1s linear infinite; }
+  @keyframes spin { 0% { transform:rotate(0deg); } 100% { transform:rotate(360deg); } }
 </style>
 </head>
 <body>
@@ -127,7 +43,6 @@ const searchInput = document.getElementById("searchInput");
 let historyStack = [];
 let historyIndex = -1;
 
-// Utility to normalize input to URL
 function normalizeInput(input) {
   input = input.trim();
   if (!input) return "https://www.google.com";
@@ -138,53 +53,38 @@ function normalizeInput(input) {
   return input;
 }
 
-// Load URL via proxy
-async function loadURL(url, pushHistory = true) {
-  spinner.style.display = "flex";
+async function loadURL(url, pushHistory=true) {
+  spinner.style.display="flex";
   try {
     const res = await fetch(`/proxy?url=${encodeURIComponent(url)}`);
-    if (!res.ok) throw new Error("Failed to load page");
+    if(!res.ok) throw new Error("Failed to load page");
     const html = await res.text();
     content.innerHTML = html;
 
-    if (pushHistory) {
-      historyStack = historyStack.slice(0, historyIndex + 1);
+    if(pushHistory){
+      historyStack = historyStack.slice(0, historyIndex+1);
       historyStack.push(url);
       historyIndex++;
     }
-  } catch (e) {
+  } catch(e){
     content.innerHTML = `<h2 style="color:red;text-align:center;margin-top:50px;">Error loading page:<br>${e.message}</h2>`;
-  } finally {
-    spinner.style.display = "none";
-  }
+  } finally { spinner.style.display="none"; }
 }
 
-// Navigation buttons
-document.getElementById("backBtn").onclick = () => {
-  if (historyIndex > 0) loadURL(historyStack[--historyIndex], false);
-};
-document.getElementById("forwardBtn").onclick = () => {
-  if (historyIndex < historyStack.length - 1) loadURL(historyStack[++historyIndex], false);
-};
-document.getElementById("refreshBtn").onclick = () => {
-  if (historyIndex >= 0) loadURL(historyStack[historyIndex], false);
-};
-document.getElementById("homeBtn").onclick = () => loadURL("https://www.google.com");
-document.getElementById("fullscreenBtn").onclick = () => {
-  if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+document.getElementById("backBtn").onclick = ()=>{ if(historyIndex>0) loadURL(historyStack[--historyIndex], false); };
+document.getElementById("forwardBtn").onclick = ()=>{ if(historyIndex<historyStack.length-1) loadURL(historyStack[++historyIndex], false); };
+document.getElementById("refreshBtn").onclick = ()=>{ if(historyIndex>=0) loadURL(historyStack[historyIndex], false); };
+document.getElementById("homeBtn").onclick = ()=>loadURL("https://www.google.com");
+document.getElementById("fullscreenBtn").onclick = ()=>{
+  if(!document.fullscreenElement) document.documentElement.requestFullscreen();
   else document.exitFullscreen();
 };
 
-// Search
-function doSearch() {
-  const input = searchInput.value;
-  loadURL(normalizeInput(input));
-}
+function doSearch(){ const input = searchInput.value; loadURL(normalizeInput(input)); }
 
 document.getElementById("searchBtn").onclick = doSearch;
-searchInput.addEventListener("keydown", e => { if (e.key === "Enter") doSearch(); });
+searchInput.addEventListener("keydown", e => { if(e.key==="Enter") doSearch(); });
 
-// Initial load
 loadURL("https://www.google.com");
 </script>
 
