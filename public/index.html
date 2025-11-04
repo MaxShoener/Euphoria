@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Euphoria Proxy</title>
+<style>
+  body {
+    margin: 0;
+    font-family: 'Segoe UI', sans-serif;
+    background: #0f0f0f;
+    color: white;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  #topbar {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #181818;
+    padding: 10px;
+    border-bottom: 1px solid #2a2a2a;
+  }
+
+  button {
+    background: #222;
+    color: white;
+    border: none;
+    padding: 8px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: 0.2s;
+    flex-shrink: 0;
+    min-width: 60px;
+    text-align: center;
+  }
+
+  button:hover { background: #333; }
+
+  #url {
+    flex: 1;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: none;
+    outline: none;
+    background: #101010;
+    color: white;
+    font-size: 1rem;
+  }
+
+  #iframe-container {
+    flex: 1;
+    position: relative;
+  }
+
+  iframe {
+    border: none;
+    width: 100%;
+    height: 100%;
+  }
+
+  #spinner {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    border: 5px solid #333;
+    border-top: 5px solid #fff;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 0.9s linear infinite;
+    display: none;
+    z-index: 999;
+  }
+
+  @keyframes spin {
+    0% { transform: translate(-50%, -50%) rotate(0deg); }
+    100% { transform: translate(-50%, -50%) rotate(360deg); }
+  }
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <button id="back">←</button>
+  <button id="forward">→</button>
+  <button id="refresh">⟳</button>
+  <input id="url" type="text" placeholder="Enter URL or search">
+  <button id="go">Go</button>
+  <button id="home">🏠</button>
+  <button id="fullscreen">⛶</button>
+</div>
+
+<div id="iframe-container">
+  <div id="spinner"></div>
+  <iframe id="view" src=""></iframe>
+</div>
+
+<script>
+const iframe = document.getElementById("view");
+const urlInput = document.getElementById("url");
+const spinner = document.getElementById("spinner");
+let historyStack = [], currentIndex = -1;
+
+function showSpinner(show) { spinner.style.display = show ? "block" : "none"; }
+
+function formatURL(raw) {
+  let url = raw.trim();
+  if (!url.includes(".")) return "https://www.google.com/search?q=" + encodeURIComponent(url);
+  if (!url.startsWith("http")) url = "https://" + url;
+  return url;
+}
+
+function navigate(raw, pushHistory = true) {
+  if (!raw) return;
+  const url = formatURL(raw);
+  iframe.src = "/proxy?url=" + encodeURIComponent(url);
+  showSpinner(true);
+
+  if(pushHistory){
+    historyStack = historyStack.slice(0, currentIndex + 1);
+    historyStack.push(raw);
+    currentIndex++;
+  }
+}
+
+iframe.addEventListener("load", () => showSpinner(false));
+
+document.getElementById("go").onclick = () => navigate(urlInput.value);
+urlInput.addEventListener("keydown", e => { if (e.key === "Enter") navigate(urlInput.value); });
+document.getElementById("home").onclick = () => { urlInput.value = "google.com"; navigate("google.com"); };
+document.getElementById("refresh").onclick = () => iframe.contentWindow.location.reload();
+document.getElementById("back").onclick = () => { if(currentIndex > 0) { currentIndex--; navigate(historyStack[currentIndex], false); } };
+document.getElementById("forward").onclick = () => { if(currentIndex < historyStack.length - 1) { currentIndex++; navigate(historyStack[currentIndex], false); } };
+
+const fsBtn = document.getElementById("fullscreen");
+fsBtn.onclick = () => {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen();
+    fsBtn.textContent = "❎";
+  } else {
+    document.exitFullscreen();
+    fsBtn.textContent = "⛶";
+  }
+};
+
+document.addEventListener("keydown", e => {
+  if(e.key === "Escape" && document.fullscreenElement) document.exitFullscreen();
+});
+
+// Initial page load
+navigate("google.com");
+</script>
+
+</body>
+</html>
