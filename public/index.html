@@ -1,181 +1,140 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Euphoria Browser</title>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; font-family: sans-serif; }
-    body, html { height: 100%; overflow: hidden; background: #1a1a1a; color: #fff; }
-    
-    #navbar {
-      display: flex;
-      align-items: center;
-      padding: 5px;
-      background: #222;
-      gap: 5px;
-    }
-
-    #navbar button {
-      flex: none;
-      padding: 8px 12px;
-      background: #333;
-      color: white;
-      border: none;
-      cursor: pointer;
-      font-size: 14px;
-      min-width: 60px;
-      text-align: center;
-    }
-
-    #navbar button:hover { background: #555; }
-
-    #search-bar {
-      flex: 1;
-      padding: 8px;
-      background: #333;
-      border: none;
-      color: #fff;
-    }
-
-    #content {
-      position: relative;
-      width: 100%;
-      height: calc(100% - 45px);
-      overflow: auto;
-      background: #000;
-    }
-
-    #spinner {
-      position: absolute;
-      top: 45px;
-      left: 0;
-      width: 100%;
-      height: calc(100% - 45px);
-      background: rgba(0,0,0,0.5);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 100;
-      pointer-events: none;
-      display: none;
-    }
-
-    .spinner-icon {
-      border: 6px solid #f3f3f3;
-      border-top: 6px solid #555;
-      border-radius: 50%;
-      width: 40px;
-      height: 40px;
-      animation: spin 1s linear infinite;
-    }
-
-    @keyframes spin {
-      0% { transform: rotate(0deg);}
-      100% { transform: rotate(360deg);}
-    }
-
-    iframe {
-      width: 100%;
-      height: 100%;
-      border: none;
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Euphoria</title>
+<style>
+  html, body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    background: #111;
+    font-family: sans-serif;
+    color: #fff;
+  }
+  #topbar {
+    display: flex;
+    align-items: center;
+    background: #222;
+    padding: 4px;
+    gap: 4px;
+  }
+  #topbar button, #topbar input {
+    height: 32px;
+    border: none;
+    border-radius: 4px;
+    font-size: 14px;
+  }
+  #topbar button {
+    background: #333;
+    color: #fff;
+    width: 32px;
+    cursor: pointer;
+  }
+  #topbar input {
+    flex: 1;
+    background: #333;
+    color: #fff;
+    padding: 0 8px;
+  }
+  #spinner {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    background: rgba(0,0,0,0.5);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+  }
+  #spinner div {
+    width: 50px;
+    height: 50px;
+    border: 6px solid #555;
+    border-top: 6px solid #fff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+  iframe, #content {
+    position: absolute;
+    top: 40px;
+    left: 0;
+    width: 100%;
+    height: calc(100% - 40px);
+    border: none;
+  }
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+</style>
 </head>
 <body>
 
-  <div id="navbar">
-    <button id="back">◀ Back</button>
-    <button id="forward">▶ Forward</button>
-    <button id="home">🏠 Home</button>
-    <button id="refresh">⟳ Refresh</button>
-    <input id="search-bar" type="text" placeholder="Enter URL or search..." />
-    <button id="fullscreen">⛶ Fullscreen</button>
-  </div>
+<div id="topbar">
+  <button id="back">&lt;</button>
+  <button id="forward">&gt;</button>
+  <input type="text" id="url" placeholder="Enter URL or search">
+  <button id="go">&#10148;</button>
+  <button id="fullscreen">[ ]</button>
+</div>
 
-  <div id="content">
-    <div id="spinner"><div class="spinner-icon"></div></div>
-    <iframe id="view" src=""></iframe>
-  </div>
+<div id="spinner"><div></div></div>
+<div id="content"></div>
 
-  <script>
-    const searchBar = document.getElementById("search-bar");
-    const iframe = document.getElementById("view");
-    const spinner = document.getElementById("spinner");
+<script>
+const content = document.getElementById("content");
+const spinner = document.getElementById("spinner");
+const urlInput = document.getElementById("url");
 
-    const backBtn = document.getElementById("back");
-    const forwardBtn = document.getElementById("forward");
-    const refreshBtn = document.getElementById("refresh");
-    const homeBtn = document.getElementById("home");
-    const fullscreenBtn = document.getElementById("fullscreen");
+let historyStack = [];
+let historyIndex = -1;
 
-    const historyStack = [];
-    let historyIndex = -1;
+// Load a URL via proxy
+async function loadUrl(url) {
+  spinner.style.display = "flex";
+  if (!url.startsWith("http")) {
+    url = "/search?q=" + encodeURIComponent(url);
+  } else {
+    url = "/proxy?url=" + encodeURIComponent(url);
+  }
+  historyStack = historyStack.slice(0, historyIndex + 1);
+  historyStack.push(url);
+  historyIndex++;
+  urlInput.value = url.replace("/proxy?url=", "");
+  
+  try {
+    const res = await fetch(url);
+    const html = await res.text();
+    content.innerHTML = html;
+  } catch(e) {
+    content.innerHTML = `<div style="padding:20px;color:#fff;">
+      <h1>Error loading page</h1>
+      <p>${e.message}</p>
+    </div>`;
+  } finally {
+    spinner.style.display = "none";
+  }
+}
 
-    function showSpinner() { spinner.style.display = "flex"; }
-    function hideSpinner() { spinner.style.display = "none"; }
+// Navigation buttons
+document.getElementById("go").addEventListener("click", () => loadUrl(urlInput.value));
+document.getElementById("back").addEventListener("click", () => {
+  if(historyIndex > 0) loadUrl(historyStack[--historyIndex]);
+});
+document.getElementById("forward").addEventListener("click", () => {
+  if(historyIndex < historyStack.length - 1) loadUrl(historyStack[++historyIndex]);
+});
+document.getElementById("fullscreen").addEventListener("click", () => {
+  if(!document.fullscreenElement) document.documentElement.requestFullscreen();
+  else document.exitFullscreen();
+});
+urlInput.addEventListener("keypress", e => { if(e.key === "Enter") loadUrl(urlInput.value); });
 
-    function loadUrl(url) {
-      if (!url.startsWith("http")) url = "https://" + url;
-      showSpinner();
-      iframe.src = "/proxy?url=" + encodeURIComponent(url);
-    }
+// Load default homepage
+loadUrl("https://www.google.com");
+</script>
 
-    function autoLoadInput(input) {
-      input = input.trim();
-      if (!input) return;
-      if (input.includes(" ") || !input.includes(".")) {
-        // Treat as Google search
-        loadUrl("https://www.google.com/search?q=" + encodeURIComponent(input));
-      } else {
-        // Treat as URL
-        loadUrl(input);
-      }
-      // Update history
-      historyStack.splice(historyIndex + 1);
-      historyStack.push(input);
-      historyIndex++;
-    }
-
-    searchBar.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
-        autoLoadInput(searchBar.value);
-      }
-    });
-
-    iframe.addEventListener("load", () => hideSpinner());
-
-    backBtn.onclick = () => {
-      if (historyIndex > 0) {
-        historyIndex--;
-        searchBar.value = historyStack[historyIndex];
-        autoLoadInput(historyStack[historyIndex]);
-      }
-    };
-
-    forwardBtn.onclick = () => {
-      if (historyIndex < historyStack.length - 1) {
-        historyIndex++;
-        searchBar.value = historyStack[historyIndex];
-        autoLoadInput(historyStack[historyIndex]);
-      }
-    };
-
-    refreshBtn.onclick = () => {
-      if (historyIndex >= 0) autoLoadInput(historyStack[historyIndex]);
-    };
-
-    homeBtn.onclick = () => {
-      searchBar.value = "google.com";
-      autoLoadInput("google.com");
-    };
-
-    fullscreenBtn.onclick = () => {
-      if (!document.fullscreenElement) document.documentElement.requestFullscreen();
-      else document.exitFullscreen();
-    };
-
-    // Load home by default
-    autoLoadInput("google.com");
-  </script>
 </body>
 </html>
