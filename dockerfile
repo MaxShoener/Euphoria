@@ -1,7 +1,6 @@
-# Base image
-FROM node:20-slim
+FROM node:20-bullseye
 
-# Install Chromium dependencies
+# Install Chromium and dependencies
 RUN apt-get update && apt-get install -y \
     chromium \
     ca-certificates \
@@ -28,9 +27,13 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /app
 
+# Copy package.json & package-lock.json
 COPY package*.json ./
-RUN npm install
 
+# Use puppeteer-core latest supported version
+RUN npm install puppeteer-core@25 express
+
+# Copy rest of the files
 COPY . .
 
 EXPOSE 3000
