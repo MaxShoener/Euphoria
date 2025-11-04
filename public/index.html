@@ -17,8 +17,8 @@
   #topbar {
     display: flex;
     align-items: center;
-    padding: 6px 12px;
-    background: #222;
+    padding: 6px;
+    background: #222; /* solid dark */
     border-radius: 24px;
     margin: 8px;
     position: fixed;
@@ -33,14 +33,17 @@
     background: #444;
     border: none;
     color: white;
-    padding: 8px 14px;
+    padding: 8px 12px;
     margin-right: 6px;
     border-radius: 12px;
     cursor: pointer;
     font-size: 14px;
     flex-shrink: 0;
   }
-  #topbar button:hover { background: #666; }
+
+  #topbar button:hover {
+    background: #666;
+  }
 
   #searchInput {
     flex: 1;
@@ -52,11 +55,14 @@
     background: #333;
     color: white;
   }
-  #searchInput::placeholder { color: #bbb; }
+
+  #searchInput::placeholder {
+    color: #bbb;
+  }
 
   #content {
     position: absolute;
-    top: 52px;
+    top: 48px;
     bottom: 0;
     left: 0;
     right: 0;
@@ -67,7 +73,7 @@
 
   #spinnerOverlay {
     position: absolute;
-    top: 52px;
+    top: 48px;
     left: 0;
     right: 0;
     bottom: 0;
@@ -87,23 +93,37 @@
     animation: spin 1s linear infinite;
   }
 
-  @keyframes spin { 0%{transform:rotate(0deg);}100%{transform:rotate(360deg);} }
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
 </style>
 </head>
 <body>
 
 <div id="topbar">
+  <button id="backBtn">◀</button>
+  <button id="forwardBtn">▶</button>
+  <button id="refreshBtn">⟳</button>
+  <button id="homeBtn">🏠</button>
+  <button id="fullscreenBtn">⛶</button>
   <input type="text" id="searchInput" placeholder="Enter URL or search...">
   <button id="searchBtn">🔍</button>
 </div>
 
-<div id="spinnerOverlay"><div class="spinner"></div></div>
+<div id="spinnerOverlay">
+  <div class="spinner"></div>
+</div>
+
 <div id="content"></div>
 
 <script>
 const content = document.getElementById("content");
 const spinner = document.getElementById("spinnerOverlay");
 const searchInput = document.getElementById("searchInput");
+
+let historyStack = [];
+let historyIndex = -1;
 
 function normalizeInput(input) {
   input = input.trim();
@@ -115,20 +135,43 @@ function normalizeInput(input) {
   return input;
 }
 
-async function loadURL(url) {
+async function loadURL(url, pushHistory = true) {
   spinner.style.display = "flex";
   try {
     const res = await fetch(`/proxy?url=${encodeURIComponent(url)}`);
-    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+    if (!res.ok) throw new Error(res.status + " " + res.statusText);
     const html = await res.text();
     content.innerHTML = html;
+
+    if (pushHistory) {
+      historyStack = historyStack.slice(0, historyIndex + 1);
+      historyStack.push(url);
+      historyIndex++;
+    }
   } catch (e) {
-    content.innerHTML = `<div style="padding:2rem;color:#fff;background:#111;">Error loading page: ${e.message}</div>`;
+    content.innerHTML = `<h2 style="color:red;text-align:center;margin-top:50px;">Error loading page:<br>${e.message}</h2>`;
   } finally {
     spinner.style.display = "none";
   }
 }
 
+// Navigation buttons
+document.getElementById("backBtn").onclick = () => {
+  if (historyIndex > 0) loadURL(historyStack[--historyIndex], false);
+};
+document.getElementById("forwardBtn").onclick = () => {
+  if (historyIndex < historyStack.length - 1) loadURL(historyStack[++historyIndex], false);
+};
+document.getElementById("refreshBtn").onclick = () => {
+  if (historyIndex >= 0) loadURL(historyStack[historyIndex], false);
+};
+document.getElementById("homeBtn").onclick = () => loadURL("https://www.google.com");
+document.getElementById("fullscreenBtn").onclick = () => {
+  if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+  else document.exitFullscreen();
+};
+
+// Search
 document.getElementById("searchBtn").onclick = () => loadURL(normalizeInput(searchInput.value));
 searchInput.addEventListener("keydown", e => { if (e.key === "Enter") loadURL(normalizeInput(searchInput.value)); });
 
