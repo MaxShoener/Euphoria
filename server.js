@@ -11,52 +11,26 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Try to locate index.html automatically
-const possiblePaths = [
-  path.join(__dirname, "index.html"),
-  path.join(__dirname, "public", "index.html"),
-  path.join(__dirname, "frontend", "index.html"),
-  "/app/index.html",
-  "/app/public/index.html",
-  "/app/frontend/index.html",
-];
+// ✅ Correctly serve index.html from /public
+const indexPath = path.join(__dirname, "public", "index.html");
+app.use(express.static(path.join(__dirname, "public")));
 
-let indexPath = null;
-for (const p of possiblePaths) {
-  try {
-    await Bun.file(p); // bun-style existence check (fails fast)
-  } catch {
-    continue;
-  }
-  indexPath = p;
-  break;
-}
-
-// If all else fails, fallback
-if (!indexPath) {
-  indexPath = path.join(__dirname, "index.html");
-  console.warn("⚠️ index.html not found in usual locations. Expected at:", indexPath);
-}
-
-console.log("📄 Serving index.html from:", indexPath);
-
-// Serve static assets (for CSS, JS, etc.)
-app.use(express.static(path.dirname(indexPath)));
-
-// Serve UI
+// Serve the UI (homepage)
 app.get("/", (req, res) => {
   res.sendFile(indexPath, (err) => {
     if (err) {
       console.error("❌ Failed to serve index.html:", err);
-      res.status(500).send("index.html not found or inaccessible.");
+      res.status(500).send("Failed to load UI");
     }
   });
 });
 
-// Main Scramjet proxy route
+// ✅ Proxy handler using Scramjet
 app.get("/proxy", async (req, res) => {
   const targetURL = req.query.url;
-  if (!targetURL) return res.status(400).send("Missing 'url' query parameter");
+  if (!targetURL) {
+    return res.status(400).send("Missing 'url' query parameter");
+  }
 
   try {
     const controller = new AbortController();
@@ -72,16 +46,25 @@ app.get("/proxy", async (req, res) => {
     });
 
     clearTimeout(timeout);
+
     const contentType = response.headers.get("content-type") || "";
     res.set("content-type", contentType);
 
-    if (response.status >= 300 && response.status < 400 && response.headers.get("location")) {
+    // Handle redirects manually
+    if (
+      response.status >= 300 &&
+      response.status < 400 &&
+      response.headers.get("location")
+    ) {
       const redirectURL = new URL(response.headers.get("location"), targetURL).href;
       return res.redirect(`/proxy?url=${encodeURIComponent(redirectURL)}`);
     }
 
+    // Handle HTML rewriting for internal resources
     if (contentType.includes("text/html")) {
       let html = await response.text();
+
+      // Rewrite href/src to pass through proxy
       html = html.replace(/(href|src)=["'](.*?)["']/gi, (m, a, u) => {
         if (!u || u.startsWith("data:") || u.startsWith("/proxy?url=")) return m;
         try {
@@ -92,6 +75,7 @@ app.get("/proxy", async (req, res) => {
         }
       });
 
+      // Rewrite inline CSS url() patterns
       html = html.replace(/url\((['"]?)(.*?)\1\)/gi, (m, q, u) => {
         if (!u || u.startsWith("data:")) return m;
         try {
@@ -102,10 +86,12 @@ app.get("/proxy", async (req, res) => {
         }
       });
 
+      // Compress & send
       const gz = zlib.createGzip();
       res.set("Content-Encoding", "gzip");
       StringStream.from(html).pipe(gz).pipe(res);
     } else {
+      // Handle other types (e.g. images, scripts)
       const buf = await response.arrayBuffer();
       res.send(Buffer.from(buf));
     }
@@ -115,4 +101,6 @@ app.get("/proxy", async (req, res) => {
   }
 });
 
-app.listen(PORT, () => console.log(`🚀 Euphoria running on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`🚀 Euphoria is running on port ${PORT}`);
+});
