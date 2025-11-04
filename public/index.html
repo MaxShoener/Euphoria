@@ -1,119 +1,192 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Euphoria Proxy</title>
-  <style>
-    body { margin: 0; font-family: Arial, sans-serif; background: #f0f0f0; }
-    #top-bar {
-      display: flex;
-      align-items: center;
-      padding: 8px 12px;
-      background: #222;
-      color: white;
-      border-radius: 12px;
-      margin: 10px;
-    }
-    #top-bar input {
-      flex: 1;
-      margin: 0 8px;
-      padding: 6px 10px;
-      border-radius: 8px;
-      border: none;
-      background: #333;
-      color: white;
-    }
-    #top-bar button {
-      padding: 6px 12px;
-      border-radius: 8px;
-      border: none;
-      background: #555;
-      color: white;
-      cursor: pointer;
-      margin-left: 4px;
-    }
-    #spinner {
-      display: none;
-      position: absolute;
-      top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      border: 8px solid #f3f3f3;
-      border-top: 8px solid #555;
-      border-radius: 50%;
-      width: 60px;
-      height: 60px;
-      animation: spin 1s linear infinite;
-      z-index: 999;
-    }
-    @keyframes spin { 100% { transform: rotate(360deg); } }
-    #content {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: calc(100vh - 60px);
-      overflow: hidden;
-    }
-    iframe {
-      width: 100%;
-      height: 100%;
-      border: none;
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Euphoria</title>
+<style>
+  body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #111;
+    color: #fff;
+    overflow: hidden;
+  }
+
+  /* Top bar */
+  #topbar {
+    display: flex;
+    align-items: center;
+    padding: 6px;
+    background: #222;
+    border-radius: 12px;
+    margin: 8px;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  }
+
+  #topbar button {
+    background: #444;
+    border: none;
+    color: white;
+    padding: 8px 12px;
+    margin-right: 6px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+
+  #topbar button:hover {
+    background: #666;
+  }
+
+  #searchInput {
+    flex: 1;
+    padding: 8px 12px;
+    border-radius: 12px;
+    border: none;
+    font-size: 14px;
+    margin-right: 6px;
+    background: #333;
+    color: white;
+  }
+
+  #searchInput::placeholder {
+    color: #bbb;
+  }
+
+  /* Content container */
+  #content {
+    position: absolute;
+    top: 48px;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    overflow: auto;
+    background: #fff;
+    border-radius: 8px;
+  }
+
+  /* Spinner overlay */
+  #spinnerOverlay {
+    position: absolute;
+    top: 48px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.6);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 900;
+  }
+
+  .spinner {
+    border: 6px solid #f3f3f3;
+    border-top: 6px solid #4caf50;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+</style>
 </head>
 <body>
-  <div id="top-bar">
-    <button id="home">Home</button>
-    <input type="text" id="url-input" placeholder="Enter URL..." />
-    <button id="go">Go</button>
-    <button id="fullscreen">Fullscreen</button>
-  </div>
 
-  <div id="spinner"></div>
-  <div id="content"></div>
+<div id="topbar">
+  <button id="backBtn">◀</button>
+  <button id="forwardBtn">▶</button>
+  <button id="refreshBtn">⟳</button>
+  <button id="homeBtn">🏠</button>
+  <button id="fullscreenBtn">⛶</button>
+  <input type="text" id="searchInput" placeholder="Enter URL or search...">
+  <button id="searchBtn">🔍</button>
+</div>
 
-  <script>
-    const spinner = document.getElementById("spinner");
-    const content = document.getElementById("content");
-    const input = document.getElementById("url-input");
+<div id="spinnerOverlay">
+  <div class="spinner"></div>
+</div>
 
-    const showSpinner = () => spinner.style.display = "block";
-    const hideSpinner = () => spinner.style.display = "none";
+<div id="content"></div>
 
-    async function loadURL(url) {
-      showSpinner();
-      try {
-        const res = await fetch(`/fetch?url=${encodeURIComponent(url)}`);
-        const html = await res.text();
-        content.innerHTML = html;
-      } catch (e) {
-        content.innerHTML = "<h1 style='text-align:center;margin-top:50px;'>Error loading page</h1>";
-      }
-      hideSpinner();
+<script>
+const content = document.getElementById("content");
+const spinner = document.getElementById("spinnerOverlay");
+const searchInput = document.getElementById("searchInput");
+
+let historyStack = [];
+let historyIndex = -1;
+
+// Utility to normalize input to URL
+function normalizeInput(input) {
+  input = input.trim();
+  if (!input) return "https://www.google.com";
+  if (!input.startsWith("http")) {
+    if (input.includes(" ")) return `https://www.google.com/search?q=${encodeURIComponent(input)}`;
+    return "https://" + input;
+  }
+  return input;
+}
+
+// Load URL via proxy
+async function loadURL(url, pushHistory = true) {
+  spinner.style.display = "flex";
+  try {
+    const res = await fetch(`/proxy?url=${encodeURIComponent(url)}`);
+    if (!res.ok) throw new Error("Failed to load page");
+    const html = await res.text();
+    content.innerHTML = html;
+
+    if (pushHistory) {
+      historyStack = historyStack.slice(0, historyIndex + 1);
+      historyStack.push(url);
+      historyIndex++;
     }
+  } catch (e) {
+    content.innerHTML = `<h2 style="color:red;text-align:center;margin-top:50px;">Error loading page:<br>${e.message}</h2>`;
+  } finally {
+    spinner.style.display = "none";
+  }
+}
 
-    document.getElementById("go").addEventListener("click", () => {
-      loadURL(input.value);
-    });
+// Navigation buttons
+document.getElementById("backBtn").onclick = () => {
+  if (historyIndex > 0) loadURL(historyStack[--historyIndex], false);
+};
+document.getElementById("forwardBtn").onclick = () => {
+  if (historyIndex < historyStack.length - 1) loadURL(historyStack[++historyIndex], false);
+};
+document.getElementById("refreshBtn").onclick = () => {
+  if (historyIndex >= 0) loadURL(historyStack[historyIndex], false);
+};
+document.getElementById("homeBtn").onclick = () => loadURL("https://www.google.com");
+document.getElementById("fullscreenBtn").onclick = () => {
+  if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+  else document.exitFullscreen();
+};
 
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") loadURL(input.value);
-    });
+// Search
+function doSearch() {
+  const input = searchInput.value;
+  loadURL(normalizeInput(input));
+}
 
-    document.getElementById("home").addEventListener("click", () => {
-      input.value = "https://www.google.com";
-      loadURL(input.value);
-    });
+document.getElementById("searchBtn").onclick = doSearch;
+searchInput.addEventListener("keydown", e => { if (e.key === "Enter") doSearch(); });
 
-    document.getElementById("fullscreen").addEventListener("click", () => {
-      if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen();
-      } else {
-        document.exitFullscreen();
-      }
-    });
+// Initial load
+loadURL("https://www.google.com");
+</script>
 
-    // Load Google by default
-    loadURL("https://www.google.com");
-  </script>
 </body>
 </html>
