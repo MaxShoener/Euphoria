@@ -1,7 +1,6 @@
 import express from "express";
 import fetch from "node-fetch";
-import pkg from "scramjet";
-const { StringStream } = pkg;
+import { StringStream } from "scramjet";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -13,69 +12,70 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.static(path.join(__dirname, "public")));
 
-// Utility to check if input is a URL
-function isUrl(input) {
-  try {
-    new URL(input.startsWith("http") ? input : `https://${input}`);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-// Auto search / redirect
-app.get("/search", (req, res) => {
-  const q = req.query.q;
-  if (!q) return res.redirect("/");
-  const url = isUrl(q) ? (q.startsWith("http") ? q : `https://${q}`) : `https://www.google.com/search?q=${encodeURIComponent(q)}`;
-  res.redirect(`/proxy?url=${encodeURIComponent(url)}`);
-});
-
-// Proxy streaming
 app.get("/proxy", async (req, res) => {
-  const { url } = req.query;
-  if (!url) return res.status(400).send("Missing URL");
+  const targetUrl = req.query.url;
+  if (!targetUrl) return res.status(400).send("Missing url");
 
   try {
-    const response = await fetch(url);
+    const response = await fetch(targetUrl, { redirect: "follow" });
     const contentType = response.headers.get("content-type") || "";
 
+    res.setHeader("Content-Type", contentType);
+
+    // Only stream HTML for rewriting URLs
     if (contentType.includes("text/html")) {
-      res.setHeader("content-type", "text/html; charset=utf-8");
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
 
-      const html = await response.text();
+      let buffer = "";
 
-      // Stream HTML line by line
-      const stream = StringStream.from(html)
-        .map(line => 
-          line.replace(/(href|src|action)=["']([^"']+)["']/gi, (match, attr, val) => {
-            if (!val) return match;
-            if (val.startsWith("http") || val.startsWith("//")) {
-              return `${attr}="/proxy?url=${encodeURIComponent(val.startsWith("//") ? "https:" + val : val)}"`;
-            } else if (val.startsWith("#") || val.startsWith("mailto:")) {
+      const stream = new StringStream();
+
+      const pushChunk = async ({ value, done }) => {
+        if (done) {
+          if (buffer) stream.write(buffer);
+          stream.end();
+          return;
+        }
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // Rewrite src/href for proxying
+        const rewritten = buffer.replace(
+          /(href|src)=["']([^"']+)["']/gi,
+          (match, attr, url) => {
+            try {
+              const abs = new URL(url, targetUrl).href;
+              return `${attr}="/proxy?url=${encodeURIComponent(abs)}"`;
+            } catch (e) {
               return match;
-            } else {
-              try {
-                const base = new URL(url);
-                return `${attr}="/proxy?url=${encodeURIComponent(new URL(val, base).href)}"`;
-              } catch {
-                return match;
-              }
             }
-          })
-        )
-        .join("\n");
+          }
+        );
 
-      await stream.pipe(res);
+        stream.write(rewritten);
+        buffer = "";
+      };
+
+      while (true) {
+        const chunk = await reader.read();
+        await pushChunk(chunk);
+        if (chunk.done) break;
+      }
+
+      stream.pipe(res);
     } else {
-      // Stream other resources (images, JS, CSS) directly
+      // Other content types
       response.body.pipe(res);
     }
   } catch (err) {
-    res.status(500).send(`Error loading page: ${err}`);
+    res.status(500).send("Error loading page: " + err.message);
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Euphoria streaming proxy running on port ${PORT}`);
+// Serve index.html for root
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public/index.html"));
 });
+
+app.listen(PORT, () => console.log(`Euphoria running on port ${PORT}`));
