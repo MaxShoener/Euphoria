@@ -1,72 +1,39 @@
 import express from "express";
-import fetch from "node-fetch";
-import pkg from "scramjet";
+import puppeteer from "puppeteer";
+import bodyParser from "body-parser";
+import path from "path";
+import { fileURLToPath } from "url";
 
-const { StringStream } = pkg;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+app.use(bodyParser.json());
+app.use(express.static(path.join(__dirname, "public")));
 
-app.use(express.static("public")); // serve your index.html
+let browserPromise = puppeteer.launch({ headless: true });
 
-// Home route
-app.get("/", (req, res) => {
-  res.sendFile("index.html", { root: "public" });
-});
+app.post("/fetch", async (req, res) => {
+  let { url } = req.body;
+  if (!url) return res.status(400).json({ error: "Missing 'url' field" });
 
-// Proxy route
-app.get("/proxy", async (req, res) => {
-  let targetUrl = req.query.url;
-  if (!targetUrl) return res.status(400).send("Missing URL");
-
-  // Add protocol if missing
-  if (!/^https?:\/\//i.test(targetUrl)) {
-    targetUrl = "https://" + targetUrl;
-  }
+  // auto prefix
+  if (!/^https?:\/\//i.test(url)) url = "https://" + url;
 
   try {
-    const response = await fetch(targetUrl);
-    const contentType = response.headers.get("content-type");
+    const browser = await browserPromise;
+    const page = await browser.newPage();
+    page.setDefaultNavigationTimeout(120000); // 2 min timeout
+    await page.goto(url, { waitUntil: "networkidle2" });
 
-    // If HTML, stream through Scramjet to rewrite links/images
-    if (contentType && contentType.includes("text/html")) {
-      res.setHeader("Content-Type", "text/html; charset=UTF-8");
+    const content = await page.content();
+    await page.close();
 
-      const htmlStream = StringStream.from(response.body);
-
-      htmlStream
-        .map(line => {
-          // Rewrite href/src to go through our proxy
-          return line.replace(
-            /(href|src)=["'](.*?)["']/gi,
-            (match, attr, url) => {
-              if (url.startsWith("data:") || url.startsWith("javascript:")) return match;
-              const absUrl = new URL(url, targetUrl).toString();
-              return `${attr}="/proxy?url=${encodeURIComponent(absUrl)}"`;
-            }
-          );
-        })
-        .pipe(res); // stream final HTML to client
-    } else {
-      // Non-HTML (images, scripts, etc.) just pipe directly
-      response.body.pipe(res);
-    }
+    res.send(content);
   } catch (err) {
-    res.status(500).send(`Error loading page: ${err.message}`);
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch page", details: err.message });
   }
 });
 
-// Optional search route (auto Google search if not a URL)
-app.get("/search", (req, res) => {
-  let query = req.query.q;
-  if (!query) return res.redirect("/");
-
-  // Check if it's a valid URL
-  if (!/^https?:\/\//i.test(query)) {
-    query = "https://www.google.com/search?q=" + encodeURIComponent(query);
-  }
-
-  res.redirect("/proxy?url=" + encodeURIComponent(query));
-});
-
-app.listen(PORT, () => console.log(`Euphoria running on port ${PORT}`));
+app.listen(3000, () => console.log("Server running on port 3000"));
