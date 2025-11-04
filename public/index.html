@@ -1,112 +1,157 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Euphoria Proxy</title>
 <style>
-  body {
-    margin: 0;
-    background: radial-gradient(circle at top, #111, #000);
-    color: #fff;
-    font-family: "Inter", sans-serif;
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
-    overflow: hidden;
-  }
-
-  #topbar {
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, sans-serif; }
+  body { background: #0e0e10; color: white; height: 100vh; display: flex; flex-direction: column; }
+  header {
     display: flex;
     align-items: center;
-    background: rgba(15,15,15,0.9);
-    padding: 8px;
+    justify-content: center;
     gap: 8px;
-    transition: opacity 0.3s ease, transform 0.3s ease;
+    padding: 8px;
+    background: rgba(20, 20, 25, 0.95);
+    border-bottom: 1px solid #222;
+    transition: opacity 0.3s;
     z-index: 10;
   }
-
-  button, input {
-    border: none;
-    outline: none;
-  }
-
-  .nav-btn {
-    background: #1c1c1c;
-    color: #ddd;
-    font-size: 18px;
-    border-radius: 8px;
-    width: 40px;
-    height: 40px;
-    cursor: pointer;
-    transition: background 0.2s, transform 0.1s;
-  }
-
-  .nav-btn:hover {
-    background: #333;
-    transform: scale(1.05);
-  }
-
-  #url {
+  header.hidden { opacity: 0; pointer-events: none; }
+  input {
     flex: 1;
     padding: 8px 12px;
+    border: none;
     border-radius: 8px;
-    background: #1e1e1e;
-    color: #fff;
-    font-size: 14px;
+    outline: none;
+    background: #1a1a1d;
+    color: white;
   }
-
-  iframe {
+  button {
+    background: #222;
+    color: white;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: background 0.2s;
+    width: 90px;
+  }
+  button:hover { background: #333; }
+  #browser {
     flex: 1;
+    background: white;
     border: none;
     width: 100%;
-    opacity: 0;
-    transition: opacity 0.5s ease;
+    height: calc(100vh - 50px);
   }
-
   #spinner {
     position: absolute;
     top: 50%;
     left: 50%;
-    width: 48px;
-    height: 48px;
-    border: 4px solid rgba(255,255,255,0.1);
-    border-top: 4px solid #09f;
-    border-radius: 50%;
     transform: translate(-50%, -50%);
+    border: 4px solid rgba(255,255,255,0.2);
+    border-top: 4px solid #fff;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
     animation: spin 1s linear infinite;
     display: none;
-    z-index: 5;
+    z-index: 50;
   }
-
   @keyframes spin {
-    to { transform: translate(-50%, -50%) rotate(360deg); }
+    0% { transform: translate(-50%, -50%) rotate(0deg); }
+    100% { transform: translate(-50%, -50%) rotate(360deg); }
   }
-
-  .hidden { opacity: 0; transform: translateY(-100%); pointer-events: none; }
 </style>
 </head>
 <body>
-
-<div id="topbar">
-  <button class="nav-btn" id="home">🏠</button>
-  <button class="nav-btn" id="back">⟵</button>
-  <button class="nav-btn" id="forward">⟶</button>
-  <button class="nav-btn" id="refresh">⟳</button>
-  <input type="text" id="url" placeholder="Enter URL or search...">
-  <button class="nav-btn" id="go">⏎</button>
-  <button class="nav-btn" id="fullscreen">⛶</button>
-</div>
-
-<div id="spinner"></div>
-<iframe id="browser"></iframe>
+  <header id="toolbar">
+    <button id="homeBtn">Home</button>
+    <input id="urlInput" type="text" placeholder="Enter URL or search..." />
+    <button id="goBtn">Go</button>
+    <button id="refreshBtn">Refresh</button>
+    <button id="fullscreenBtn">Fullscreen</button>
+  </header>
+  <div id="spinner"></div>
+  <iframe id="browser" sandbox="allow-scripts allow-forms allow-same-origin"></iframe>
 
 <script>
-const iframe = document.getElementById('browser');
-const urlInput = document.getElementById('url');
-const bar = document.getElementById('topbar');
-const spinner = document.getElementById('spinner');
+const urlInput = document.getElementById("urlInput");
+const goBtn = document.getElementById("goBtn");
+const refreshBtn = document.getElementById("refreshBtn");
+const fullscreenBtn = document.getElementById("fullscreenBtn");
+const browser = document.getElementById("browser");
+const spinner = document.getElementById("spinner");
+const toolbar = document.getElementById("toolbar");
+const homePage = "https://www.google.com";
 
-function formatInput(value) {
-  value = value.trim();
-  if (!value) return "https://www.googl
+function showSpinner(show) {
+  spinner.style.display = show ? "block" : "none";
+}
+
+function isValidURL(str) {
+  try { new URL(str); return true; }
+  catch { return false; }
+}
+
+function normalizeURL(input) {
+  if (!input.trim()) return homePage;
+  if (!input.includes(".") && !input.startsWith("http"))
+    return `https://www.google.com/search?q=${encodeURIComponent(input)}`;
+  if (!/^https?:\/\//i.test(input))
+    input = "https://" + input;
+  return input;
+}
+
+function navigate() {
+  const input = urlInput.value.trim();
+  const fullURL = normalizeURL(input);
+  const proxied = `/proxy?url=${encodeURIComponent(fullURL)}`;
+  showSpinner(true);
+  browser.src = proxied;
+}
+
+browser.addEventListener("load", () => showSpinner(false));
+browser.addEventListener("error", () => showSpinner(false));
+
+goBtn.onclick = navigate;
+urlInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") navigate();
+});
+
+refreshBtn.onclick = () => {
+  if (browser.src) {
+    showSpinner(true);
+    browser.src = browser.src;
+  }
+};
+
+homeBtn.onclick = () => {
+  urlInput.value = "";
+  showSpinner(true);
+  browser.src = `/proxy?url=${encodeURIComponent(homePage)}`;
+};
+
+fullscreenBtn.onclick = () => {
+  toolbar.classList.add("hidden");
+  browser.requestFullscreen();
+};
+document.addEventListener("fullscreenchange", () => {
+  if (!document.fullscreenElement) {
+    toolbar.classList.remove("hidden");
+  }
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && document.fullscreenElement) {
+    document.exitFullscreen();
+  }
+});
+
+// Load homepage on start
+browser.src = `/proxy?url=${encodeURIComponent(homePage)}`;
+</script>
+</body>
+</html>
