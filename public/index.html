@@ -67,15 +67,6 @@
     border-radius: 8px;
     padding: 8px;
     box-sizing: border-box;
-    transition: all 0.3s ease;
-  }
-
-  iframe {
-    width: 100%;
-    height: 100%;
-    border: none;
-    border-radius: 8px;
-    background: #fff;
   }
 
   /* Spinner overlay */
@@ -123,14 +114,12 @@
   <div class="spinner"></div>
 </div>
 
-<div id="content">
-  <iframe id="iframeContent" src=""></iframe>
-</div>
+<div id="content"></div>
 
 <script>
+const content = document.getElementById("content");
 const spinner = document.getElementById("spinnerOverlay");
 const searchInput = document.getElementById("searchInput");
-const iframe = document.getElementById("iframeContent");
 
 let historyStack = [];
 let historyIndex = -1;
@@ -145,15 +134,34 @@ function normalizeInput(input) {
   return input;
 }
 
-function loadURL(url, pushHistory = true) {
+async function loadURL(url, pushHistory = true) {
   spinner.style.display = "flex";
-  iframe.src = `/proxy?url=${encodeURIComponent(url)}`;
-  iframe.onload = () => spinner.style.display = "none";
+  content.innerHTML = "";
+  try {
+    const res = await fetch(`/proxy?url=${encodeURIComponent(url)}`);
+    if (!res.ok) throw new Error("Failed to load page");
 
-  if (pushHistory) {
-    historyStack = historyStack.slice(0, historyIndex + 1);
-    historyStack.push(url);
-    historyIndex++;
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let done = false;
+
+    while (!done) {
+      const { value, done: doneReading } = await reader.read();
+      done = doneReading;
+      if (value) {
+        content.insertAdjacentHTML("beforeend", decoder.decode(value));
+      }
+    }
+
+    if (pushHistory) {
+      historyStack = historyStack.slice(0, historyIndex + 1);
+      historyStack.push(url);
+      historyIndex++;
+    }
+  } catch (e) {
+    content.innerHTML = `<h2 style="color:red;text-align:center;margin-top:50px;">Error loading page:<br>${e.message}</h2>`;
+  } finally {
+    spinner.style.display = "none";
   }
 }
 
