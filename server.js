@@ -13,6 +13,7 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.static(path.join(__dirname, "public")));
 
+// Check if input is a URL
 function isUrl(input) {
   try {
     new URL(input.startsWith("http") ? input : `https://${input}`);
@@ -22,7 +23,7 @@ function isUrl(input) {
   }
 }
 
-// Auto-search route
+// Auto-search / redirect
 app.get("/search", (req, res) => {
   const q = req.query.q;
   if (!q) return res.redirect("/");
@@ -30,7 +31,7 @@ app.get("/search", (req, res) => {
   res.redirect(`/proxy?url=${encodeURIComponent(url)}`);
 });
 
-// Proxy route
+// Proxy streaming
 app.get("/proxy", async (req, res) => {
   const { url } = req.query;
   if (!url) return res.status(400).send("Missing URL");
@@ -74,5 +75,5 @@ app.get("/proxy", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Streaming proxy server running on port ${PORT}`);
+  console.log(`Euphoria streaming proxy running on port ${PORT}`);
 });
