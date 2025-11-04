@@ -1,17 +1,76 @@
+// server.js
+import express from "express";
+import fetch from "node-fetch";
+import fs from "fs";
+import path from "path";
+import cors from "cors";
+import pkg from "scramjet";
+const { StringStream } = pkg;
 import cookie from "cookie";
 
-// In-memory session store
-const SESSIONS = new Map();
+const app = express(); // <-- ensure app is defined
+app.use(cors());
+app.use(express.static("public"));
 
+const PORT = process.env.PORT || 3000;
+const CACHE_DIR = path.resolve("./cache");
+if (!fs.existsSync(CACHE_DIR)) fs.mkdirSync(CACHE_DIR);
+
+const MEM_CACHE = new Map();
+const CACHE_TTL = 1000 * 60 * 10; // 10 minutes
+
+function cacheKey(url) {
+  return Buffer.from(url).toString("base64url");
+}
+function readDiskCache(url) {
+  try {
+    const p = path.join(CACHE_DIR, cacheKey(url));
+    if (!fs.existsSync(p)) return null;
+    const raw = fs.readFileSync(p, "utf8");
+    const obj = JSON.parse(raw);
+    if (Date.now() - obj.t > CACHE_TTL) {
+      fs.unlinkSync(p);
+      return null;
+    }
+    return obj.html;
+  } catch (e) { return null; }
+}
+function writeDiskCache(url, html) {
+  try {
+    const p = path.join(CACHE_DIR, cacheKey(url));
+    fs.writeFileSync(p, JSON.stringify({ t: Date.now(), html }), "utf8");
+  } catch (e) { /* ignore */ }
+}
+function getCached(url) {
+  const m = MEM_CACHE.get(url);
+  if (m && (Date.now() - m.t) < CACHE_TTL) return m.html;
+  const disk = readDiskCache(url);
+  if (disk) {
+    MEM_CACHE.set(url, { html: disk, t: Date.now() });
+    return disk;
+  }
+  return null;
+}
+function setCached(url, html) {
+  MEM_CACHE.set(url, { html, t: Date.now() });
+  writeDiskCache(url, html);
+}
+
+// Helper to ensure absolute urls
+function toAbsolute(url, base) {
+  try { return new URL(url, base).href; } catch { return null; }
+}
+
+// In-memory session store for cookies
+const SESSIONS = new Map();
 function getSession(req) {
   let sid = req.headers["x-euphoria-session"];
-  if (!sid) {
-    sid = Math.random().toString(36).slice(2);
-  }
+  if (!sid) sid = Math.random().toString(36).slice(2);
   if (!SESSIONS.has(sid)) SESSIONS.set(sid, { cookies: new Map() });
   return { sid, data: SESSIONS.get(sid) };
 }
 
+// Proxy endpoint
 app.get("/proxy", async (req, res) => {
   const raw = req.query.url;
   if (!raw) return res.status(400).send("Missing url");
@@ -30,7 +89,6 @@ app.get("/proxy", async (req, res) => {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15000);
 
-    // Build cookie header for the target site
     let cookieHeader = "";
     for (const [name, val] of session.data.cookies.entries()) {
       cookieHeader += `${name}=${val}; `;
@@ -48,7 +106,7 @@ app.get("/proxy", async (req, res) => {
 
     clearTimeout(timeout);
 
-    // Capture Set-Cookie headers from proxied site
+    // Capture Set-Cookie headers
     const setCookies = response.headers.raw()["set-cookie"] || [];
     setCookies.forEach(sc => {
       const parsed = cookie.parse(sc);
@@ -72,11 +130,10 @@ app.get("/proxy", async (req, res) => {
 
     let html = await response.text();
 
-    // --- Rewrite and fix HTML (same as before) ---
     html = html.replace(/<meta[^>]*http-equiv=["']?content-security-policy["']?[^>]*>/gi, "");
     html = html.replace(/\sintegrity=(["'])(.*?)\1/gi, "");
     html = html.replace(/\scrossorigin=(["'])(.*?)\1/gi, "");
-    html = html.replace(/<head([^>]*)>/i, (m,g) => `<head${g}><base href="${target}"><style>img,video{max-width:100%;height:auto;}body{margin:0;background:transparent;}</style>`);
+    html = html.replace(/<head([^>]*)>/i, (m,g) => `<head${g}><base href="${target}"><style>img,video{max-width:100%;height:auto;}body{margin:0;background:#111;color:#fff;}</style>`);
 
     html = html.replace(/(href|src|srcset)=["']([^"']*)["']/gi, (m, attr, val) => {
       if (!val || /^(javascript:|data:|#)/i.test(val) || val.startsWith("/proxy?url=")) return m;
@@ -99,3 +156,5 @@ app.get("/proxy", async (req, res) => {
     res.status(500).send(`<div style="padding:2rem;color:#fff;background:#111;font-family:system-ui;">Proxy error: ${(err && err.message) || String(err)}</div>`);
   }
 });
+
+app.listen(PORT, () => console.log(`Euphoria Scramjet proxy listening on ${PORT}`));
