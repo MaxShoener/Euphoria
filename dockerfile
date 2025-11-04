@@ -1,11 +1,22 @@
-FROM node:20-alpine
+FROM node:20-slim
 
+# Install Chromium
+RUN apt-get update && apt-get install -y chromium && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
 WORKDIR /app
 
-COPY package*.json ./
-RUN npm install --production
+# Copy package files
+COPY package.json package-lock.json* ./
 
+# Install dependencies
+RUN npm install
+
+# Copy the rest of the app
 COPY . .
 
+# Expose port
 EXPOSE 3000
+
+# Run the server
 CMD ["node", "server.js"]
