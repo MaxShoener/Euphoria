@@ -2,117 +2,118 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Euphoria</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Euphoria Proxy</title>
 <style>
-html, body { margin:0; padding:0; height:100%; font-family:sans-serif; display:flex; flex-direction:column; background:#111; color:#fff; }
-#topbar { display:flex; align-items:center; gap:0.3rem; padding:0.3rem; background:rgba(30,30,40,0.9); transition:0.3s; }
-#topbar.hidden { display:none; }
-button { flex:0 0 40px; height:40px; border:none; border-radius:6px; background:#4cafef; color:white; cursor:pointer; display:flex; align-items:center; justify-content:center; font-weight:600; transition:0.2s; }
-button:hover { background:#3690d9; }
-input { flex:1; padding:0.5rem; border-radius:6px; border:none; background:#3e3e50; color:#fff; font-size:1rem; }
-input:focus { outline:none; box-shadow:0 0 5px #4cafef; }
-#browser { flex:1; overflow:auto; position:relative; background:#fff; color:#000; }
-#browser * { max-width:100%; word-wrap:break-word; }
+  body {
+    margin: 0;
+    background: #0d0d0d;
+    color: #fff;
+    font-family: "Inter", sans-serif;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  #topbar {
+    display: flex;
+    align-items: center;
+    background: #111;
+    padding: 8px;
+    gap: 8px;
+    transition: all 0.3s ease;
+    z-index: 5;
+  }
+
+  button, input {
+    border: none;
+    outline: none;
+  }
+
+  .nav-btn {
+    background: #1e1e1e;
+    color: #ccc;
+    font-size: 16px;
+    border-radius: 8px;
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .nav-btn:hover {
+    background: #333;
+  }
+
+  #url {
+    flex: 1;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: #1e1e1e;
+    color: #fff;
+  }
+
+  iframe {
+    flex: 1;
+    border: none;
+    width: 100%;
+    background: white;
+  }
+
+  .hidden {
+    transform: translateY(-100%);
+  }
 </style>
 </head>
 <body>
 
-<header id="topbar">
-  <button title="Fullscreen" onclick="toggleFullscreen()">⛶</button>
-  <button title="Back" onclick="goBack()">◀</button>
-  <button title="Forward" onclick="goForward()">▶</button>
-  <button title="Refresh" onclick="refreshPage()">⟳</button>
-  <button title="Home" onclick="goHome()">🏠</button>
-  <input id="url" type="text" placeholder="Enter URL or search term" onkeypress="handleEnter(event)">
-  <button title="Go" onclick="navigate()">Go</button>
-</header>
+<div id="topbar">
+  <button class="nav-btn" id="home">🏠</button>
+  <button class="nav-btn" id="back">⟵</button>
+  <button class="nav-btn" id="forward">⟶</button>
+  <button class="nav-btn" id="refresh">⟳</button>
+  <input type="text" id="url" placeholder="Enter URL or search...">
+  <button class="nav-btn" id="go">Go</button>
+  <button class="nav-btn" id="fullscreen">⛶</button>
+</div>
 
-<div id="browser">Welcome to Euphoria!</div>
+<iframe id="browser"></iframe>
 
 <script>
-const browser = document.getElementById("browser");
-const urlInput = document.getElementById("url");
-const topbar = document.getElementById("topbar");
-let historyStack = [];
-let historyIndex = -1;
-let fullscreen = false;
+const iframe = document.getElementById('browser');
+const urlInput = document.getElementById('url');
+const bar = document.getElementById('topbar');
 
-function toggleFullscreen() {
-    fullscreen = !fullscreen;
-    topbar.classList.toggle('hidden', fullscreen);
+function formatInput(value) {
+  value = value.trim();
+  if (!value) return "https://www.google.com";
+  if (!value.includes('.') && !value.startsWith('http')) {
+    return "https://www.google.com/search?q=" + encodeURIComponent(value);
+  }
+  if (!/^https?:\/\//i.test(value)) {
+    value = "https://" + value;
+  }
+  return value;
 }
-document.addEventListener('keydown', e => { 
-    if(e.key === "Escape" && fullscreen) toggleFullscreen(); 
+
+function loadURL(u) {
+  const finalURL = formatInput(u);
+  urlInput.value = finalURL;
+  iframe.src = "/proxy?url=" + encodeURIComponent(finalURL);
+}
+
+document.getElementById('go').onclick = () => loadURL(urlInput.value);
+urlInput.addEventListener('keydown', e => { if (e.key === 'Enter') loadURL(urlInput.value); });
+document.getElementById('home').onclick = () => loadURL('https://www.google.com');
+document.getElementById('refresh').onclick = () => iframe.contentWindow.location.reload();
+document.getElementById('fullscreen').onclick = () => {
+  bar.classList.toggle('hidden');
+};
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') bar.classList.remove('hidden');
 });
 
-function normalizeURL(input) {
-    input = input.trim();
-    if(!input) return "https://www.google.com";
-    if(!/^https?:\/\//i.test(input)) {
-        if(input.includes(".")) return "https://" + input;
-        return `https://www.google.com/search?q=${encodeURIComponent(input)}`;
-    }
-    return input;
-}
-
-async function navigate() {
-    let url = normalizeURL(urlInput.value);
-    if(historyIndex === -1 || historyStack[historyIndex] !== url) {
-        historyStack = historyStack.slice(0, historyIndex + 1);
-        historyStack.push(url);
-        historyIndex++;
-    }
-    urlInput.value = url;
-    browser.textContent = "Loading…";
-
-    try {
-        const res = await fetch(`/proxy?url=${encodeURIComponent(url)}`);
-        if(res.status >= 300 && res.status < 400 && res.headers.get('location')) {
-            urlInput.value = new URL(res.headers.get('location'), url).href;
-            navigate();
-            return;
-        }
-        const html = await res.text();
-        browser.innerHTML = html;
-
-        // Rewrite links and resources to proxy
-        browser.querySelectorAll('[href], [src]').forEach(el => {
-            const attr = el.hasAttribute('href') ? 'href' : 'src';
-            const link = el.getAttribute(attr);
-            if(link && !link.startsWith('javascript:')) {
-                el.setAttribute(attr, `/proxy?url=${encodeURIComponent(new URL(link, url).href)}`);
-                if(attr==='href') el.addEventListener('click', e => {
-                    e.preventDefault();
-                    urlInput.value = new URL(link, url).href;
-                    navigate();
-                });
-            }
-        });
-
-        // Rewrite forms to proxy
-        browser.querySelectorAll('form').forEach(form => {
-            form.addEventListener('submit', e => {
-                e.preventDefault();
-                const action = form.action || url;
-                const formData = new FormData(form);
-                const query = new URLSearchParams(formData).toString();
-                urlInput.value = action.includes("?") ? `${action}&${query}` : `${action}?${query}`;
-                navigate();
-            });
-        });
-
-    } catch(err) {
-        browser.textContent = "Error loading page: " + err.message;
-    }
-}
-
-// Navigation buttons
-function goBack() { if(historyIndex>0){ historyIndex--; urlInput.value=historyStack[historyIndex]; navigate(); } }
-function goForward() { if(historyIndex<historyStack.length-1){ historyIndex++; urlInput.value=historyStack[historyIndex]; navigate(); } }
-function refreshPage() { if(historyIndex>=0) navigate(); }
-function goHome() { urlInput.value="https://www.google.com"; navigate(); }
-function handleEnter(e) { if(e.key==="Enter") navigate(); }
-
+loadURL('https://www.google.com');
 </script>
 </body>
 </html>
