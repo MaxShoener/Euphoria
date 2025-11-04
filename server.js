@@ -12,7 +12,7 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Serve static files from public/
+// Serve static files
 app.use(express.static(path.join(__dirname, "public")));
 
 // Serve index.html at root
@@ -20,7 +20,7 @@ app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-// Optimized proxy route
+// Proxy route
 app.get("/proxy", async (req, res) => {
   const target = req.query.url;
   if (!target) return res.status(400).send("Missing 'url'");
@@ -41,9 +41,32 @@ app.get("/proxy", async (req, res) => {
     res.set("content-type", contentType);
 
     if (contentType.includes("text/html")) {
-      // Stream HTML line by line and rewrite links
+      // Stream HTML line by line
       const stream = new StringStream(response.body);
 
       stream
         .map(line => {
-          return line.replace(/(href|src)=["']
+          // Rewrite href/src links to go through the proxy
+          return line.replace(/(href|src)=["'](.*?)["']/gi, (match, attr, link) => {
+            if (!link || link.startsWith("javascript:")) return match;
+            try {
+              const abs = new URL(link, target).href;
+              return `${attr}="/proxy?url=${encodeURIComponent(abs)}"`;
+            } catch {
+              return match;
+            }
+          });
+        })
+        .pipe(res);
+
+    } else {
+      // Stream images, JS, CSS, etc. directly
+      response.body.pipe(res);
+    }
+  } catch (err) {
+    console.error("Proxy error:", err);
+    res.status(500).send("Error loading page");
+  }
+});
+
+app.listen(PORT, () => console.log(`Euphoria proxy running on port ${PORT}`));
