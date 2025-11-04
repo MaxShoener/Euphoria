@@ -14,7 +14,7 @@ app.get("/proxy", async (req, res) => {
 
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10000); // faster timeout
+    const timeout = setTimeout(() => controller.abort(), 10000);
 
     const response = await fetch(targetURL, {
       redirect: "manual",
@@ -27,7 +27,6 @@ app.get("/proxy", async (req, res) => {
 
     clearTimeout(timeout);
 
-    // Handle redirects
     if (response.status >= 300 && response.status < 400 && response.headers.get("location")) {
       const redirectURL = new URL(response.headers.get("location"), targetURL).href;
       return res.redirect(`/proxy?url=${encodeURIComponent(redirectURL)}`);
@@ -40,15 +39,13 @@ app.get("/proxy", async (req, res) => {
     if (contentType.includes("text/html")) {
       let html = await response.text();
 
-      // Rewrite resources URLs
+      // Rewrite all resource URLs to proxy
       html = html.replace(/(href|src|srcset)=["'](.*?)["']/gi, (match, attr, url) => {
         if (!url || url.startsWith("javascript:") || url.startsWith("/proxy?url=")) return match;
         try {
           const absolute = new URL(url, targetURL).href;
           return `${attr}="/proxy?url=${encodeURIComponent(absolute)}"`;
-        } catch {
-          return match;
-        }
+        } catch { return match; }
       });
 
       // Stream progressively
@@ -56,7 +53,6 @@ app.get("/proxy", async (req, res) => {
         .pipe(res)
         .on("finish", () => res.end())
         .on("error", () => res.end());
-
     } else {
       const buffer = await response.arrayBuffer();
       res.send(Buffer.from(buffer));
