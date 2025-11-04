@@ -1,4 +1,3 @@
-// server.js
 import express from 'express';
 import puppeteer from 'puppeteer-core';
 import path from 'path';
@@ -13,34 +12,31 @@ const PORT = process.env.PORT || 3000;
 // Serve static files
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Puppeteer browser instance
 let browser;
-
-// Launch Puppeteer Core with system Chromium
 (async () => {
   browser = await puppeteer.launch({
-    executablePath: '/usr/bin/chromium-browser', // make sure Chromium is installed
+    executablePath: '/usr/bin/chromium-browser', // System Chromium path
     headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
   });
 })();
 
-// Helper to render full page
 async function renderPage(url) {
   if (!browser) throw new Error('Browser not initialized');
   const page = await browser.newPage();
   await page.setViewport({ width: 1366, height: 768 });
   await page.goto(url, { waitUntil: 'networkidle2', timeout: 0 });
-  const content = await page.content();
+  const html = await page.content();
   await page.close();
-  return content;
+  return html;
 }
 
-// Home page
+// Routes
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Search proxy
 app.get('/search', async (req, res) => {
   const query = req.query.q;
   if (!query) return res.redirect('/');
@@ -53,7 +49,6 @@ app.get('/search', async (req, res) => {
   }
 });
 
-// Arbitrary URL proxy
 app.get('/url', async (req, res) => {
   const url = req.query.url;
   if (!url) return res.redirect('/');
@@ -65,7 +60,7 @@ app.get('/url', async (req, res) => {
   }
 });
 
-// Clean shutdown
+// Close browser on exit
 process.on('exit', async () => {
   if (browser) await browser.close();
 });
