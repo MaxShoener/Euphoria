@@ -20,14 +20,27 @@ app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
+// Helper: determine if input is a URL or search query
+function makeTarget(input) {
+  if (!input) return "https://www.google.com";
+  try {
+    return new URL(input).href;
+  } catch {
+    return `https://www.google.com/search?q=${encodeURIComponent(input)}`;
+  }
+}
+
 // Proxy route
 app.get("/proxy", async (req, res) => {
-  const target = req.query.url;
-  if (!target) return res.status(400).send("Missing 'url'");
+  const input = req.query.url || req.query.q;
+  const target = makeTarget(input);
 
   try {
     const response = await fetch(target, {
-      headers: { "User-Agent": "Mozilla/5.0 (Euphoria Browser)" },
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+      },
       redirect: "manual",
     });
 
@@ -41,12 +54,10 @@ app.get("/proxy", async (req, res) => {
     res.set("content-type", contentType);
 
     if (contentType.includes("text/html")) {
-      // Stream HTML line by line
       const stream = new StringStream(response.body);
 
       stream
         .map(line => {
-          // Rewrite href/src links to go through the proxy
           return line.replace(/(href|src)=["'](.*?)["']/gi, (match, attr, link) => {
             if (!link || link.startsWith("javascript:")) return match;
             try {
@@ -58,11 +69,10 @@ app.get("/proxy", async (req, res) => {
           });
         })
         .pipe(res);
-
     } else {
-      // Stream images, JS, CSS, etc. directly
       response.body.pipe(res);
     }
+
   } catch (err) {
     console.error("Proxy error:", err);
     res.status(500).send("Error loading page");
