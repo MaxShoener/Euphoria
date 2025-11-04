@@ -13,7 +13,7 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.static(path.join(__dirname, "public")));
 
-// Check if input is a URL
+// Utility to check if input is a URL
 function isUrl(input) {
   try {
     new URL(input.startsWith("http") ? input : `https://${input}`);
@@ -23,7 +23,7 @@ function isUrl(input) {
   }
 }
 
-// Auto-search / redirect
+// Auto search / redirect
 app.get("/search", (req, res) => {
   const q = req.query.q;
   if (!q) return res.redirect("/");
@@ -45,8 +45,9 @@ app.get("/proxy", async (req, res) => {
 
       const html = await response.text();
 
-      const rewritten = await StringStream.from(html)
-        .map(line =>
+      // Stream HTML line by line
+      const stream = StringStream.from(html)
+        .map(line => 
           line.replace(/(href|src|action)=["']([^"']+)["']/gi, (match, attr, val) => {
             if (!val) return match;
             if (val.startsWith("http") || val.startsWith("//")) {
@@ -65,8 +66,9 @@ app.get("/proxy", async (req, res) => {
         )
         .join("\n");
 
-      res.send(rewritten);
+      await stream.pipe(res);
     } else {
+      // Stream other resources (images, JS, CSS) directly
       response.body.pipe(res);
     }
   } catch (err) {
