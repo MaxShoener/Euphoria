@@ -1,101 +1,89 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <title>Scramjet Proxy UI</title>
-    <style>
-      body {
-        background: #0a0a0a;
-        color: white;
-        margin: 0;
-        font-family: Arial, sans-serif;
-        overflow: hidden;
-      }
-      .top-oval {
-        position: fixed;
-        top: 20px;
-        left: 50%;
-        transform: translateX(-50%);
-        background: #1a1a1a;
-        width: 60%;
-        height: 60px;
-        border-radius: 50px;
-        display: flex;
-        align-items: center;
-        padding: 0 25px;
-        box-shadow: 0 0 20px #000;
-      }
-      .top-oval input {
-        flex: 1;
-        border: none;
-        background: transparent;
-        color: white;
-        font-size: 1.1em;
-        outline: none;
-      }
-      iframe {
-        position: absolute;
-        top: 100px;
-        left: 0;
-        width: 100%;
-        height: calc(100vh - 100px);
-        border: none;
-      }
-      .buttons {
-        position: fixed;
-        top: 30px;
-        right: 40px;
-        display: flex;
-        gap: 10px;
-      }
-      button {
-        background: #333;
-        border: none;
-        color: white;
-        padding: 8px 14px;
-        border-radius: 20px;
-        cursor: pointer;
-      }
-      button:hover {
-        background: #555;
-      }
-    </style>
-  </head>
-  <body>
-    <div class="top-oval">
-      <input
-        id="urlInput"
-        type="text"
-        placeholder="Enter a URL (e.g. https://google.com)"
-      />
-    </div>
-    <div class="buttons">
-      <button id="backBtn">←</button>
-      <button id="forwardBtn">→</button>
-      <button id="homeBtn">🏠</button>
-    </div>
-    <iframe id="viewer"></iframe>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Euphoria</title>
+  <style>
+    :root { --bg: #111; --bar: #111; --btn: #222; --btn-hover:#333; --accent:#2e7d32; color-scheme: dark; }
+    html,body { height:100%; margin:0; background:var(--bg); font-family:system-ui,Arial,sans-serif; color:#fff; }
+    /* top oval launcher (initial page only) */
+    #launcher {
+      position: fixed;
+      top: 18px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 84%;
+      max-width: 1100px;
+      background: var(--bar);
+      border-radius: 30px;
+      padding: 10px 14px;
+      display:flex;
+      align-items:center;
+      gap:10px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+      z-index:1000;
+    }
+    #launcher button { min-width:46px; padding:8px 12px; border-radius:12px; border:0; background:var(--btn); color:#fff; cursor:pointer; }
+    #launcher button:hover { background: var(--btn-hover); }
+    #launcher input { flex:1; padding:10px 12px; border-radius:14px; border:0; background:#222; color:#fff; outline:none; font-size:15px; }
+    #info { position: fixed; bottom: 10px; left: 10px; color:#888; font-size:13px; }
+    /* when proxied page is loaded the UI is injected server-side into that HTML */
+  </style>
+</head>
+<body>
+  <div id="launcher" role="search" aria-label="Euphoria launcher">
+    <button id="back">◀</button>
+    <button id="forward">▶</button>
+    <button id="refresh">⟳</button>
+    <button id="home">🏠</button>
+    <input id="q" placeholder="Enter URL or search (e.g. google.com) — press Enter" />
+    <button id="go" style="background:var(--accent)">Go</button>
+    <button id="full">⛶</button>
+  </div>
 
-    <script>
-      const input = document.getElementById("urlInput");
-      const iframe = document.getElementById("viewer");
+  <div id="info">Tip: type “xbox.com” or “google.com” and press Enter. Logins are preserved per session.</div>
 
-      function load(url) {
-        if (!url.startsWith("http")) url = "https://" + url;
-        iframe.src = "/proxy?url=" + encodeURIComponent(url);
+  <script>
+    const q = document.getElementById('q');
+    const go = document.getElementById('go');
+    const back = document.getElementById('back');
+    const forward = document.getElementById('forward');
+    const refresh = document.getElementById('refresh');
+    const home = document.getElementById('home');
+    const full = document.getElementById('full');
+
+    function normalize(v){
+      v = (v||'').trim();
+      if(!v) return 'https://www.google.com';
+      try { new URL(v); return v; } catch(e){}
+      if (v.indexOf(' ') >= 0) return 'https://www.google.com/search?q=' + encodeURIComponent(v);
+      return 'https://' + v;
+    }
+
+    function goTo(val){
+      const u = normalize(val);
+      // navigate browser to proxied page: server will inject the UI into the page
+      window.location.href = '/load?url=' + encodeURIComponent(u);
+    }
+
+    go.onclick = () => goTo(q.value);
+    q.addEventListener('keydown', (e) => { if (e.key === 'Enter') goTo(q.value); });
+
+    back.onclick = () => window.history.back();
+    forward.onclick = () => window.history.forward();
+    refresh.onclick = () => window.location.reload();
+    home.onclick = () => { q.value=''; window.location.href = '/'; };
+    full.onclick = () => { if (!document.fullscreenElement) document.documentElement.requestFullscreen(); else document.exitFullscreen(); };
+
+    // if loaded from /load?url=..., prefill the input with that url (so users can edit)
+    (function(){
+      const params = new URLSearchParams(window.location.search);
+      const u = params.get('url');
+      if(u) {
+        try { q.value = decodeURIComponent(u); } catch(e) { q.value = u; }
       }
-
-      input.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") load(input.value);
-      });
-
-      document.getElementById("homeBtn").onclick = () => {
-        iframe.src = "";
-        input.value = "";
-      };
-      document.getElementById("backBtn").onclick = () => window.history.back();
-      document.getElementById("forwardBtn").onclick = () =>
-        window.history.forward();
-    </script>
-  </body>
+    })();
+  </script>
+</body>
 </html>
