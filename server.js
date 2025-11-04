@@ -11,7 +11,6 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Serve static index.html
 app.use(express.static(path.join(__dirname, "public")));
 
 function isUrl(input) {
@@ -23,7 +22,7 @@ function isUrl(input) {
   }
 }
 
-// Auto-search redirect
+// Auto-search route
 app.get("/search", (req, res) => {
   const q = req.query.q;
   if (!q) return res.redirect("/");
@@ -45,7 +44,6 @@ app.get("/proxy", async (req, res) => {
 
       const html = await response.text();
 
-      // Rewrite href/src/action links
       const rewritten = await StringStream.from(html)
         .map(line =>
           line.replace(/(href|src|action)=["']([^"']+)["']/gi, (match, attr, val) => {
@@ -66,32 +64,8 @@ app.get("/proxy", async (req, res) => {
         )
         .join("\n");
 
-      // Inject spinner and minimal UI styles
-      const finalHTML = rewritten.replace(
-        /<body([^>]*)>/i,
-        `<body$1>
-        <div id="spinner" style="position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(255,255,255,0.8);display:flex;align-items:center;justify-content:center;z-index:9999;">
-          <div class="loader"></div>
-        </div>
-        <style>
-          .loader {
-            border: 8px solid #f3f3f3;
-            border-top: 8px solid #444;
-            border-radius: 50%;
-            width: 50px;
-            height: 50px;
-            animation: spin 1s linear infinite;
-          }
-          @keyframes spin {0% {transform: rotate(0deg);} 100% {transform: rotate(360deg);}}
-        </style>
-        <script>
-          window.addEventListener('load',()=>{const s=document.getElementById('spinner');if(s)s.style.display='none';});
-        </script>`
-      );
-
-      res.send(finalHTML);
+      res.send(rewritten);
     } else {
-      // Pass through assets (JS, images, CSS)
       response.body.pipe(res);
     }
   } catch (err) {
