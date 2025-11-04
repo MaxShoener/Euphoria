@@ -7,7 +7,7 @@
 <style>
   body {
     margin: 0;
-    font-family: system-ui, sans-serif;
+    font-family: Arial, sans-serif;
     background: #111;
     color: #fff;
     overflow: hidden;
@@ -18,7 +18,7 @@
     display: flex;
     align-items: center;
     padding: 6px 12px;
-    background: #222; /* solid dark color */
+    background: #222;
     border-radius: 24px;
     margin: 8px;
     position: fixed;
@@ -30,7 +30,7 @@
   }
 
   #topbar button {
-    background: #333;
+    background: #444;
     border: none;
     color: white;
     padding: 8px 14px;
@@ -39,45 +39,35 @@
     cursor: pointer;
     font-size: 14px;
     flex-shrink: 0;
-    min-width: 50px;
-    text-align: center;
   }
-
-  #topbar button:hover {
-    background: #444;
-  }
+  #topbar button:hover { background: #666; }
 
   #searchInput {
     flex: 1;
     padding: 8px 12px;
-    border-radius: 16px;
+    border-radius: 12px;
     border: none;
     font-size: 14px;
     margin-right: 6px;
     background: #333;
     color: white;
   }
+  #searchInput::placeholder { color: #bbb; }
 
-  #searchInput::placeholder {
-    color: #bbb;
-  }
-
-  /* Content container */
   #content {
     position: absolute;
-    top: 56px;
+    top: 52px;
     bottom: 0;
     left: 0;
     right: 0;
     overflow: auto;
     background: #fff;
-    border-radius: 0;
+    border-radius: 8px;
   }
 
-  /* Spinner overlay */
   #spinnerOverlay {
     position: absolute;
-    top: 56px;
+    top: 52px;
     left: 0;
     right: 0;
     bottom: 0;
@@ -97,28 +87,17 @@
     animation: spin 1s linear infinite;
   }
 
-  @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-  }
+  @keyframes spin { 0%{transform:rotate(0deg);}100%{transform:rotate(360deg);} }
 </style>
 </head>
 <body>
 
 <div id="topbar">
-  <button id="backBtn">◀</button>
-  <button id="forwardBtn">▶</button>
-  <button id="refreshBtn">⟳</button>
-  <button id="homeBtn">🏠</button>
-  <button id="fullscreenBtn">⛶</button>
   <input type="text" id="searchInput" placeholder="Enter URL or search...">
   <button id="searchBtn">🔍</button>
 </div>
 
-<div id="spinnerOverlay">
-  <div class="spinner"></div>
-</div>
-
+<div id="spinnerOverlay"><div class="spinner"></div></div>
 <div id="content"></div>
 
 <script>
@@ -126,67 +105,32 @@ const content = document.getElementById("content");
 const spinner = document.getElementById("spinnerOverlay");
 const searchInput = document.getElementById("searchInput");
 
-let historyStack = [];
-let historyIndex = -1;
-
-// Normalize input: URLs or search
 function normalizeInput(input) {
   input = input.trim();
   if (!input) return "https://www.google.com";
-  try {
-    const url = new URL(input);
-    return url.href;
-  } catch {
+  if (!input.startsWith("http")) {
     if (input.includes(" ")) return `https://www.google.com/search?q=${encodeURIComponent(input)}`;
     return "https://" + input;
   }
+  return input;
 }
 
-// Load URL via proxy
-async function loadURL(url, pushHistory = true) {
+async function loadURL(url) {
   spinner.style.display = "flex";
   try {
     const res = await fetch(`/proxy?url=${encodeURIComponent(url)}`);
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
     const html = await res.text();
     content.innerHTML = html;
-
-    if (pushHistory) {
-      historyStack = historyStack.slice(0, historyIndex + 1);
-      historyStack.push(url);
-      historyIndex++;
-    }
   } catch (e) {
-    content.innerHTML = `<h2 style="color:red;text-align:center;margin-top:50px;">Error loading page:<br>${e.message}</h2>`;
+    content.innerHTML = `<div style="padding:2rem;color:#fff;background:#111;">Error loading page: ${e.message}</div>`;
   } finally {
     spinner.style.display = "none";
   }
 }
 
-// Navigation buttons
-document.getElementById("backBtn").onclick = () => {
-  if (historyIndex > 0) loadURL(historyStack[--historyIndex], false);
-};
-document.getElementById("forwardBtn").onclick = () => {
-  if (historyIndex < historyStack.length - 1) loadURL(historyStack[++historyIndex], false);
-};
-document.getElementById("refreshBtn").onclick = () => {
-  if (historyIndex >= 0) loadURL(historyStack[historyIndex], false);
-};
-document.getElementById("homeBtn").onclick = () => loadURL("https://www.google.com");
-document.getElementById("fullscreenBtn").onclick = () => {
-  if (!document.fullscreenElement) document.documentElement.requestFullscreen();
-  else document.exitFullscreen();
-};
-
-// Search
-function doSearch() {
-  const input = searchInput.value;
-  loadURL(normalizeInput(input));
-}
-
-document.getElementById("searchBtn").onclick = doSearch;
-searchInput.addEventListener("keydown", e => { if (e.key === "Enter") doSearch(); });
+document.getElementById("searchBtn").onclick = () => loadURL(normalizeInput(searchInput.value));
+searchInput.addEventListener("keydown", e => { if (e.key === "Enter") loadURL(normalizeInput(searchInput.value)); });
 
 // Initial load
 loadURL("https://www.google.com");
