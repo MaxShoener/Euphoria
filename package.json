@@ -1,12 +1,13 @@
 {
-  "name": "euphoria",
+  "name": "euphoria-proxy",
   "version": "1.0.0",
   "type": "module",
+  "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
     "express": "^4.18.2",
-    "puppeteer": "^24.4.0"
+    "puppeteer-core": "^25.10.0"
   }
 }
