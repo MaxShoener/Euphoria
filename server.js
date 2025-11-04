@@ -1,68 +1,45 @@
-import express from 'express';
-import puppeteer from 'puppeteer-core';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import express from "express";
+import puppeteer from "puppeteer";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Serve static files
-app.use(express.static(path.join(__dirname, 'public')));
+// Serve static files (index.html)
+app.use(express.static("public"));
 
-// Puppeteer browser instance
 let browser;
-(async () => {
-  browser = await puppeteer.launch({
-    executablePath: '/usr/bin/chromium-browser', // System Chromium path
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox']
-  });
-})();
 
-async function renderPage(url) {
-  if (!browser) throw new Error('Browser not initialized');
-  const page = await browser.newPage();
-  await page.setViewport({ width: 1366, height: 768 });
-  await page.goto(url, { waitUntil: 'networkidle2', timeout: 0 });
-  const html = await page.content();
-  await page.close();
-  return html;
+async function getBrowser() {
+  if (!browser) {
+    browser = await puppeteer.launch({
+      headless: true,
+      args: ["--no-sandbox", "--disable-setuid-sandbox"]
+    });
+  }
+  return browser;
 }
 
-// Routes
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-app.get('/search', async (req, res) => {
-  const query = req.query.q;
-  if (!query) return res.redirect('/');
-  const url = query.startsWith('http') ? query : `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+// Proxy route to render websites
+app.get("/proxy", async (req, res) => {
   try {
-    const html = await renderPage(url);
-    res.send(html);
-  } catch (e) {
-    res.status(500).send(`<h2>Error loading page</h2><p>${e.message}</p>`);
+    let url = req.query.url;
+    if (!url) return res.status(400).send("Missing URL");
+    if (!url.startsWith("http")) url = "https://" + url;
+
+    const browser = await getBrowser();
+    const page = await browser.newPage();
+    await page.setViewport({ width: 1280, height: 800 });
+
+    await page.goto(url, { waitUntil: "networkidle2", timeout: 120000 });
+
+    const content = await page.content();
+    await page.close();
+
+    res.send(content);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Failed to load page.");
   }
 });
 
-app.get('/url', async (req, res) => {
-  const url = req.query.url;
-  if (!url) return res.redirect('/');
-  try {
-    const html = await renderPage(url);
-    res.send(html);
-  } catch (e) {
-    res.status(500).send(`<h2>Error loading page</h2><p>${e.message}</p>`);
-  }
-});
-
-// Close browser on exit
-process.on('exit', async () => {
-  if (browser) await browser.close();
-});
-
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => console.log(`Euphoria running on port ${PORT}`));
