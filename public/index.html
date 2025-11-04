@@ -3,117 +3,190 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Euphoria Proxy</title>
+<title>Euphoria</title>
 <style>
   body {
     margin: 0;
-    background: #0d0d0d;
+    font-family: Arial, sans-serif;
+    background: #111;
     color: #fff;
-    font-family: "Inter", sans-serif;
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
     overflow: hidden;
   }
 
+  /* Top bar */
   #topbar {
     display: flex;
     align-items: center;
-    background: #111;
-    padding: 8px;
-    gap: 8px;
-    transition: all 0.3s ease;
-    z-index: 5;
+    padding: 6px;
+    background: #222;
+    border-radius: 12px;
+    margin: 8px;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
   }
 
-  button, input {
+  #topbar button {
+    background: #444;
     border: none;
-    outline: none;
-  }
-
-  .nav-btn {
-    background: #1e1e1e;
-    color: #ccc;
-    font-size: 16px;
-    border-radius: 8px;
+    color: white;
     padding: 8px 12px;
+    margin-right: 6px;
+    border-radius: 8px;
     cursor: pointer;
-    transition: background 0.2s;
+    font-size: 14px;
+    flex-shrink: 0;
   }
 
-  .nav-btn:hover {
-    background: #333;
+  #topbar button:hover {
+    background: #666;
   }
 
-  #url {
+  #searchInput {
     flex: 1;
     padding: 8px 12px;
-    border-radius: 8px;
-    background: #1e1e1e;
-    color: #fff;
-  }
-
-  iframe {
-    flex: 1;
+    border-radius: 12px;
     border: none;
-    width: 100%;
-    background: white;
+    font-size: 14px;
+    margin-right: 6px;
+    background: #333;
+    color: white;
   }
 
-  .hidden {
-    transform: translateY(-100%);
+  #searchInput::placeholder {
+    color: #bbb;
+  }
+
+  /* Content container */
+  #content {
+    position: absolute;
+    top: 48px;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    overflow: auto;
+    background: #fff;
+    border-radius: 8px;
+  }
+
+  /* Spinner overlay */
+  #spinnerOverlay {
+    position: absolute;
+    top: 48px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.6);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 900;
+  }
+
+  .spinner {
+    border: 6px solid #f3f3f3;
+    border-top: 6px solid #4caf50;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
   }
 </style>
 </head>
 <body>
 
 <div id="topbar">
-  <button class="nav-btn" id="home">🏠</button>
-  <button class="nav-btn" id="back">⟵</button>
-  <button class="nav-btn" id="forward">⟶</button>
-  <button class="nav-btn" id="refresh">⟳</button>
-  <input type="text" id="url" placeholder="Enter URL or search...">
-  <button class="nav-btn" id="go">Go</button>
-  <button class="nav-btn" id="fullscreen">⛶</button>
+  <button id="backBtn">◀</button>
+  <button id="forwardBtn">▶</button>
+  <button id="refreshBtn">⟳</button>
+  <button id="homeBtn">🏠</button>
+  <button id="fullscreenBtn">⛶</button>
+  <input type="text" id="searchInput" placeholder="Enter URL or search...">
+  <button id="searchBtn">🔍</button>
 </div>
 
-<iframe id="browser"></iframe>
+<div id="spinnerOverlay">
+  <div class="spinner"></div>
+</div>
+
+<div id="content"></div>
 
 <script>
-const iframe = document.getElementById('browser');
-const urlInput = document.getElementById('url');
-const bar = document.getElementById('topbar');
+const content = document.getElementById("content");
+const spinner = document.getElementById("spinnerOverlay");
+const searchInput = document.getElementById("searchInput");
 
-function formatInput(value) {
-  value = value.trim();
-  if (!value) return "https://www.google.com";
-  if (!value.includes('.') && !value.startsWith('http')) {
-    return "https://www.google.com/search?q=" + encodeURIComponent(value);
+let historyStack = [];
+let historyIndex = -1;
+
+// Utility to normalize input to URL
+function normalizeInput(input) {
+  input = input.trim();
+  if (!input) return "https://www.google.com";
+  if (!input.startsWith("http")) {
+    if (input.includes(" ")) return `https://www.google.com/search?q=${encodeURIComponent(input)}`;
+    return "https://" + input;
   }
-  if (!/^https?:\/\//i.test(value)) {
-    value = "https://" + value;
-  }
-  return value;
+  return input;
 }
 
-function loadURL(u) {
-  const finalURL = formatInput(u);
-  urlInput.value = finalURL;
-  iframe.src = "/proxy?url=" + encodeURIComponent(finalURL);
+// Load URL via proxy
+async function loadURL(url, pushHistory = true) {
+  spinner.style.display = "flex";
+  try {
+    const res = await fetch(`/proxy?url=${encodeURIComponent(url)}`);
+    if (!res.ok) throw new Error("Failed to load page");
+    const html = await res.text();
+    content.innerHTML = html;
+
+    if (pushHistory) {
+      historyStack = historyStack.slice(0, historyIndex + 1);
+      historyStack.push(url);
+      historyIndex++;
+    }
+  } catch (e) {
+    content.innerHTML = `<h2 style="color:red;text-align:center;margin-top:50px;">Error loading page:<br>${e.message}</h2>`;
+  } finally {
+    spinner.style.display = "none";
+  }
 }
 
-document.getElementById('go').onclick = () => loadURL(urlInput.value);
-urlInput.addEventListener('keydown', e => { if (e.key === 'Enter') loadURL(urlInput.value); });
-document.getElementById('home').onclick = () => loadURL('https://www.google.com');
-document.getElementById('refresh').onclick = () => iframe.contentWindow.location.reload();
-document.getElementById('fullscreen').onclick = () => {
-  bar.classList.toggle('hidden');
+// Navigation buttons
+document.getElementById("backBtn").onclick = () => {
+  if (historyIndex > 0) loadURL(historyStack[--historyIndex], false);
 };
-document.addEventListener('keydown', e => {
-  if (e.key === 'Escape') bar.classList.remove('hidden');
-});
+document.getElementById("forwardBtn").onclick = () => {
+  if (historyIndex < historyStack.length - 1) loadURL(historyStack[++historyIndex], false);
+};
+document.getElementById("refreshBtn").onclick = () => {
+  if (historyIndex >= 0) loadURL(historyStack[historyIndex], false);
+};
+document.getElementById("homeBtn").onclick = () => loadURL("https://www.google.com");
+document.getElementById("fullscreenBtn").onclick = () => {
+  if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+  else document.exitFullscreen();
+};
 
-loadURL('https://www.google.com');
+// Search
+function doSearch() {
+  const input = searchInput.value;
+  loadURL(normalizeInput(input));
+}
+
+document.getElementById("searchBtn").onclick = doSearch;
+searchInput.addEventListener("keydown", e => { if (e.key === "Enter") doSearch(); });
+
+// Initial load
+loadURL("https://www.google.com");
 </script>
+
 </body>
 </html>
