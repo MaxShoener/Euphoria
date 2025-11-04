@@ -1,13 +1,24 @@
 import express from "express";
 import fetch from "node-fetch";
+import path from "path";
+import { fileURLToPath } from "url";
 import zlib from "zlib";
 import pkg from "scramjet";
 const { StringStream } = pkg;
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(express.static("."));
+// Serve static files (if any)
+app.use(express.static(__dirname));
+
+// Serve main UI (index.html)
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "index.html"));
+});
 
 app.get("/proxy", async (req, res) => {
   const targetURL = req.query.url;
@@ -42,15 +53,21 @@ app.get("/proxy", async (req, res) => {
         try {
           const abs = new URL(u, targetURL).href;
           return `${a}="/proxy?url=${encodeURIComponent(abs)}"`;
-        } catch { return m; }
+        } catch {
+          return m;
+        }
       });
+
       html = html.replace(/url\((['"]?)(.*?)\1\)/gi, (m, q, u) => {
         if (!u || u.startsWith("data:")) return m;
         try {
           const abs = new URL(u, targetURL).href;
           return `url("/proxy?url=${encodeURIComponent(abs)}")`;
-        } catch { return m; }
+        } catch {
+          return m;
+        }
       });
+
       const gz = zlib.createGzip();
       res.set("Content-Encoding", "gzip");
       StringStream.from(html).pipe(gz).pipe(res);
@@ -64,4 +81,4 @@ app.get("/proxy", async (req, res) => {
   }
 });
 
-app.listen(PORT, () => console.log(`🚀 Euphoria proxy running on port ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Euphoria running on port ${PORT}`));
