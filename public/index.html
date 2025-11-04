@@ -6,38 +6,56 @@
     <style>
       body {
         margin: 0;
-        background-color: #0b0b0b;
+        background: #0b0b0b;
         color: white;
         font-family: "Segoe UI", sans-serif;
+        height: 100vh;
         display: flex;
         flex-direction: column;
-        height: 100vh;
       }
 
       .top-bar {
-        background: rgba(20, 20, 20, 0.9);
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
         display: flex;
         justify-content: center;
         align-items: center;
-        padding: 0.5rem 1rem;
-        border-radius: 0 0 2rem 2rem;
-        position: fixed;
-        top: 0;
-        width: 100%;
+        background: rgba(20, 20, 20, 0.95);
+        padding: 0.4rem 0.8rem;
+        border-radius: 0 0 1.5rem 1.5rem;
         z-index: 10;
+        gap: 0.5rem;
       }
 
       .top-bar input {
-        width: 60%;
-        padding: 0.5rem 1rem;
+        width: 55%;
+        padding: 0.55rem 1rem;
         border-radius: 1.5rem;
         border: none;
-        outline: none;
         font-size: 1rem;
+        outline: none;
+      }
+
+      .top-bar button {
+        background: #1e1e1e;
+        color: #ddd;
+        border: none;
+        border-radius: 1.5rem;
+        padding: 0.55rem 1.2rem;
+        font-size: 1rem;
+        cursor: pointer;
+        transition: 0.2s;
+      }
+
+      .top-bar button:hover {
+        background: #333;
+        color: white;
       }
 
       .content {
-        margin-top: 4rem;
+        margin-top: 3.5rem;
         flex: 1;
         overflow: hidden;
       }
@@ -48,12 +66,17 @@
         height: 100%;
       }
 
-      .hidden { display: none; }
+      .hidden {
+        display: none;
+      }
     </style>
   </head>
   <body>
     <div class="top-bar">
-      <input id="urlInput" type="text" placeholder="Enter URL (e.g. google.com)" />
+      <button id="homeBtn">Home</button>
+      <input id="urlInput" type="text" placeholder="Enter URL (e.g. xbox.com)" />
+      <button id="goBtn">Go</button>
+      <button id="fullscreenBtn">⛶</button>
     </div>
     <div class="content">
       <iframe id="proxyFrame"></iframe>
@@ -62,14 +85,39 @@
     <script>
       const input = document.getElementById("urlInput");
       const frame = document.getElementById("proxyFrame");
+      const goBtn = document.getElementById("goBtn");
+      const homeBtn = document.getElementById("homeBtn");
+      const fullscreenBtn = document.getElementById("fullscreenBtn");
 
-      input.addEventListener("keypress", e => {
-        if (e.key === "Enter") {
-          const url = input.value.trim();
-          if (!url) return;
-          frame.src = `/proxy?url=${encodeURIComponent(url)}`;
-        }
+      const HOME_URL = "https://google.com";
+
+      const loadUrl = (url) => {
+        if (!url) return;
+        if (!url.startsWith("http")) url = "https://" + url;
+        frame.src = `/proxy?url=${encodeURIComponent(url)}`;
+      };
+
+      goBtn.onclick = () => loadUrl(input.value.trim());
+      input.addEventListener("keypress", (e) => {
+        if (e.key === "Enter") loadUrl(input.value.trim());
       });
+
+      homeBtn.onclick = () => {
+        input.value = HOME_URL;
+        loadUrl(HOME_URL);
+      };
+
+      fullscreenBtn.onclick = () => {
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen();
+        } else {
+          document.exitFullscreen();
+        }
+      };
+
+      // Load Google by default
+      input.value = HOME_URL;
+      loadUrl(HOME_URL);
     </script>
   </body>
 </html>
