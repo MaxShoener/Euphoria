@@ -11,6 +11,7 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Serve static index.html
 app.use(express.static(path.join(__dirname, "public")));
 
 function isUrl(input) {
@@ -22,39 +23,50 @@ function isUrl(input) {
   }
 }
 
-app.get("/search", async (req, res) => {
-  let q = req.query.q;
+// Auto-search redirect
+app.get("/search", (req, res) => {
+  const q = req.query.q;
   if (!q) return res.redirect("/");
-
-  let url = isUrl(q) ? (q.startsWith("http") ? q : `https://${q}`) : `https://www.google.com/search?q=${encodeURIComponent(q)}`;
+  const url = isUrl(q) ? (q.startsWith("http") ? q : `https://${q}`) : `https://www.google.com/search?q=${encodeURIComponent(q)}`;
   res.redirect(`/proxy?url=${encodeURIComponent(url)}`);
 });
 
+// Proxy route
 app.get("/proxy", async (req, res) => {
   const { url } = req.query;
-  if (!url) return res.status(400).send("Missing url");
+  if (!url) return res.status(400).send("Missing URL");
 
   try {
     const response = await fetch(url);
-    let contentType = response.headers.get("content-type") || "";
+    const contentType = response.headers.get("content-type") || "";
 
     if (contentType.includes("text/html")) {
       res.setHeader("content-type", "text/html; charset=utf-8");
-      const text = await response.text();
 
-      // Rewrite links, forms, and resources
-      const rewritten = text.replace(/(href|src|action)=["']([^"']+)["']/gi, (match, attr, val) => {
-        if (val.startsWith("http") || val.startsWith("//")) {
-          return `${attr}="/proxy?url=${encodeURIComponent(val.startsWith("//") ? "https:" + val : val)}"`;
-        } else if (val.startsWith("#") || val.startsWith("mailto:")) {
-          return match;
-        } else {
-          const base = new URL(url);
-          return `${attr}="/proxy?url=${encodeURIComponent(new URL(val, base).href)}"`;
-        }
-      });
+      const html = await response.text();
 
-      // Inject spinner script
+      // Rewrite href/src/action links
+      const rewritten = await StringStream.from(html)
+        .map(line =>
+          line.replace(/(href|src|action)=["']([^"']+)["']/gi, (match, attr, val) => {
+            if (!val) return match;
+            if (val.startsWith("http") || val.startsWith("//")) {
+              return `${attr}="/proxy?url=${encodeURIComponent(val.startsWith("//") ? "https:" + val : val)}"`;
+            } else if (val.startsWith("#") || val.startsWith("mailto:")) {
+              return match;
+            } else {
+              try {
+                const base = new URL(url);
+                return `${attr}="/proxy?url=${encodeURIComponent(new URL(val, base).href)}"`;
+              } catch {
+                return match;
+              }
+            }
+          })
+        )
+        .join("\n");
+
+      // Inject spinner and minimal UI styles
       const finalHTML = rewritten.replace(
         /<body([^>]*)>/i,
         `<body$1>
@@ -70,19 +82,16 @@ app.get("/proxy", async (req, res) => {
             height: 50px;
             animation: spin 1s linear infinite;
           }
-          @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-          }
+          @keyframes spin {0% {transform: rotate(0deg);} 100% {transform: rotate(360deg);}}
         </style>
         <script>
-          window.addEventListener('load', () => { const s=document.getElementById('spinner'); if(s) s.style.display='none'; });
+          window.addEventListener('load',()=>{const s=document.getElementById('spinner');if(s)s.style.display='none';});
         </script>`
       );
 
       res.send(finalHTML);
     } else {
-      // Pass through non-HTML (images, JS, CSS)
+      // Pass through assets (JS, images, CSS)
       response.body.pipe(res);
     }
   } catch (err) {
@@ -91,5 +100,5 @@ app.get("/proxy", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Proxy server running on port ${PORT}`);
+  console.log(`Streaming proxy server running on port ${PORT}`);
 });
