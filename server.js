@@ -12,13 +12,32 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Serve static files (if any)
-app.use(express.static(__dirname));
+// Serve from /public if it exists, else from current directory
+const publicDir = path.join(__dirname, "public");
+const serveDir = process.env.NODE_ENV === "production" ? __dirname : publicDir;
 
-// Serve main UI (index.html)
+// Logging for confirmation
+console.log("Serving static files from:", serveDir);
+
+// Serve index.html explicitly
 app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "index.html"));
+  const indexPaths = [
+    path.join(serveDir, "index.html"),
+    path.join(__dirname, "index.html"),
+    "/app/index.html",
+    "/app/public/index.html",
+  ];
+  for (const p of indexPaths) {
+    try {
+      res.sendFile(p);
+      return;
+    } catch {}
+  }
+  res.status(404).send("index.html not found");
 });
+
+// Serve static assets
+app.use(express.static(serveDir));
 
 app.get("/proxy", async (req, res) => {
   const targetURL = req.query.url;
