@@ -4,8 +4,8 @@ import fetch from "node-fetch";
 import fs from "fs";
 import path from "path";
 import cors from "cors";
-import pkg from "scramjet"; // import default, then destructure
-const { StringStream } = pkg;
+import scramjetPkg from "scramjet"; // CommonJS default import
+const { StringStream } = scramjetPkg;
 
 const app = express();
 app.use(cors());
@@ -38,7 +38,7 @@ function writeDiskCache(url, html) {
   try {
     const p = path.join(CACHE_DIR, cacheKey(url));
     fs.writeFileSync(p, JSON.stringify({ t: Date.now(), html }), "utf8");
-  } catch (e) { /* ignore */ }
+  } catch {}
 }
 function getCached(url) {
   const m = MEM_CACHE.get(url);
@@ -74,7 +74,6 @@ app.get("/proxy", async (req, res) => {
   }
 
   try {
-    // Fetch from origin (no redirect following - handle manually)
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 15000);
 
@@ -89,7 +88,6 @@ app.get("/proxy", async (req, res) => {
 
     clearTimeout(timeout);
 
-    // If redirect, resolve and redirect through proxy
     if (response.status >= 300 && response.status < 400 && response.headers.get("location")) {
       const loc = response.headers.get("location");
       const resolved = toAbsolute(loc, target);
@@ -100,31 +98,24 @@ app.get("/proxy", async (req, res) => {
     res.setHeader("content-type", ctype);
 
     if (!ctype.includes("text/html")) {
-      // Binary asset — pipe directly and optionally cache small ones
       const buffer = Buffer.from(await response.arrayBuffer());
-      if (buffer.length < 1024 * 100) setCached(target, buffer);
       return res.send(buffer);
     }
 
-    // HTML: get full string (so .replace works)
+    // Ensure string
     let html = await response.text();
 
-    // Remove problematic CSP meta tags that would block resources
+    // Remove CSP meta tags & integrity/crossorigin attributes
     html = html.replace(/<meta[^>]*http-equiv=["']?content-security-policy["']?[^>]*>/gi, "");
-
-    // Remove integrity/crossorigin attrs which would block proxied assets
     html = html.replace(/\sintegrity=(["'])(.*?)\1/gi, "");
     html = html.replace(/\scrossorigin=(["'])(.*?)\1/gi, "");
 
-    // Inject a <base> to help relative URL resolution
-    html = html.replace(/<head([^>]*)>/i, (m, g) => {
-      return `<head${g}><base href="${target}">`;
-    });
+    // Inject <base> for relative URLs
+    html = html.replace(/<head([^>]*)>/i, (m,g) => `<head${g}><base href="${target}">`);
 
-    // Rewrite href/src/srcset to proxy through /proxy?url=...
+    // Rewrite href/src/srcset to proxy
     html = html.replace(/(href|src|srcset)=["']([^"']*)["']/gi, (m, attr, val) => {
-      if (!val) return m;
-      if (/^(javascript:|data:|#)/i.test(val)) return m;
+      if (!val || /^(javascript:|data:|#)/i.test(val)) return m;
       if (val.startsWith("/proxy?url=")) return m;
       const abs = toAbsolute(val, target);
       if (!abs) return m;
@@ -139,21 +130,18 @@ app.get("/proxy", async (req, res) => {
       return `url("/proxy?url=${encodeURIComponent(abs)}")`;
     });
 
-    // Optional: for performance, strip <noscript> and heavy analytics scripts (best-effort)
-    // (We **do not** remove all <script> tags — removing all breaks many pages.)
-    // Instead, remove known trackers to reduce noise:
+    // Remove heavy analytics scripts for speed
     html = html.replace(/<script[^>]*src=["'][^"']*(analytics|gtag|googlesyndication|doubleclick)[^"']*["'][^>]*><\/script>/gi, "");
 
-    // Inject some stabilization CSS so pages layout properly inside injected container
-    html = html.replace(/<head([^>]*)>/i, (m,g) => {
-      return `<head${g}><style>img,video{max-width:100%;height:auto;}body{margin:0;background:transparent;}</style>`;
-    });
+    // Inject stabilization CSS for proper layout inside the container
+    html = html.replace(/<head([^>]*)>/i, (m,g) => `<head${g}><style>img,video{max-width:100%;height:auto;}body{margin:0;background:transparent;}</style>`);
 
-    // Save to cache
+    // Save cache
     setCached(target, html);
 
-    // Stream to client progressively using scramjet StringStream
+    // Stream via Scramjet
     StringStream.from(html).pipe(res);
+
   } catch (err) {
     console.error("Proxy error:", err && err.message ? err.message : String(err));
     res.status(500).send(`<div style="padding:2rem;color:#fff;background:#111;font-family:system-ui;">Proxy error: ${(err && err.message) || String(err)}</div>`);
