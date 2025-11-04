@@ -2,12 +2,11 @@
   "name": "euphoria",
   "version": "1.0.0",
   "type": "module",
-  "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
     "express": "^4.18.2",
-    "puppeteer": "^21.0.0"
+    "puppeteer": "^25.10.0"
   }
 }
