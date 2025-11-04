@@ -3,6 +3,8 @@ import fetch from "node-fetch";
 import fs from "fs";
 import path from "path";
 import cors from "cors";
+import scramjetPkg from "scramjet";
+const { StringStream } = scramjetPkg;
 
 const app = express();
 app.use(cors());
@@ -13,12 +15,11 @@ const CACHE_DIR = path.resolve("./cache");
 if (!fs.existsSync(CACHE_DIR)) fs.mkdirSync(CACHE_DIR);
 
 const MEM_CACHE = new Map();
-const CACHE_TTL = 1000 * 60 * 10; // 10 minutes
+const CACHE_TTL = 1000 * 60 * 10; // 10 min
 
 function cacheKey(url) {
   return Buffer.from(url).toString("base64url");
 }
-
 function readDiskCache(url) {
   try {
     const p = path.join(CACHE_DIR, cacheKey(url));
@@ -32,14 +33,12 @@ function readDiskCache(url) {
     return obj.html;
   } catch (e) { return null; }
 }
-
 function writeDiskCache(url, html) {
   try {
     const p = path.join(CACHE_DIR, cacheKey(url));
     fs.writeFileSync(p, JSON.stringify({ t: Date.now(), html }), "utf8");
-  } catch (e) { /* ignore */ }
+  } catch (e) {}
 }
-
 function getCached(url) {
   const m = MEM_CACHE.get(url);
   if (m && (Date.now() - m.t) < CACHE_TTL) return m.html;
@@ -50,25 +49,20 @@ function getCached(url) {
   }
   return null;
 }
-
 function setCached(url, html) {
   MEM_CACHE.set(url, { html, t: Date.now() });
   writeDiskCache(url, html);
 }
 
-// Absolute URL helper
 function toAbsolute(url, base) {
   try { return new URL(url, base).href; } catch { return null; }
 }
 
-// Proxy endpoint
 app.get("/proxy", async (req, res) => {
   const raw = req.query.url;
   if (!raw) return res.status(400).send("Missing url");
+  const target = raw.startsWith("http") ? raw : `https://${raw}`;
 
-  let target = raw.startsWith("http") ? raw : `https://${raw}`;
-
-  // Check cache
   const cached = getCached(target);
   if (cached) {
     res.setHeader("content-type", "text/html; charset=utf-8");
@@ -84,12 +78,13 @@ app.get("/proxy", async (req, res) => {
       signal: controller.signal,
       headers: {
         "User-Agent": "Euphoria-Scramjet-Proxy/1.0",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9"
       }
     });
+
     clearTimeout(timeout);
 
-    // Handle redirects manually
     if (response.status >= 300 && response.status < 400 && response.headers.get("location")) {
       const loc = response.headers.get("location");
       const resolved = toAbsolute(loc, target);
@@ -105,22 +100,16 @@ app.get("/proxy", async (req, res) => {
       return res.send(buffer);
     }
 
-    // Fully fetch HTML
     let html = await response.text();
 
-    // Remove problematic CSP/meta
     html = html.replace(/<meta[^>]*http-equiv=["']?content-security-policy["']?[^>]*>/gi, "");
     html = html.replace(/\sintegrity=(["'])(.*?)\1/gi, "");
     html = html.replace(/\scrossorigin=(["'])(.*?)\1/gi, "");
+    html = html.replace(/<head([^>]*)>/i, (m,g) => `<head${g}><base href="${target}"><style>img,video{max-width:100%;height:auto;}body{margin:0;background:transparent;}</style>`);
 
-    // Inject <base> for relative URLs
-    html = html.replace(/<head([^>]*)>/i, (m, g) => {
-      return `<head${g}><base href="${target}"><style>img,video{max-width:100%;height:auto;}body{margin:0;background:transparent;}</style>`;
-    });
-
-    // Rewrite links
     html = html.replace(/(href|src|srcset)=["']([^"']*)["']/gi, (m, attr, val) => {
-      if (!val || /^(javascript:|data:|#)/i.test(val) || val.startsWith("/proxy?url=")) return m;
+      if (!val || /^(javascript:|data:|#)/i.test(val)) return m;
+      if (val.startsWith("/proxy?url=")) return m;
       const abs = toAbsolute(val, target);
       if (!abs) return m;
       return `${attr}="/proxy?url=${encodeURIComponent(abs)}"`;
@@ -133,15 +122,11 @@ app.get("/proxy", async (req, res) => {
       return `url("/proxy?url=${encodeURIComponent(abs)}")`;
     });
 
-    // Remove known analytics scripts for speed
-    html = html.replace(/<script[^>]*(analytics|gtag|googlesyndication|doubleclick)[^>]*><\/script>/gi, "");
+    html = html.replace(/<script[^>]*src=["'][^"']*(analytics|gtag|googlesyndication|doubleclick)[^"']*["'][^>]*><\/script>/gi, "");
 
-    // Save to cache
     setCached(target, html);
 
-    // Send fully rewritten HTML
-    res.send(html);
-
+    StringStream.from(html).pipe(res);
   } catch (err) {
     console.error("Proxy error:", err && err.message ? err.message : String(err));
     res.status(500).send(`<div style="padding:2rem;color:#fff;background:#111;font-family:system-ui;">Proxy error: ${(err && err.message) || String(err)}</div>`);
