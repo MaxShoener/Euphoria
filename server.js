@@ -3,60 +3,70 @@ import fetch from "node-fetch";
 import pkg from "scramjet";
 
 const { StringStream } = pkg;
+
 const app = express();
-const port = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3000;
 
-app.use(express.static("public"));
+app.use(express.static("public")); // serve your index.html
 
-// Utility: normalize input
-function normalizeInput(input) {
-  input = input.trim();
-  if (!input) return "https://www.google.com";
-  // Auto add https
-  if (!input.startsWith("http")) {
-    if (input.includes(" ")) return `https://www.google.com/search?q=${encodeURIComponent(input)}`;
-    return "https://" + input;
-  }
-  return input;
-}
+// Home route
+app.get("/", (req, res) => {
+  res.sendFile("index.html", { root: "public" });
+});
 
-// Proxy endpoint: streams content progressively
+// Proxy route
 app.get("/proxy", async (req, res) => {
-  const url = req.query.url;
-  if (!url) return res.status(400).send("Missing URL");
+  let targetUrl = req.query.url;
+  if (!targetUrl) return res.status(400).send("Missing URL");
+
+  // Add protocol if missing
+  if (!/^https?:\/\//i.test(targetUrl)) {
+    targetUrl = "https://" + targetUrl;
+  }
 
   try {
-    const response = await fetch(url);
-    if (!response.ok) return res.status(500).send("Failed to fetch");
+    const response = await fetch(targetUrl);
+    const contentType = response.headers.get("content-type");
 
-    res.setHeader("Content-Type", "text/html");
+    // If HTML, stream through Scramjet to rewrite links/images
+    if (contentType && contentType.includes("text/html")) {
+      res.setHeader("Content-Type", "text/html; charset=UTF-8");
 
-    const text = await response.text();
+      const htmlStream = StringStream.from(response.body);
 
-    // Stream through Scramjet to rewrite links/images
-    await StringStream.from(text)
-      .map(line => {
-        // Rewrite href/src to pass through proxy
-        return line.replace(/(href|src)=["'](.*?)["']/gi, (match, attr, val) => {
-          try {
-            const abs = new URL(val, url).href;
-            return `${attr}="/proxy?url=${encodeURIComponent(abs)}"`;
-          } catch {
-            return match;
-          }
-        });
-      })
-      .toArray()
-      .then(lines => res.send(lines.join("\n")));
+      htmlStream
+        .map(line => {
+          // Rewrite href/src to go through our proxy
+          return line.replace(
+            /(href|src)=["'](.*?)["']/gi,
+            (match, attr, url) => {
+              if (url.startsWith("data:") || url.startsWith("javascript:")) return match;
+              const absUrl = new URL(url, targetUrl).toString();
+              return `${attr}="/proxy?url=${encodeURIComponent(absUrl)}"`;
+            }
+          );
+        })
+        .pipe(res); // stream final HTML to client
+    } else {
+      // Non-HTML (images, scripts, etc.) just pipe directly
+      response.body.pipe(res);
+    }
   } catch (err) {
-    res.status(500).send(`<h1>Error</h1><p>${err.message}</p>`);
+    res.status(500).send(`Error loading page: ${err.message}`);
   }
 });
 
-// Optional search endpoint (redirects to Google search)
+// Optional search route (auto Google search if not a URL)
 app.get("/search", (req, res) => {
-  const q = req.query.q || "";
-  res.redirect(`https://www.google.com/search?q=${encodeURIComponent(q)}`);
+  let query = req.query.q;
+  if (!query) return res.redirect("/");
+
+  // Check if it's a valid URL
+  if (!/^https?:\/\//i.test(query)) {
+    query = "https://www.google.com/search?q=" + encodeURIComponent(query);
+  }
+
+  res.redirect("/proxy?url=" + encodeURIComponent(query));
 });
 
-app.listen(port, () => console.log(`Euphoria server running on port ${port}`));
+app.listen(PORT, () => console.log(`Euphoria running on port ${PORT}`));
