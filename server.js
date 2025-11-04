@@ -1,77 +1,69 @@
 import express from "express";
 import fetch from "node-fetch";
-import fs from "fs";
-import path from "path";
-import pkg from "scramjet"; // ✅ CommonJS default import fix
-const { StringStream } = pkg;
+import cors from "cors";
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+app.use(cors());
+app.use(express.static("public"));
 
-// --- Cache Setup ---
-const CACHE_DIR = "./cache";
-const CACHE_TTL = 1000 * 60 * 10; // 10 minutes
-if (!fs.existsSync(CACHE_DIR)) fs.mkdirSync(CACHE_DIR);
+const PORT = process.env.PORT || 8080;
 
-function getCachePath(url) {
-  return path.join(CACHE_DIR, Buffer.from(url).toString("base64"));
-}
+// 🧠 Simple in-memory cache with TTL
+const cache = new Map();
+const CACHE_TTL = 60 * 1000; // 1 minute
 
-function setCache(url, data) {
-  const file = getCachePath(url);
-  fs.writeFileSync(file, JSON.stringify({ data, timestamp: Date.now() }));
-}
-
-function getCache(url) {
-  const file = getCachePath(url);
-  if (!fs.existsSync(file)) return null;
-  const content = JSON.parse(fs.readFileSync(file, "utf-8"));
-  if (Date.now() - content.timestamp > CACHE_TTL) {
-    fs.unlinkSync(file);
+function getCached(url) {
+  const entry = cache.get(url);
+  if (!entry) return null;
+  const { data, time } = entry;
+  if (Date.now() - time > CACHE_TTL) {
+    cache.delete(url);
     return null;
   }
-  return content.data;
+  return data;
 }
 
-// --- Proxy Route ---
+function setCached(url, data) {
+  cache.set(url, { data, time: Date.now() });
+}
+
+// 🌐 Proxy endpoint using Scramjet-like approach
 app.get("/proxy", async (req, res) => {
   const targetUrl = req.query.url;
-  if (!targetUrl) return res.status(400).send("Missing URL parameter.");
-
-  const fullUrl = targetUrl.startsWith("http") ? targetUrl : `https://${targetUrl}`;
-  const cached = getCache(fullUrl);
-  if (cached) return res.send(cached);
+  if (!targetUrl) return res.status(400).send("Missing url parameter.");
 
   try {
-    const response = await fetch(fullUrl, {
-      headers: { "User-Agent": "Mozilla/5.0 (Euphoria Proxy)" },
+    // ✅ Check cache
+    const cached = getCached(targetUrl);
+    if (cached) {
+      console.log("Cache hit:", targetUrl);
+      return res.send(cached);
+    }
+
+    console.log("Fetching:", targetUrl);
+    const response = await fetch(targetUrl, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36",
+      },
     });
 
-    const stream = new StringStream();
-    response.body.pipe(stream);
-    let html = await stream.stringify().join("");
+    let html = await response.text();
 
+    // ✅ Fix CSP and relative pathing issues
     html = html
-      .replace(/<head>/i, `<head><base href="${fullUrl}">`)
-      .replace(/integrity=".*?"/g, "")
-      .replace(/crossorigin=".*?"/g, "");
+      .replace(/<head>/i, `<head><base href="${targetUrl}">`)
+      .replace(/content-security-policy/gi, "x-content-security-policy")
+      .replace(/integrity=/gi, "data-integrity=");
 
-    setCache(fullUrl, html);
+    // ✅ Cache the result
+    setCached(targetUrl, html);
+
     res.send(html);
   } catch (err) {
     console.error("Proxy error:", err);
-    res.status(500).send(`
-      <div style="font-family:Segoe UI;background:#111;color:#eee;padding:2rem;text-align:center">
-        <h2>Error loading page</h2>
-        <p>${err.message}</p>
-      </div>
-    `);
+    res.status(500).send("Error loading page.");
   }
 });
 
-// --- Serve Frontend ---
-app.use(express.static("public"));
-
-app.listen(PORT, () => {
-  console.log(`🚀 Euphoria proxy running on port ${PORT}`);
-});
+app.listen(PORT, () => console.log(`🚀 Proxy running on port ${PORT}`));
