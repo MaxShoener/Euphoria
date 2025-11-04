@@ -1,123 +1,237 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <title>Euphoria Proxy</title>
-    <style>
-      body {
-        margin: 0;
-        background: #0b0b0b;
-        color: white;
-        font-family: "Segoe UI", sans-serif;
-        height: 100vh;
-        display: flex;
-        flex-direction: column;
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Euphoria — Scramjet Proxy</title>
+<style>
+  :root{
+    --bg:#0f0f10; --panel:#1b1b1c; --accent:#00d47b; --white:#f6f7f8;
+  }
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--white);font-family:Inter,system-ui,Segoe UI,Roboto,Arial;}
+  #topbar{
+    position:fixed; top:10px; left:12px; right:12px; height:48px;
+    display:flex; align-items:center; gap:8px;
+    background:linear-gradient(180deg, rgba(255,255,255,0.03), rgba(0,0,0,0.06));
+    border-radius:24px; padding:6px 12px; box-shadow:0 6px 18px rgba(0,0,0,0.6); z-index:999; backdrop-filter: blur(6px);
+  }
+  .btn {
+    background:var(--panel); color:var(--white); border:none; border-radius:12px; padding:8px 12px;
+    min-width:44px; height:36px; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; font-size:14px;
+  }
+  .btn:hover{filter:brightness(1.12)}
+  #url{flex:1;height:36px;padding:8px 12px;border-radius:12px;border:none;background:#111;color:var(--white);font-size:14px;outline:none}
+  #content{position:fixed; top:70px; left:12px; right:12px; bottom:12px; border-radius:12px; background:#fff; overflow:auto;}
+  #injected{width:100%;height:100%;background:#fff;color:#111; padding:12px; box-sizing:border-box;}
+  #spinner{position:fixed; top:70px; left:12px; right:12px; bottom:12px; display:none; align-items:center; justify-content:center; z-index:900}
+  .dot{width:40px;height:40px;border-radius:50%;border:6px solid rgba(0,0,0,0.08);border-top-color:var(--accent);animation:spin 1s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .err{padding:28px;text-align:center;color:#b00000;font-weight:600}
+</style>
+</head>
+<body>
+  <div id="topbar">
+    <button class="btn" id="back">◀</button>
+    <button class="btn" id="forward">▶</button>
+    <button class="btn" id="refresh">⟳</button>
+    <button class="btn" id="home">🏠</button>
+    <button class="btn" id="fullscreen">⛶</button>
+    <input id="url" placeholder="Enter URL or search (e.g. google.com)" />
+    <button class="btn" id="go">🔍</button>
+  </div>
+
+  <div id="spinner"><div class="dot"></div></div>
+
+  <div id="content">
+    <div id="injected"></div>
+  </div>
+
+<script>
+/*
+  Pure scramjet proxy client:
+  - Loads /proxy?url=...
+  - Inserts fetched HTML into #injected
+  - Finds <script> tags and executes them properly (external scripts fetched through proxy)
+  - Rewrites links/form actions to route via /proxy for in-app navigation
+  NOTE: This is best-effort. Some cross-origin behaviors (cookies, third-party auth) require iframe/headless.
+*/
+
+const urlEl = document.getElementById('url');
+const injected = document.getElementById('injected');
+const spinner = document.getElementById('spinner');
+
+let historyStack = [], historyIndex = -1;
+
+function normalizeInput(val){
+  val = (val||'').trim();
+  if(!val) return 'https://www.google.com';
+  if(!/^https?:\/\//i.test(val)){
+    if(val.includes(' ')) return `https://www.google.com/search?q=${encodeURIComponent(val)}`;
+    return 'https://' + val;
+  }
+  return val;
+}
+
+function showSpinner(){ spinner.style.display = 'flex'; }
+function hideSpinner(){ spinner.style.display = 'none'; }
+
+function rewriteNavigation(doc, baseUrl){
+  // Rebind links to load via our proxy
+  const anchors = doc.querySelectorAll('a[href]');
+  anchors.forEach(a=>{
+    const href = a.getAttribute('href');
+    if(!href) return;
+    if(href.startsWith('javascript:') || href.startsWith('#')) return;
+    const abs = new URL(href, baseUrl).href;
+    a.addEventListener('click', (e)=>{
+      e.preventDefault();
+      loadURL(abs);
+    });
+    a.setAttribute('href','/proxy?url=' + encodeURIComponent(abs));
+  });
+
+  // Rebind forms to submit through /proxy via fetch
+  const forms = doc.querySelectorAll('form[action]');
+  forms.forEach(f=>{
+    const action = f.getAttribute('action') || '';
+    const abs = new URL(action, baseUrl).href;
+    f.addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      // serialize form
+      const data = new FormData(f);
+      const params = new URLSearchParams();
+      for(const [k,v] of data) params.append(k,v);
+      // We POST to our server to forward to target (server currently doesn't forward POSTs - future work)
+      // For now, convert to GET search-style where possible:
+      const getUrl = abs + (abs.includes('?') ? '&' : '?') + params.toString();
+      loadURL(getUrl);
+    });
+    f.setAttribute('action','/proxy?url=' + encodeURIComponent(abs));
+    f.setAttribute('method','get'); // best-effort convert to GET for in-app
+  });
+}
+
+async function executeScripts(doc, baseUrl){
+  // Gather scripts
+  const scripts = Array.from(doc.querySelectorAll('script'));
+  for(const s of scripts){
+    try{
+      const newScript = document.createElement('script');
+      // copy attributes except src (we will handle)
+      for(const attr of s.attributes){
+        if(attr.name === 'src') continue;
+        newScript.setAttribute(attr.name, attr.value);
       }
-
-      .top-bar {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        background: rgba(20, 20, 20, 0.95);
-        padding: 0.4rem 0.8rem;
-        border-radius: 0 0 1.5rem 1.5rem;
-        z-index: 10;
-        gap: 0.5rem;
+      if(s.src){
+        // External script: fetch via /proxy so it's same-origin
+        const abs = new URL(s.src, baseUrl).href;
+        const proxyUrl = '/proxy?url=' + encodeURIComponent(abs);
+        const res = await fetch(proxyUrl);
+        if(!res.ok) { console.warn('Script fetch failed', proxyUrl); continue; }
+        const js = await res.text();
+        newScript.textContent = js;
+      } else {
+        // Inline
+        newScript.textContent = s.textContent;
       }
+      // Replace old script with new script so it executes
+      s.parentNode.replaceChild(newScript, s);
+    } catch (err){
+      console.warn('executeScripts error', err);
+    }
+  }
+}
 
-      .top-bar input {
-        width: 55%;
-        padding: 0.55rem 1rem;
-        border-radius: 1.5rem;
-        border: none;
-        font-size: 1rem;
-        outline: none;
-      }
+async function injectHTML(html, baseUrl){
+  // parse as fragment to avoid replacing current <html>
+  const parser = new DOMParser();
+  // Wrap in a container to parse partials
+  const doc = parser.parseFromString(html, 'text/html');
 
-      .top-bar button {
-        background: #1e1e1e;
-        color: #ddd;
-        border: none;
-        border-radius: 1.5rem;
-        padding: 0.55rem 1.2rem;
-        font-size: 1rem;
-        cursor: pointer;
-        transition: 0.2s;
-      }
+  // Optional: remove heavy trackers
+  const trackers = doc.querySelectorAll('script[src*="analytics"],script[src*="googlesyndication"],script[src*="doubleclick"]');
+  trackers.forEach(t => t.remove());
 
-      .top-bar button:hover {
-        background: #333;
-        color: white;
-      }
+  // rewrite resource urls inside the doc to route via our proxy
+  const attrs = ['src','href','srcset'];
+  attrs.forEach(attr=>{
+    const nodes = doc.querySelectorAll('['+attr+']');
+    nodes.forEach(n=>{
+      const val = n.getAttribute(attr);
+      if(!val) return;
+      if(/^(data:|javascript:|#)/i.test(val)) return;
+      try{
+        const abs = new URL(val, baseUrl).href;
+        n.setAttribute(attr, '/proxy?url=' + encodeURIComponent(abs));
+      } catch(e){}
+    });
+  });
 
-      .content {
-        margin-top: 3.5rem;
-        flex: 1;
-        overflow: hidden;
-      }
+  // Move parsed body into injected container
+  injected.innerHTML = '';
+  // move stylesheets and head styles into injected area
+  const headChildren = doc.head ? Array.from(doc.head.childNodes) : [];
+  headChildren.forEach(node=>{
+    if(node.nodeName === 'TITLE') return;
+    injected.appendChild(document.importNode(node, true));
+  });
 
-      iframe {
-        border: none;
-        width: 100%;
-        height: 100%;
-      }
+  // now import body
+  const bodyChildren = doc.body ? Array.from(doc.body.childNodes) : [];
+  bodyChildren.forEach(node=>{
+    injected.appendChild(document.importNode(node, true));
+  });
 
-      .hidden {
-        display: none;
-      }
-    </style>
-  </head>
-  <body>
-    <div class="top-bar">
-      <button id="homeBtn">Home</button>
-      <input id="urlInput" type="text" placeholder="Enter URL (e.g. xbox.com)" />
-      <button id="goBtn">Go</button>
-      <button id="fullscreenBtn">⛶</button>
-    </div>
-    <div class="content">
-      <iframe id="proxyFrame"></iframe>
-    </div>
+  // rewrite links/forms to intercept navigation
+  rewriteNavigation(injected, baseUrl);
 
-    <script>
-      const input = document.getElementById("urlInput");
-      const frame = document.getElementById("proxyFrame");
-      const goBtn = document.getElementById("goBtn");
-      const homeBtn = document.getElementById("homeBtn");
-      const fullscreenBtn = document.getElementById("fullscreenBtn");
+  // execute scripts (external scripts fetched via /proxy)
+  await executeScripts(injected, baseUrl);
+}
 
-      const HOME_URL = "https://google.com";
+async function loadURL(raw, pushHistory=true){
+  const url = normalizeInput(raw);
+  if(pushHistory){
+    historyStack = historyStack.slice(0, historyIndex+1);
+    historyStack.push(url); historyIndex++;
+  }
+  showSpinner();
+  try{
+    const res = await fetch('/proxy?url=' + encodeURIComponent(url));
+    if(!res.ok) throw new Error('HTTP ' + res.status);
+    const html = await res.text();
+    await injectHTML(html, url);
+  } catch(e){
+    injected.innerHTML = `<div class="err">Error loading page: ${e.message}</div>`;
+  } finally {
+    hideSpinner();
+  }
+}
 
-      const loadUrl = (url) => {
-        if (!url) return;
-        if (!url.startsWith("http")) url = "https://" + url;
-        frame.src = `/proxy?url=${encodeURIComponent(url)}`;
-      };
+// navigation handlers
+document.getElementById('go').addEventListener('click', ()=> loadURL(urlEl.value));
+urlEl.addEventListener('keydown', e=> { if(e.key === 'Enter') loadURL(urlEl.value); });
 
-      goBtn.onclick = () => loadUrl(input.value.trim());
-      input.addEventListener("keypress", (e) => {
-        if (e.key === "Enter") loadUrl(input.value.trim());
-      });
+document.getElementById('back').addEventListener('click', ()=> {
+  if(historyIndex > 0) loadURL(historyStack[--historyIndex], false);
+});
+document.getElementById('forward').addEventListener('click', ()=> {
+  if(historyIndex < historyStack.length-1) loadURL(historyStack[++historyIndex], false);
+});
+document.getElementById('refresh').addEventListener('click', ()=> {
+  if(historyIndex >= 0) loadURL(historyStack[historyIndex], false);
+});
+document.getElementById('home').addEventListener('click', ()=> {
+  urlEl.value = 'https://www.google.com'; loadURL(urlEl.value);
+});
+document.getElementById('fullscreen').addEventListener('click', ()=> {
+  if(!document.fullscreenElement) document.documentElement.requestFullscreen();
+  else document.exitFullscreen();
+});
 
-      homeBtn.onclick = () => {
-        input.value = HOME_URL;
-        loadUrl(HOME_URL);
-      };
-
-      fullscreenBtn.onclick = () => {
-        if (!document.fullscreenElement) {
-          document.documentElement.requestFullscreen();
-        } else {
-          document.exitFullscreen();
-        }
-      };
-
-      // Load Google by default
-      input.value = HOME_URL;
-      loadUrl(HOME_URL);
-    </script>
-  </body>
+// default
+urlEl.value = 'https://www.google.com';
+loadURL(urlEl.value);
+</script>
+</body>
 </html>
