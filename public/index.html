@@ -1,208 +1,84 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Euphoria Browser</title>
-  <style>
-    body, html {
-      margin: 0;
-      padding: 0;
-      height: 100%;
-      font-family: Arial, sans-serif;
-      overflow: hidden;
-      background: #f5f5f5;
-    }
-
-    /* Top bar */
-    #top-bar {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      height: 50px;
-      background: #222;
-      display: flex;
-      align-items: center;
-      padding: 0 10px;
-      border-radius: 0 0 25px 25px;
-      z-index: 1000;
-    }
-
-    #top-bar button {
-      margin-right: 8px;
-      background: #444;
-      color: #fff;
-      border: none;
-      border-radius: 12px;
-      padding: 8px 12px;
-      cursor: pointer;
-      height: 34px;
-      min-width: 60px;
-      font-size: 14px;
-    }
-
-    #top-bar button:hover {
-      background: #555;
-    }
-
-    #search-bar {
-      flex: 1;
-      margin-left: 8px;
-      padding: 6px 10px;
-      border-radius: 15px;
-      border: none;
-      background: #333;
-      color: #fff;
-      font-size: 14px;
-    }
-
-    #search-bar::placeholder {
-      color: #bbb;
-    }
-
-    /* Loading spinner overlay */
-    #spinner-overlay {
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(0,0,0,0.5);
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      z-index: 900;
-      pointer-events: none;
-    }
-
-    .spinner {
-      border: 6px solid #f3f3f3;
-      border-top: 6px solid #444;
-      border-radius: 50%;
-      width: 40px;
-      height: 40px;
-      animation: spin 1s linear infinite;
-    }
-
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
-    }
-
-    /* iframe replacement area */
-    #content-frame {
-      position: absolute;
-      top: 50px;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      overflow: auto;
-      background: white;
-    }
-
-    #content-frame iframe {
-      width: 100%;
-      height: 100%;
-      border: none;
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Euphoria Browser</title>
+<style>
+  body, html { margin: 0; padding: 0; height: 100%; font-family: Arial, sans-serif; overflow: hidden; }
+  #top-bar { display: flex; align-items: center; padding: 8px; background: #1e1e1e; border-radius: 12px; margin: 10px; }
+  #top-bar button { margin-right: 8px; padding: 6px 12px; border-radius: 8px; border: none; background: #3a3a3a; color: white; cursor: pointer; }
+  #top-bar input { flex: 1; padding: 6px 12px; border-radius: 8px; border: none; margin-right: 8px; background: #333; color: white; }
+  #spinner { position: fixed; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.4); display: none; justify-content: center; align-items: center; z-index: 1000; }
+  #spinner img { width: 64px; height: 64px; }
+  #content { width: 100%; height: calc(100% - 60px); overflow: auto; }
+</style>
 </head>
 <body>
 
-  <div id="top-bar">
-    <button id="back">◀ Back</button>
-    <button id="forward">▶ Forward</button>
-    <button id="home">🏠 Home</button>
-    <button id="fullscreen">⛶ Fullscreen</button>
-    <input type="text" id="search-bar" placeholder="Search or type URL..." />
-  </div>
+<div id="top-bar">
+  <button id="home">Home</button>
+  <button id="back">◀</button>
+  <button id="forward">▶</button>
+  <button id="fullscreen">⛶</button>
+  <input type="text" id="url" placeholder="Enter URL or search..." />
+  <button id="go">Go</button>
+</div>
 
-  <div id="spinner-overlay">
-    <div class="spinner"></div>
-  </div>
+<div id="spinner"><img src="spinner.gif" alt="Loading..."></div>
+<iframe id="content"></iframe>
 
-  <div id="content-frame"></div>
+<script>
+const spinner = document.getElementById('spinner');
+const iframe = document.getElementById('content');
+const urlInput = document.getElementById('url');
+const historyStack = [];
+let historyIndex = -1;
 
-  <script>
-    const backBtn = document.getElementById('back');
-    const forwardBtn = document.getElementById('forward');
-    const homeBtn = document.getElementById('home');
-    const fullscreenBtn = document.getElementById('fullscreen');
-    const searchBar = document.getElementById('search-bar');
-    const contentFrame = document.getElementById('content-frame');
-    const spinner = document.getElementById('spinner-overlay');
+function showSpinner() { spinner.style.display = 'flex'; }
+function hideSpinner() { spinner.style.display = 'none'; }
 
-    const historyStack = [];
-    let historyIndex = -1;
-
-    function showSpinner(show) {
-      spinner.style.display = show ? 'flex' : 'none';
+async function loadURL(url) {
+  showSpinner();
+  try {
+    iframe.src = '/search?q=' + encodeURIComponent(url);
+    if(historyIndex === -1 || historyStack[historyIndex] !== url) {
+      historyStack.push(url);
+      historyIndex = historyStack.length - 1;
     }
+  } finally {
+    setTimeout(hideSpinner, 2000); // minimum spinner
+  }
+}
 
-    async function loadURL(url, addToHistory = true) {
-      showSpinner(true);
+document.getElementById('go').onclick = () => loadURL(urlInput.value);
+document.getElementById('home').onclick = () => loadURL('https://www.google.com');
+document.getElementById('back').onclick = () => {
+  if(historyIndex > 0) {
+    historyIndex--;
+    urlInput.value = historyStack[historyIndex];
+    loadURL(historyStack[historyIndex]);
+  }
+};
+document.getElementById('forward').onclick = () => {
+  if(historyIndex < historyStack.length - 1) {
+    historyIndex++;
+    urlInput.value = historyStack[historyIndex];
+    loadURL(historyStack[historyIndex]);
+  }
+};
+document.getElementById('fullscreen').onclick = () => {
+  if(!document.fullscreenElement) document.documentElement.requestFullscreen();
+  else document.exitFullscreen();
+};
 
-      if (!url.startsWith('http')) url = 'https://' + url;
+urlInput.addEventListener('keydown', (e) => {
+  if(e.key === 'Enter') loadURL(urlInput.value);
+});
 
-      if (addToHistory) {
-        historyStack.splice(historyIndex + 1);
-        historyStack.push(url);
-        historyIndex++;
-      }
+// Load Google home on start
+loadURL('https://www.google.com');
+</script>
 
-      searchBar.value = url;
-
-      try {
-        const res = await fetch(`/proxy?url=${encodeURIComponent(url)}`);
-        const html = await res.text();
-        contentFrame.innerHTML = html;
-      } catch (err) {
-        contentFrame.innerHTML = `<div style="padding:20px;color:red;">Error loading page: ${err.message}</div>`;
-      } finally {
-        showSpinner(false);
-      }
-    }
-
-    backBtn.addEventListener('click', () => {
-      if (historyIndex > 0) {
-        historyIndex--;
-        loadURL(historyStack[historyIndex], false);
-      }
-    });
-
-    forwardBtn.addEventListener('click', () => {
-      if (historyIndex < historyStack.length - 1) {
-        historyIndex++;
-        loadURL(historyStack[historyIndex], false);
-      }
-    });
-
-    homeBtn.addEventListener('click', () => loadURL('https://www.google.com'));
-    fullscreenBtn.addEventListener('click', () => {
-      if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen();
-      } else {
-        document.exitFullscreen();
-      }
-    });
-
-    searchBar.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        let query = searchBar.value.trim();
-        if (!query) return;
-        if (!query.includes('.') || query.startsWith('www.')) {
-          // Treat as Google search
-          loadURL(`/search?q=${encodeURIComponent(query)}`);
-        } else {
-          // Treat as URL
-          loadURL(query);
-        }
-      }
-    });
-
-    // Initial load
-    loadURL('https://www.google.com');
-  </script>
 </body>
 </html>
