@@ -1,183 +1,101 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Euphoria</title>
-<style>
-  body {
-    margin: 0;
-    font-family: Arial, sans-serif;
-    background: #111;
-    color: #fff;
-    overflow: hidden;
-  }
+  <head>
+    <meta charset="UTF-8" />
+    <title>Scramjet Proxy UI</title>
+    <style>
+      body {
+        background: #0a0a0a;
+        color: white;
+        margin: 0;
+        font-family: Arial, sans-serif;
+        overflow: hidden;
+      }
+      .top-oval {
+        position: fixed;
+        top: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: #1a1a1a;
+        width: 60%;
+        height: 60px;
+        border-radius: 50px;
+        display: flex;
+        align-items: center;
+        padding: 0 25px;
+        box-shadow: 0 0 20px #000;
+      }
+      .top-oval input {
+        flex: 1;
+        border: none;
+        background: transparent;
+        color: white;
+        font-size: 1.1em;
+        outline: none;
+      }
+      iframe {
+        position: absolute;
+        top: 100px;
+        left: 0;
+        width: 100%;
+        height: calc(100vh - 100px);
+        border: none;
+      }
+      .buttons {
+        position: fixed;
+        top: 30px;
+        right: 40px;
+        display: flex;
+        gap: 10px;
+      }
+      button {
+        background: #333;
+        border: none;
+        color: white;
+        padding: 8px 14px;
+        border-radius: 20px;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #555;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="top-oval">
+      <input
+        id="urlInput"
+        type="text"
+        placeholder="Enter a URL (e.g. https://google.com)"
+      />
+    </div>
+    <div class="buttons">
+      <button id="backBtn">←</button>
+      <button id="forwardBtn">→</button>
+      <button id="homeBtn">🏠</button>
+    </div>
+    <iframe id="viewer"></iframe>
 
-  /* Top oval bar */
-  #topbar {
-    display: flex;
-    align-items: center;
-    padding: 6px;
-    background: #222; /* solid dark */
-    border-radius: 24px;
-    margin: 8px;
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    z-index: 1000;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-  }
+    <script>
+      const input = document.getElementById("urlInput");
+      const iframe = document.getElementById("viewer");
 
-  #topbar button {
-    background: #444;
-    border: none;
-    color: white;
-    padding: 8px 12px;
-    margin-right: 6px;
-    border-radius: 12px;
-    cursor: pointer;
-    font-size: 14px;
-    flex-shrink: 0;
-  }
+      function load(url) {
+        if (!url.startsWith("http")) url = "https://" + url;
+        iframe.src = "/proxy?url=" + encodeURIComponent(url);
+      }
 
-  #topbar button:hover {
-    background: #666;
-  }
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") load(input.value);
+      });
 
-  #searchInput {
-    flex: 1;
-    padding: 8px 12px;
-    border-radius: 12px;
-    border: none;
-    font-size: 14px;
-    margin-right: 6px;
-    background: #333;
-    color: white;
-  }
-
-  #searchInput::placeholder {
-    color: #bbb;
-  }
-
-  #content {
-    position: absolute;
-    top: 48px;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    overflow: auto;
-    background: #fff;
-    border-radius: 8px;
-  }
-
-  #spinnerOverlay {
-    position: absolute;
-    top: 48px;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(0,0,0,0.6);
-    display: none;
-    justify-content: center;
-    align-items: center;
-    z-index: 900;
-  }
-
-  .spinner {
-    border: 6px solid #f3f3f3;
-    border-top: 6px solid #4caf50;
-    border-radius: 50%;
-    width: 40px;
-    height: 40px;
-    animation: spin 1s linear infinite;
-  }
-
-  @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-  }
-</style>
-</head>
-<body>
-
-<div id="topbar">
-  <button id="backBtn">◀</button>
-  <button id="forwardBtn">▶</button>
-  <button id="refreshBtn">⟳</button>
-  <button id="homeBtn">🏠</button>
-  <button id="fullscreenBtn">⛶</button>
-  <input type="text" id="searchInput" placeholder="Enter URL or search...">
-  <button id="searchBtn">🔍</button>
-</div>
-
-<div id="spinnerOverlay">
-  <div class="spinner"></div>
-</div>
-
-<div id="content"></div>
-
-<script>
-const content = document.getElementById("content");
-const spinner = document.getElementById("spinnerOverlay");
-const searchInput = document.getElementById("searchInput");
-
-let historyStack = [];
-let historyIndex = -1;
-
-function normalizeInput(input) {
-  input = input.trim();
-  if (!input) return "https://www.google.com";
-  if (!input.startsWith("http")) {
-    if (input.includes(" ")) return `https://www.google.com/search?q=${encodeURIComponent(input)}`;
-    return "https://" + input;
-  }
-  return input;
-}
-
-async function loadURL(url, pushHistory = true) {
-  spinner.style.display = "flex";
-  try {
-    const res = await fetch(`/proxy?url=${encodeURIComponent(url)}`);
-    if (!res.ok) throw new Error(res.status + " " + res.statusText);
-    const html = await res.text();
-    content.innerHTML = html;
-
-    if (pushHistory) {
-      historyStack = historyStack.slice(0, historyIndex + 1);
-      historyStack.push(url);
-      historyIndex++;
-    }
-  } catch (e) {
-    content.innerHTML = `<h2 style="color:red;text-align:center;margin-top:50px;">Error loading page:<br>${e.message}</h2>`;
-  } finally {
-    spinner.style.display = "none";
-  }
-}
-
-// Navigation buttons
-document.getElementById("backBtn").onclick = () => {
-  if (historyIndex > 0) loadURL(historyStack[--historyIndex], false);
-};
-document.getElementById("forwardBtn").onclick = () => {
-  if (historyIndex < historyStack.length - 1) loadURL(historyStack[++historyIndex], false);
-};
-document.getElementById("refreshBtn").onclick = () => {
-  if (historyIndex >= 0) loadURL(historyStack[historyIndex], false);
-};
-document.getElementById("homeBtn").onclick = () => loadURL("https://www.google.com");
-document.getElementById("fullscreenBtn").onclick = () => {
-  if (!document.fullscreenElement) document.documentElement.requestFullscreen();
-  else document.exitFullscreen();
-};
-
-// Search
-document.getElementById("searchBtn").onclick = () => loadURL(normalizeInput(searchInput.value));
-searchInput.addEventListener("keydown", e => { if (e.key === "Enter") loadURL(normalizeInput(searchInput.value)); });
-
-// Initial load
-loadURL("https://www.google.com");
-</script>
-
-</body>
+      document.getElementById("homeBtn").onclick = () => {
+        iframe.src = "";
+        input.value = "";
+      };
+      document.getElementById("backBtn").onclick = () => window.history.back();
+      document.getElementById("forwardBtn").onclick = () =>
+        window.history.forward();
+    </script>
+  </body>
 </html>
