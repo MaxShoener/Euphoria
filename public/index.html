@@ -30,6 +30,9 @@
     #info{position:fixed;bottom:12px;left:12px;color:#888;font-size:13px}
     main { position: absolute; top: 90px; bottom: 0; left: 0; right: 0; overflow:auto; display:flex; align-items:center; justify-content:center; color:#999 }
     .hint { text-align:center; max-width:720px; padding:30px; border-radius:12px; background: rgba(255,255,255,0.02); }
+    #prompt-deploy { display:none; position: fixed; top: 40%; left:50%; transform:translate(-50%,-50%); background:#111; padding:18px; border-radius:10px; box-shadow:0 12px 40px rgba(0,0,0,0.7); z-index:2000;}
+    #prompt-deploy input { width: 420px; padding:8px 10px; border-radius:8px; border: none; background:#222; color:#fff; outline:none; }
+    #prompt-deploy button { margin-left:10px; padding:8px 12px; border-radius:8px; border:0; background:var(--accent); color:#fff; cursor:pointer; }
   </style>
 </head>
 <body>
@@ -52,39 +55,81 @@
 
   <div id="info">Session-backed proxy • No iframe • Login persistence enabled</div>
 
+  <div id="prompt-deploy">
+    <div style="margin-bottom:8px;color:#ddd">You opened this file locally (file://). Enter your Euphoria deployment base URL so this UI can talk to the server (e.g. <code>https://useful-karil-maxshoener-6cb890d9.koyeb.app</code>):</div>
+    <input id="deploy-url" placeholder="https://your-euphoria.example" />
+    <button id="deploy-save">Save</button>
+  </div>
+
   <script>
-    const q = document.getElementById('q');
-    const go = document.getElementById('go');
-    const back = document.getElementById('back');
-    const forward = document.getElementById('forward');
-    const refresh = document.getElementById('refresh');
-    const home = document.getElementById('home');
-    const full = document.getElementById('full');
-
-    function normalize(v) {
-      v = (v||'').trim();
-      if (!v) return 'https://www.google.com';
-      try { new URL(v); return v; } catch(e) {}
-      if (v.indexOf(' ') >= 0) return 'https://www.google.com/search?q=' + encodeURIComponent(v);
-      return 'https://' + v;
-    }
-
-    function goTo(val) {
-      const u = normalize(val);
-      window.location.href = '/load?url=' + encodeURIComponent(u);
-    }
-
-    go.onclick = () => goTo(q.value);
-    q.addEventListener('keydown', e => { if (e.key === 'Enter') goTo(q.value); });
-
-    back.onclick = () => window.history.back();
-    forward.onclick = () => window.history.forward();
-    refresh.onclick = () => window.location.reload();
-    home.onclick = () => { q.value = ''; window.location.href = '/'; };
-    full.onclick = () => { if (!document.fullscreenElement) document.documentElement.requestFullscreen(); else document.exitFullscreen(); };
-
-    // If this page was opened from /load?url=..., pre-populate input
+    // FRONTEND logic
     (function(){
+      const q = document.getElementById('q');
+      const go = document.getElementById('go');
+      const back = document.getElementById('back');
+      const forward = document.getElementById('forward');
+      const refresh = document.getElementById('refresh');
+      const home = document.getElementById('home');
+      const full = document.getElementById('full');
+
+      // detect whether this HTML was loaded over file://
+      const isLocalFile = location.protocol === 'file:';
+      // Default proxy base: same origin when served, otherwise will be filled by user
+      let PROXY_BASE = '';
+
+      if (!isLocalFile) {
+        // normal server-served case: use same origin
+        PROXY_BASE = window.location.origin;
+      } else {
+        // if local, try a saved value in localStorage
+        const saved = localStorage.getItem('euphoria_deploy_base');
+        if (saved) PROXY_BASE = saved;
+        else {
+          // show prompt to get deployment base URL from user (so file:/// can connect)
+          document.getElementById('prompt-deploy').style.display = 'block';
+          const input = document.getElementById('deploy-url');
+          const btn = document.getElementById('deploy-save');
+          btn.onclick = () => {
+            const v = input.value.trim();
+            if (!v) return alert('Please enter your deployed Euphoria base URL (must start with http or https).');
+            PROXY_BASE = v.replace(/\/+$/,''); // trim trailing slash
+            localStorage.setItem('euphoria_deploy_base', PROXY_BASE);
+            document.getElementById('prompt-deploy').style.display = 'none';
+            alert('Saved deployment URL. Now type a site and press Go.');
+          };
+        }
+      }
+
+      function normalize(v) {
+        v = (v||'').trim();
+        if (!v) return 'https://www.google.com';
+        try { new URL(v); return v; } catch(e) {}
+        if (v.indexOf(' ') >= 0) return 'https://www.google.com/search?q=' + encodeURIComponent(v);
+        return 'https://' + v;
+      }
+
+      function proxyLoad(targetUrl) {
+        // targetUrl must be absolute
+        if (!PROXY_BASE) {
+          // fallback - if server is same origin, use relative endpoints
+          if (!isLocalFile) PROXY_BASE = window.location.origin;
+          else return alert('Deployment base not set. Please enter your deployed Euphoria URL.');
+        }
+        const loadUrl = PROXY_BASE + '/load?url=' + encodeURIComponent(targetUrl);
+        // navigate the whole browser to the proxied page (the server will inject UI)
+        window.location.href = loadUrl;
+      }
+
+      go.onclick = () => proxyLoad(normalize(q.value));
+      q.addEventListener('keydown', (e) => { if (e.key === 'Enter') proxyLoad(normalize(q.value)); });
+
+      back.onclick = () => window.history.back();
+      forward.onclick = () => window.history.forward();
+      refresh.onclick = () => window.location.reload();
+      home.onclick = () => { q.value=''; window.location.href = isLocalFile ? (PROXY_BASE || '/') : '/'; };
+      full.onclick = () => { if (!document.fullscreenElement) document.documentElement.requestFullscreen(); else document.exitFullscreen(); };
+
+      // prefill input if opened with /load?url=...
       try {
         const params = new URLSearchParams(window.location.search);
         const u = params.get('url');
