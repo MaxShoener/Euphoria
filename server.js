@@ -1,21 +1,16 @@
 // server.js
-/* EUPHORIA proxy server
-   - /           -> serves public/index.html
-   - /load?url=  -> fetch HTML, rewrite, inject top-bar, return HTML (no iframe)
-   - /proxy?url= -> fetch arbitrary assets and forward bytes (attaches session cookies)
-   - Sessions: server-side cookie store mapped by euphoria_sid HttpOnly cookie
-   - Caching: in-memory + disk for speed
-   - Safe defaults and helpful logs
-*/
-
 import express from "express";
 import fetch from "node-fetch";
 import compression from "compression";
 import cookie from "cookie";
 import morgan from "morgan";
-import path from "path";
 import fs from "fs";
+import path from "path";
 import { fileURLToPath } from "url";
+
+// Import scramjet as suggested (default import then destructure)
+import pkg from "scramjet";
+const { StringStream } = pkg;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -23,32 +18,31 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middlewares
+// --- Middleware ---
 app.use(morgan("tiny"));
 app.use(compression());
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
+
+// Serve static frontend
 app.use(express.static(path.join(__dirname, "public"), { index: false }));
 
-// --- Config ---
+// --- Config & storage ---
 const SESSION_NAME = "euphoria_sid";
-const SESSION_TTL = 1000 * 60 * 60 * 24; // 24h
-const CACHE_TTL = 1000 * 60 * 10; // 10 minutes default
+const SESSION_TTL = 1000 * 60 * 60 * 24; // 24 hours
+const CACHE_TTL = 1000 * 60 * 10; // 10 minutes
 const CACHE_DIR = path.join(__dirname, "cache");
 if (!fs.existsSync(CACHE_DIR)) fs.mkdirSync(CACHE_DIR, { recursive: true });
 
-// --- In-memory stores ---
-const SESSIONS = new Map(); // sid -> { cookies: Map, last: timestamp }
+const SESSIONS = new Map(); // sid -> { cookies: Map, last }
 const MEM_CACHE = new Map(); // key -> { val, t }
 
 // --- Helpers ---
-function makeSid() {
-  return Math.random().toString(36).slice(2) + Date.now().toString(36);
-}
 function now() { return Date.now(); }
+function mkSid() { return Math.random().toString(36).slice(2) + now().toString(36); }
 
 function createSession() {
-  const sid = makeSid();
+  const sid = mkSid();
   const data = { cookies: new Map(), last: now() };
   SESSIONS.set(sid, data);
   return { sid, data };
@@ -80,58 +74,53 @@ function persistSessionCookie(res, sid) {
   else res.setHeader("Set-Cookie", [prev, sc]);
 }
 
-function cacheKey(key) {
-  return Buffer.from(key).toString("base64url");
-}
-
-function cacheGet(key) {
-  const m = MEM_CACHE.get(key);
+function cacheKey(k) { return Buffer.from(k).toString("base64url"); }
+function cacheGet(k) {
+  const m = MEM_CACHE.get(k);
   if (m && (now() - m.t) < CACHE_TTL) return m.val;
-  const f = path.join(CACHE_DIR, cacheKey(key));
+  const f = path.join(CACHE_DIR, cacheKey(k));
   if (fs.existsSync(f)) {
     try {
       const raw = fs.readFileSync(f, "utf8");
-      const parsed = JSON.parse(raw);
-      if ((now() - parsed.t) < CACHE_TTL) {
-        MEM_CACHE.set(key, { val: parsed.val, t: parsed.t });
-        return parsed.val;
+      const obj = JSON.parse(raw);
+      if ((now() - obj.t) < CACHE_TTL) {
+        MEM_CACHE.set(k, { val: obj.val, t: obj.t });
+        return obj.val;
       } else {
-        try { fs.unlinkSync(f); } catch {}
+        try { fs.unlinkSync(f); } catch (e) {}
       }
-    } catch {}
+    } catch (e) {}
   }
   return null;
 }
-
-function cacheSet(key, val) {
-  MEM_CACHE.set(key, { val, t: now() });
-  const f = path.join(CACHE_DIR, cacheKey(key));
-  try { fs.writeFileSync(f, JSON.stringify({ val, t: now() }), "utf8"); } catch {}
+function cacheSet(k, v) {
+  MEM_CACHE.set(k, { val: v, t: now() });
+  const f = path.join(CACHE_DIR, cacheKey(k));
+  try { fs.writeFileSync(f, JSON.stringify({ val: v, t: now() }), "utf8"); } catch (e) {}
 }
 
 function toAbsolute(href, base) {
   try { return new URL(href, base).href; } catch { return null; }
 }
-
-function buildCookieHeaderFromMap(map) {
+function buildCookieHeader(map) {
   const parts = [];
-  for (const [k,v] of map.entries()) parts.push(`${k}=${v}`);
+  for (const [k, v] of map.entries()) parts.push(`${k}=${v}`);
   return parts.join("; ");
 }
-
-function storeSetCookieStringsToSession(setCookieStrings = [], sessionData) {
+function storeSetCookieStrings(setCookieStrings = [], sessionData) {
   for (const sc of setCookieStrings) {
     try {
-      const parsed = cookie.parse(sc);
+      // cookie.parse expects "k=v; ..." so parse the initial part
+      const parsed = cookie.parse(sc.split(";")[0] || "");
       for (const k in parsed) {
         if (!k) continue;
         sessionData.cookies.set(k, parsed[k]);
       }
-    } catch (e) { /* ignore parse error */ }
+    } catch (e) { /* ignore */ }
   }
 }
 
-// prune sessions periodically
+// prune old sessions
 setInterval(() => {
   const cutoff = now() - SESSION_TTL;
   for (const [sid, data] of SESSIONS.entries()) {
@@ -139,36 +128,31 @@ setInterval(() => {
   }
 }, 1000 * 60 * 10);
 
-// --- Routes ---
-
-// root: serve single-file frontend
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
-
-// support both query style /proxy?url=... and path style /proxy/<encoded>
-// and accept raw hostnames/urls
+// helper: extract url from query or path (/proxy/<encoded>)
 function extractUrl(req) {
   if (req.query && req.query.url) return req.query.url;
-  // path style: /proxy/https%3A%2F%2Fgoogle.com or /proxy/google.com
   const m = req.path.match(/^\/proxy\/(.+)$/);
   if (m) return decodeURIComponent(m[1]);
   return null;
 }
 
-// /load -> fetch HTML page, rewrite references, inject UI, return HTML
+// --- Routes ---
+
+// root: serve frontend index
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+// /load: fetch full page HTML, rewrite, inject topbar UI, return HTML.
+// This is the single-tab "browser" content loader.
 app.get("/load", async (req, res) => {
   let raw = req.query.url;
-  if (!raw) {
-    return res.status(400).send("Missing url (e.g. /load?url=https://google.com)");
-  }
-  // Normalize
+  if (!raw) return res.status(400).send("Missing url (e.g. /load?url=https://google.com)");
   if (!/^https?:\/\//i.test(raw)) raw = "https://" + raw;
 
   const session = getSession(req);
   if (session.isNew) persistSessionCookie(res, session.sid);
 
-  // caching
   const cacheKeyHtml = raw + "::html";
   const cached = cacheGet(cacheKeyHtml);
   if (cached) {
@@ -176,10 +160,9 @@ app.get("/load", async (req, res) => {
     return res.type("html").send(cached);
   }
 
-  // Prepare headers forwarded to origin
-  const cookieHeader = buildCookieHeaderFromMap(session.data.cookies);
+  const cookieHeader = buildCookieHeader(session.data.cookies);
   const headers = {
-    "User-Agent": req.headers["user-agent"] || "EuphoriaProxy/1.0",
+    "User-Agent": req.headers["user-agent"] || "Euphoria/1.0",
     "Accept": req.headers["accept"] || "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": req.headers["accept-language"] || "en-US,en;q=0.9"
   };
@@ -193,11 +176,11 @@ app.get("/load", async (req, res) => {
     const originRes = await fetch(raw, { headers, redirect: "manual", signal: controller.signal });
     clearTimeout(timeout);
 
-    // Capture set-cookie and store to session
-    const setCookies = originRes.headers.raw()["set-cookie"] || [];
-    if (setCookies.length) storeSetCookieStringsToSession(setCookies, session.data);
+    // store set-cookie to session
+    const setCookies = originRes.headers.raw ? (originRes.headers.raw()["set-cookie"] || []) : [];
+    if (setCookies.length) storeSetCookieStrings(setCookies, session.data);
 
-    // handle redirects (meta redirect wrapper)
+    // if redirect, resolve and keep inside our /load flow
     if (originRes.status >= 300 && originRes.status < 400 && originRes.headers.get("location")) {
       const loc = originRes.headers.get("location");
       const resolved = toAbsolute(loc, raw) || loc;
@@ -207,7 +190,6 @@ app.get("/load", async (req, res) => {
 
     const ctype = originRes.headers.get("content-type") || "";
     if (!ctype.includes("text/html")) {
-      // return binary directly
       const buffer = Buffer.from(await originRes.arrayBuffer());
       persistSessionCookie(res, session.sid);
       if (originRes.headers.get("content-type")) res.setHeader("Content-Type", originRes.headers.get("content-type"));
@@ -219,31 +201,30 @@ app.get("/load", async (req, res) => {
     // remove CSP meta tags that would block our injected UI
     html = html.replace(/<meta[^>]*http-equiv=["']?content-security-policy["']?[^>]*>/gi, "");
 
-    // remove SRI/integrity and crossorigin that would block proxied assets
+    // remove SRI/integrity/crossorigin attributes preventing proxied assets
     html = html.replace(/\sintegrity=(["'])(.*?)\1/gi, "");
     html = html.replace(/\scrossorigin=(["'])(.*?)\1/gi, "");
 
-    // inject <base> to make relative URLs easier
-    html = html.replace(/<head([^>]*)>/i, (m,g) => `<head${g}><base href="${raw}">`);
+    // inject base tag for relative URLs
+    html = html.replace(/<head([^>]*)>/i, (m, g) => `<head${g}><base href="${raw}">`);
 
-    // rewrite href/src/srcset to route through /proxy
+    // rewrite href/src/srcset => /proxy?url=absolute
     html = html.replace(/(href|src|srcset)=["']([^"']*)["']/gi, (m, attr, val) => {
       if (!val) return m;
       if (/^(javascript:|data:|mailto:|tel:|#)/i.test(val)) return m;
-      if (val.startsWith("/proxy?url=") || /^\/\//.test(val)) {
-        if (/^\/\//.test(val)) {
-          try {
-            const abs = new URL(val, raw).href;
-            return `${attr}="/proxy?url=${encodeURIComponent(abs)}"`;
-          } catch { return m; }
-        }
-        return m;
+      if (val.startsWith("/proxy?url=")) return m;
+      // protocol-relative
+      if (/^\/\//.test(val)) {
+        try {
+          const abs = new URL(val, raw).href;
+          return `${attr}="/proxy?url=${encodeURIComponent(abs)}"`;
+        } catch { return m; }
       }
       const abs = toAbsolute(val, raw) || val;
       try { return `${attr}="/proxy?url=${encodeURIComponent(abs)}"`; } catch { return m; }
     });
 
-    // Rewriting CSS url(...) references
+    // rewrite CSS url(...) -> /proxy?url=
     html = html.replace(/url\((['"]?)(.*?)\1\)/gi, (m, q, val) => {
       if (!val) return m;
       if (/^data:/i.test(val)) return m;
@@ -251,11 +232,11 @@ app.get("/load", async (req, res) => {
       try { return `url("/proxy?url=${encodeURIComponent(abs)}")`; } catch { return m; }
     });
 
-    // remove some heavy analytics scripts (best-effort)
+    // remove some analytics scripts lightly
     html = html.replace(/<script[^>]*src=["'][^"']*(analytics|gtag|googletagmanager|doubleclick|googlesyndication)[^"']*["'][^>]*><\/script>/gi, "");
 
-    // inject our topbar (solid dark oval) and small helper style/script
-    const injectedUI = `
+    // inject Euphoria topbar (solid dark oval) and small client helper
+    const ui = `
       <div id="euphoria-topbar" style="position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:2147483647;width:78%;max-width:1200px;background:#111;border-radius:28px;padding:8px 12px;display:flex;align-items:center;gap:8px;box-shadow:0 6px 20px rgba(0,0,0,0.6);font-family:system-ui,Arial,sans-serif;">
         <button id="eph-back" style="min-width:44px;padding:8px;border-radius:12px;border:0;background:#222;color:#fff;cursor:pointer">◀</button>
         <button id="eph-forward" style="min-width:44px;padding:8px;border-radius:12px;border:0;background:#222;color:#fff;cursor:pointer">▶</button>
@@ -268,85 +249,81 @@ app.get("/load", async (req, res) => {
       <style>body{padding-top:76px !important;}</style>
       <script>
         (function(){
-          const input = document.getElementById('eph-input');
-          const go = document.getElementById('eph-go');
-          const back = document.getElementById('eph-back');
-          const forward = document.getElementById('eph-forward');
-          const refresh = document.getElementById('eph-refresh');
-          const home = document.getElementById('eph-home');
-          const full = document.getElementById('eph-full');
-
-          // prefill with current URL
           try {
-            const m = window.location.search.match(/[?&]url=([^&]+)/);
-            input.value = m ? decodeURIComponent(m[1]) : '';
-          } catch (e) {}
+            const input = document.getElementById('eph-input');
+            const go = document.getElementById('eph-go');
+            const back = document.getElementById('eph-back');
+            const forward = document.getElementById('eph-forward');
+            const refresh = document.getElementById('eph-refresh');
+            const home = document.getElementById('eph-home');
+            const full = document.getElementById('eph-full');
 
-          function normalize(v) {
-            v = (v||'').trim();
-            if (!v) return 'https://www.google.com';
-            try { new URL(v); return v; } catch(e) {}
-            if (v.indexOf(' ') !== -1) return 'https://www.google.com/search?q=' + encodeURIComponent(v);
-            return 'https://' + v;
-          }
+            // prefill input with the proxied target if available
+            try {
+              const m = window.location.search.match(/[?&]url=([^&]+)/);
+              input.value = m ? decodeURIComponent(m[1]) : '';
+            } catch (e) {}
 
-          go.onclick = () => { const url = normalize(input.value); window.location.href = '/load?url=' + encodeURIComponent(url); };
-          input.onkeydown = e => { if (e.key === 'Enter') go.onclick(); };
-          back.onclick = () => window.history.back();
-          forward.onclick = () => window.history.forward();
-          refresh.onclick = () => window.location.reload();
-          home.onclick = () => window.location.href = '/';
-          full.onclick = () => { if (!document.fullscreenElement) document.documentElement.requestFullscreen(); else document.exitFullscreen(); };
+            function normalize(v){
+              v = (v||'').trim();
+              if (!v) return 'https://www.google.com';
+              try { new URL(v); return v; } catch(e) {}
+              if (v.indexOf(' ') !== -1) return 'https://www.google.com/search?q=' + encodeURIComponent(v);
+              return 'https://' + v;
+            }
 
-          // monkeypatch fetch to include euphoria session header derived from HttpOnly cookie (can't read HttpOnly) — fallback uses header if present
-          // This is best-effort: server attaches session cookie itself, client XHR will include cookies automatically for same-origin.
+            go.onclick = () => { const url = normalize(input.value); window.location.href = '/load?url=' + encodeURIComponent(url); };
+            input.onkeydown = e => { if (e.key === 'Enter') go.onclick(); };
+            back.onclick = () => window.history.back();
+            forward.onclick = () => window.history.forward();
+            refresh.onclick = () => window.location.reload();
+            home.onclick = () => window.location.href = '/';
+            full.onclick = () => { if (!document.fullscreenElement) document.documentElement.requestFullscreen(); else document.exitFullscreen(); };
+          } catch(e){}
         })();
       </script>
     `;
 
-    html = html.replace(/<body([^>]*)>/i, (m) => m + injectedUI);
+    html = html.replace(/<body([^>]*)>/i, (m) => m + ui);
 
     cacheSet(cacheKeyHtml, html);
     persistSessionCookie(res, session.sid);
     res.setHeader("x-euphoria-session", session.sid);
-    res.type("html").send(html);
 
+    // stream progressively with scramjet StringStream (helps for large pages)
+    StringStream.from(html).pipe(res);
   } catch (err) {
-    console.error("Load error:", err);
+    console.error("load error:", err && err.message ? err.message : err);
     persistSessionCookie(res, session.sid);
-    res.status(500).send(`<div style="padding:2rem;color:#fff;background:#111;font-family:system-ui;">Proxy error: ${(err && err.message) || String(err)}</div>`);
+    res.status(500).send(`<div style="padding:1.5rem;color:#fff;background:#111;font-family:system-ui;">Proxy error: ${(err && err.message) || String(err)}</div>`);
   }
 });
 
-// /proxy -> fetch arbitrary assets and forward bytes (images, css, js, XHR)
+// /proxy => fetch assets (images, css, js, XHR resources), preserve session cookies
 app.get("/proxy", async (req, res) => {
   let raw = extractUrl(req);
   if (!raw) raw = req.query.url;
   if (!raw) return res.status(400).send("Missing url");
-
-  // normalize protocol
   if (!/^https?:\/\//i.test(raw)) raw = "https://" + raw;
 
   const session = getSession(req);
   if (session.isNew) persistSessionCookie(res, session.sid);
 
-  // small-asset cache key
   const cacheKeyAsset = raw + "::asset";
   const cached = cacheGet(cacheKeyAsset);
   if (cached) {
     try {
       const obj = typeof cached === "string" ? JSON.parse(cached) : cached;
       if (obj.headers) {
-        for (const [k,v] of Object.entries(obj.headers)) res.setHeader(k, v);
+        for (const [k, v] of Object.entries(obj.headers)) res.setHeader(k, v);
       }
-      res.send(Buffer.from(obj.body, "base64"));
-      return;
+      return res.send(Buffer.from(obj.body, "base64"));
     } catch {}
   }
 
-  const cookieHeader = buildCookieHeaderFromMap(session.data.cookies);
+  const cookieHeader = buildCookieHeader(session.data.cookies);
   const headers = {
-    "User-Agent": req.headers["user-agent"] || "EuphoriaProxy/1.0",
+    "User-Agent": req.headers["user-agent"] || "Euphoria/1.0",
     "Accept": req.headers["accept"] || "*/*",
     "Referer": req.headers["referer"] || undefined
   };
@@ -359,11 +336,10 @@ app.get("/proxy", async (req, res) => {
     const originRes = await fetch(raw, { headers, redirect: "manual", signal: controller.signal });
     clearTimeout(timeout);
 
-    // store Set-Cookie to session
-    const setCookies = originRes.headers.raw()["set-cookie"] || [];
-    if (setCookies.length) storeSetCookieStringsToSession(setCookies, session.data);
+    // store Set-Cookie
+    const setCookies = originRes.headers.raw ? (originRes.headers.raw()["set-cookie"] || []) : [];
+    if (setCookies.length) storeSetCookieStrings(setCookies, session.data);
 
-    // handle redirect
     if (originRes.status >= 300 && originRes.status < 400 && originRes.headers.get("location")) {
       const loc = originRes.headers.get("location");
       const resolved = toAbsolute(loc, raw) || loc;
@@ -380,20 +356,21 @@ app.get("/proxy", async (req, res) => {
 
     // cache small assets
     if (buf.length < 100 * 1024) {
-      try { cacheSet(cacheKeyAsset, JSON.stringify({ headers: { "Content-Type": ctype }, body: buf.toString("base64") })); } catch {}
+      try {
+        cacheSet(cacheKeyAsset, JSON.stringify({ headers: { "Content-Type": ctype }, body: buf.toString("base64") }));
+      } catch (e) {}
     }
 
     persistSessionCookie(res, session.sid);
     return res.send(buf);
-
   } catch (err) {
-    console.error("Proxy asset error:", err);
+    console.error("proxy asset error:", err && err.message ? err.message : err);
     persistSessionCookie(res, session.sid);
     return res.status(500).send("Proxy asset error: " + (err && err.message ? err.message : String(err)));
   }
 });
 
-// fallback to index.html for unknown routes (useful when hosting single-file frontends)
+// Fallback: return index.html for GET html requests (SPA-friendly)
 app.use((req, res, next) => {
   if (req.method === "GET" && req.accepts("html")) {
     return res.sendFile(path.join(__dirname, "public", "index.html"));
@@ -401,5 +378,4 @@ app.use((req, res, next) => {
   next();
 });
 
-// start
-app.listen(PORT, () => console.log(`Euphoria proxy listening on port ${PORT}`));
+app.listen(PORT, () => console.log(`Euphoria single-tab proxy listening on ${PORT}`));
