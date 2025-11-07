@@ -1,8 +1,8 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Euphoria</title>
 <style>
   :root { --bg:#0b0b0b; --bar:#111; --btn:#222; --btn-hover:#333; --accent:#2e7d32; color-scheme:dark; }
@@ -33,53 +33,55 @@
   <main>
     <div class="hint">
       <h2>Euphoria</h2>
-      <p>Type a site (e.g. <strong>google.com</strong> or <strong>xbox.com</strong>), press Enter or click Go. Euphoria loads the page in a single tab and keeps navigation inside the proxy so the topbar remains visible and logins persist.</p>
+      <p>Type a site (for example <strong>google.com</strong> or <strong>xbox.com</strong>), press Enter or click Go. The proxy will load the site and keep the topbar UI injected into every page so navigation and logins remain inside Euphoria.</p>
     </div>
   </main>
 
-  <script>
-    const q = document.getElementById('q');
-    const go = document.getElementById('go');
-    const back = document.getElementById('back');
-    const forward = document.getElementById('forward');
-    const refresh = document.getElementById('refresh');
-    const home = document.getElementById('home');
-    const full = document.getElementById('full');
+<script>
+  const q = document.getElementById('q');
+  const go = document.getElementById('go');
+  const back = document.getElementById('back');
+  const forward = document.getElementById('forward');
+  const refresh = document.getElementById('refresh');
+  const home = document.getElementById('home');
+  const full = document.getElementById('full');
 
-    function isLikelySearch(v) {
-      if (!v) return true;
-      if (v.includes(' ')) return true;
-      if (/^https?:\/\//i.test(v)) return false;
-      if (/\./.test(v)) return false;
-      return true;
-    }
-    function normalize(v) {
-      v = (v||'').trim();
-      if (!v) return 'https://www.google.com';
-      if (isLikelySearch(v)) return 'https://www.google.com/search?q=' + encodeURIComponent(v);
-      try { new URL(v); return v; } catch(e) {}
-      return 'https://' + v;
-    }
+  function isLikelySearch(v){
+    if(!v) return true;
+    if (v.includes(' ')) return true;
+    if (/^https?:\/\//i.test(v)) return false;
+    if (/\./.test(v)) return false;
+    return true;
+  }
+  function normalize(v){
+    v = (v||'').trim();
+    if(!v) return 'https://www.google.com';
+    if(isLikelySearch(v)) return 'https://www.google.com/search?q=' + encodeURIComponent(v);
+    try{ new URL(v); return v; } catch(e) {}
+    return 'https://' + v;
+  }
 
-    function openProxy(url) {
-      const u = normalize(url);
-      window.location.href = '/load?url=' + encodeURIComponent(u);
-    }
+  function openProxy(url){
+    // if user pasted a /proxy?url= link, don't double-wrap
+    if (/\\/proxy\\?url=/i.test(url)) { location.href = url; return; }
+    const u = normalize(url);
+    location.href = '/proxy?url=' + encodeURIComponent(u);
+  }
 
-    go.onclick = () => openProxy(q.value);
-    q.addEventListener('keydown', e => { if (e.key === 'Enter') openProxy(q.value); });
-    back.onclick = () => window.history.back();
-    forward.onclick = () => window.history.forward();
-    refresh.onclick = () => window.location.reload();
-    home.onclick = () => { q.value=''; window.location.href = '/'; };
-    full.onclick = () => { if (!document.fullscreenElement) document.documentElement.requestFullscreen(); else document.exitFullscreen(); };
+  go.onclick = () => openProxy(q.value);
+  q.addEventListener('keydown', e => { if(e.key === 'Enter') openProxy(q.value); });
+  back.onclick = () => history.back();
+  forward.onclick = () => history.forward();
+  refresh.onclick = () => location.reload();
+  home.onclick = () => { q.value=''; location.href = '/'; };
+  full.onclick = () => { if (!document.fullscreenElement) document.documentElement.requestFullscreen(); else document.exitFullscreen(); };
 
-    // Pre-fill if /load?url= present
-    try {
-      const params = new URLSearchParams(window.location.search);
-      const u = params.get('url');
-      if (u) q.value = decodeURIComponent(u);
-    } catch(e){}
-  </script>
+  // prefill if /proxy?url present in location
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const u = params.get('url');
+    if (u) q.value = decodeURIComponent(u);
+  } catch(e){}
+</script>
 </body>
 </html>
