@@ -133,6 +133,27 @@ function extractUrl(req) {
   return null;
 }
 
+// Heuristic: decide if an input is a search or a URL
+function isLikelySearch(input) {
+  if (!input) return true;
+  const s = input.trim();
+  if (s.includes(" ")) return true; // spaces => search
+  if (/^https?:\/\//i.test(s)) return false;
+  // if looks like ip or domain with dot, treat as URL
+  if (/\./.test(s)) return false;
+  // otherwise search (e.g. "gmail", "how to cook")
+  return true;
+}
+
+// Normalize user input into a proper URL or search
+function normalizeInputToURL(input) {
+  const v = (input || "").trim();
+  if (!v) return "https://www.google.com";
+  if (isLikelySearch(v)) return "https://www.google.com/search?q=" + encodeURIComponent(v);
+  if (/^https?:\/\//i.test(v)) return v;
+  return "https://" + v;
+}
+
 // Routes
 
 // Serve frontend index.html at root
@@ -144,7 +165,9 @@ app.get("/", (req, res) => {
 app.get("/load", async (req, res) => {
   let raw = req.query.url;
   if (!raw) return res.status(400).send("Missing url (e.g. /load?url=https://google.com)");
-  if (!/^https?:\/\//i.test(raw)) raw = "https://" + raw;
+
+  // normalize if input was a search or plain hostname
+  raw = normalizeInputToURL(decodeURIComponent(raw));
 
   const session = getSession(req);
   if (session.isNew) persistSessionCookie(res, session.sid);
@@ -156,7 +179,6 @@ app.get("/load", async (req, res) => {
     return res.type("html").send(cached);
   }
 
-  // prepare headers forwarded to origin
   const cookieHeader = buildCookieHeader(session.data.cookies);
   const headers = {
     "User-Agent": req.headers["user-agent"] || "Euphoria/1.0",
@@ -167,9 +189,9 @@ app.get("/load", async (req, res) => {
   if (req.headers.referer) headers["Referer"] = req.headers.referer;
 
   try {
-    // fetch and follow redirects so we end up with final URL and final HTML that works
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 20000);
+    // follow redirects server-side so the response HTML is final and navigation stays inside /load
     const response = await fetch(raw, { headers, redirect: "follow", signal: controller.signal });
     clearTimeout(timeout);
 
@@ -181,7 +203,6 @@ app.get("/load", async (req, res) => {
     const contentType = response.headers.get("content-type") || "";
 
     if (!contentType.includes("text/html")) {
-      // Non-HTML resource — forward as binary
       const buffer = Buffer.from(await response.arrayBuffer());
       persistSessionCookie(res, session.sid);
       if (response.headers.get("content-type")) res.setHeader("Content-Type", response.headers.get("content-type"));
@@ -190,52 +211,60 @@ app.get("/load", async (req, res) => {
 
     let html = await response.text();
 
-    // remove CSP meta tags to prevent blocking of injected resources
+    // remove CSP meta tags to avoid blocking injections
     html = html.replace(/<meta[^>]*http-equiv=["']?content-security-policy["']?[^>]*>/gi, "");
 
-    // strip integrity/crossorigin attributes that break proxying
+    // remove integrity/crossorigin attributes that break proxied assets
     html = html.replace(/\sintegrity=(["'])(.*?)\1/gi, "");
     html = html.replace(/\scrossorigin=(["'])(.*?)\1/gi, "");
 
-    // inject <base> using final resolved URL to help relative resolution
+    // inject base tag for relative resolution
     html = html.replace(/<head([^>]*)>/i, (m,g) => `<head${g}><base href="${finalUrl}">`);
 
-    // rewrite href/src/srcset/form actions to /proxy or /load
-    html = html.replace(/(<\s*form[^>]*action=)(["'])([^"']*)(["'])/gi, (m, pre, q1, val, q2) => {
-      if (!val) return m;
-      if (/^(javascript:|#)/i.test(val)) return m;
-      const abs = toAbsolute(val, finalUrl) || val;
-      // we want form submissions to go via /proxy for assets or /load for full-page navigations.
-      // easiest: keep form submissions going to /proxy so server will forward method as needed.
-      return `${pre}${q1}/proxy?url=${encodeURIComponent(abs)}${q2}`;
+    // Remove target="_blank" everywhere
+    html = html.replace(/\s+target=(["'])(.*?)\1/gi, " ");
+
+    // Convert window.open(...) -> location.href=... to keep navigation in same tab (best-effort)
+    // very simple replace for common patterns:
+    html = html.replace(/window\.open\((["'])(https?:\/\/[^"']+)\1(,[^)]+)?\)/gi, (m, q, url) => {
+      try { const u = new URL(url).href; return `window.location.href=${q}${u}${q}`; } catch { return m; }
     });
 
-    html = html.replace(/(href|src|srcset)=["']([^"']*)["']/gi, (m, attr, val) => {
+    // Rewrite anchor tags (<a ... href="...">) to /load so clicks navigate full pages via /load
+    html = html.replace(/<a\b([^>]*?)href=(["'])([^"']*)\2/gi, (m, pre, q, val) => {
       if (!val) return m;
-      if (/^(javascript:|data:|mailto:|tel:|#)/i.test(val)) return m;
-      if (val.startsWith("/proxy?url=")) return m;
-      // protocol relative URLs
-      if (/^\/\//.test(val)) {
-        try {
-          const abs = new URL(val, finalUrl).href;
-          return `${attr}="/proxy?url=${encodeURIComponent(abs)}"`;
-        } catch { return m; }
-      }
+      if (/^(javascript:|mailto:|tel:|#)/i.test(val)) return m; // keep non-http
       const abs = toAbsolute(val, finalUrl) || val;
-      try { return `${attr}="/proxy?url=${encodeURIComponent(abs)}"`; } catch { return m; }
+      return `<a${pre}href="/load?url=${encodeURIComponent(abs)}"`;
     });
 
-    // rewrite CSS url(...) -> /proxy?url=absolute
+    // For common asset tags (img, script, link), rewrite src/href/srcset to /proxy so browser fetches them through proxy
+    html = html.replace(/(<\s*(?:img|script|link)[^>]*?(?:src|href|srcset)=)(["'])([^"']*)\2/gi, (m, prefix, q, val) => {
+      if (!val) return m;
+      if (/^data:/i.test(val)) return m;
+      if (/^(javascript:|mailto:|tel:|#)/i.test(val)) return m;
+      const abs = toAbsolute(val, finalUrl) || val;
+      return `${prefix}${q}/proxy?url=${encodeURIComponent(abs)}${q}`;
+    });
+
+    // Also rewrite inline CSS url(...) references to /proxy
     html = html.replace(/url\((['"]?)(.*?)\1\)/gi, (m, q, val) => {
       if (!val) return m;
       if (/^data:/i.test(val)) return m;
       const abs = toAbsolute(val, finalUrl) || val;
-      try { return `url("/proxy?url=${encodeURIComponent(abs)}")`; } catch { return m; }
+      return `url("/proxy?url=${encodeURIComponent(abs)}")`;
     });
 
-    // rewrite meta-refresh redirects to keep navigation inside /load
+    // Rewrite form actions to /proxy so submissions pass through proxy routing
+    html = html.replace(/(<\s*form[^>]*action=)(["'])([^"']*)(["'])/gi, (m, pre, q1, val, q2) => {
+      if (!val) return m;
+      if (/^(javascript:|#)/i.test(val)) return m;
+      const abs = toAbsolute(val, finalUrl) || val;
+      return `${pre}${q1}/proxy?url=${encodeURIComponent(abs)}${q2}`;
+    });
+
+    // Rewrite meta refresh to /load
     html = html.replace(/<meta[^>]*http-equiv=["']?refresh["']?[^>]*>/gi, (m) => {
-      // attempt to rewrite content URL if present
       const match = m.match(/content\s*=\s*"(.*?)"/i);
       if (!match) return m;
       const parts = match[1].split(";");
@@ -248,10 +277,10 @@ app.get("/load", async (req, res) => {
       return `<meta http-equiv="refresh" content="${parts[0]};url=/load?url=${encodeURIComponent(abs)}">`;
     });
 
-    // remove some heavy analytics scripts (best-effort)
+    // Remove known analytics scripts to improve performance (best-effort)
     html = html.replace(/<script[^>]*src=["'][^"']*(analytics|gtag|googletagmanager|doubleclick|googlesyndication)[^"']*["'][^>]*><\/script>/gi, "");
 
-    // inject solid dark oval topbar (non-intrusive)
+    // Inject topbar UI (solid dark oval)
     const injectedTopbar = `
       <div id="euphoria-topbar" style="position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:2147483647;width:78%;max-width:1200px;background:#111;border-radius:28px;padding:8px 12px;display:flex;align-items:center;gap:8px;box-shadow:0 6px 20px rgba(0,0,0,0.6);font-family:system-ui,Arial,sans-serif;">
         <button id="eph-back" style="min-width:44px;padding:8px;border-radius:12px;border:0;background:#222;color:#fff;cursor:pointer">◀</button>
@@ -282,8 +311,9 @@ app.get("/load", async (req, res) => {
             function normalize(v){
               v = (v||'').trim();
               if (!v) return 'https://www.google.com';
+              // if looks like a search -> google search
+              if (v.includes(' ') || !/\\./.test(v)) return 'https://www.google.com/search?q=' + encodeURIComponent(v);
               try { new URL(v); return v; } catch(e) {}
-              if (v.indexOf(' ') !== -1) return 'https://www.google.com/search?q=' + encodeURIComponent(v);
               return 'https://' + v;
             }
 
@@ -301,9 +331,8 @@ app.get("/load", async (req, res) => {
 
     html = html.replace(/<body([^>]*)>/i, (m) => m + injectedTopbar);
 
-    // store to cache
+    // cache and return
     cacheSet(cacheKeyHtml, html);
-
     persistSessionCookie(res, session.sid);
     res.setHeader("x-euphoria-session", session.sid);
     res.type("html").send(html);
@@ -315,7 +344,7 @@ app.get("/load", async (req, res) => {
   }
 });
 
-// /proxy -> used for assets (images, css, js, XHR). Forwards bytes, caches small ones.
+// /proxy -> used for assets (images, css, js, XHR). forwards bytes, caches small ones.
 app.get("/proxy", async (req, res) => {
   let raw = extractUrl(req);
   if (!raw) raw = req.query.url;
@@ -355,7 +384,6 @@ app.get("/proxy", async (req, res) => {
     const setCookies = originRes.headers.raw ? (originRes.headers.raw()["set-cookie"] || []) : [];
     if (setCookies.length) storeSetCookieStrings(setCookies, session.data);
 
-    // If the origin redirects, fetch followed and we have final resource.
     const ctype = originRes.headers.get("content-type") || "application/octet-stream";
     res.setHeader("Content-Type", ctype);
     if (originRes.headers.get("cache-control")) res.setHeader("Cache-Control", originRes.headers.get("cache-control"));
