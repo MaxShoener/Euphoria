@@ -7,7 +7,6 @@
 <style>
   :root { --bg:#0b0b0b; --bar:#111; --btn:#222; --btn-hover:#333; --accent:#2e7d32; color-scheme:dark; }
   html,body{height:100%;margin:0;background:var(--bg);font-family:system-ui,Arial,sans-serif;color:#fff;overflow:hidden}
-  /* centered oval topbar */
   #launcher {
     position: fixed; top: 18px; left: 50%; transform:translateX(-50%);
     width: 84%; max-width:1100px; background:var(--bar); border-radius:30px; padding:10px 14px;
@@ -68,7 +67,7 @@
     home.onclick = () => { q.value=''; window.location.href = '/'; };
     full.onclick = () => { if (!document.fullscreenElement) document.documentElement.requestFullscreen(); else document.exitFullscreen(); };
 
-    // prefill if /load?url=...
+    // Pre-fill if /load?url= present
     try {
       const params = new URLSearchParams(window.location.search);
       const u = params.get('url');
