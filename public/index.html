@@ -1,106 +1,107 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Euphoria</title>
-  <style>
-    :root { --bg:#0b0c0d; --panel:#111; --accent:#2e7d32; --muted:#9aa; --text:#eee; }
-    html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;}
-    .wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;}
-    .card{width:100%;max-width:980px;background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));border-radius:14px;padding:20px;box-shadow:0 12px 40px rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.02)}
-    .row{display:flex;gap:10px;align-items:center}
-    .oval{flex:1;display:flex;align-items:center;background:#111;padding:8px;border-radius:28px;border:1px solid rgba(255,255,255,0.03)}
-    .oval input{background:transparent;border:0;padding:8px 12px;color:var(--text);outline:none;width:100%;font-size:15px}
-    .oval button{background:var(--accent);border:0;color:#fff;padding:8px 12px;border-radius:12px;cursor:pointer;font-weight:600}
-    .btn{background:#222;border:0;color:var(--text);padding:8px 10px;border-radius:10px;cursor:pointer}
-    footer{margin-top:18px;color:var(--muted);font-size:13px;text-align:center}
-    @media(max-width:640px){.row{flex-direction:column;align-items:stretch}.oval{width:100%}}
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Euphoria — Launcher</title>
+<style>
+  :root{
+    --bg:#0b0c0d;
+    --panel:#111214;
+    --accent:#2e7d32;
+    --muted:#9aa0a6;
+    --text:#eceff1;
+  }
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:system-ui,Arial,sans-serif}
+  .wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:28px}
+  .card{width:100%;max-width:1000px;background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));border-radius:14px;padding:18px;box-shadow:0 8px 30px rgba(0,0,0,0.6)}
+  .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+  .brand{display:flex;gap:12px;align-items:center}
+  .oval{display:flex;align-items:center;gap:8px;background:#111;padding:10px;border-radius:28px;flex:1}
+  .oval input{background:transparent;border:0;color:var(--text);padding:8px 12px;outline:none;width:100%;font-size:15px}
+  .goBtn{background:var(--accent);border:0;color:#fff;padding:8px 12px;border-radius:12px;cursor:pointer;font-weight:700}
+  .smallBtn{background:#222;border:0;color:var(--text);padding:8px 10px;border-radius:10px;cursor:pointer}
+  .row{display:flex;gap:12px;align-items:center;margin-bottom:12px}
+  footer{margin-top:14px;color:var(--muted);font-size:13px;text-align:center}
+  @media(max-width:560px){.card{padding:12px}}
+</style>
 </head>
 <body>
   <div class="wrap">
     <div class="card">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
-        <div>
-          <div style="font-weight:700;font-size:18px">Euphoria</div>
-          <div style="color:var(--muted);font-size:13px">Single-tab proxy — type URL or search, press Enter</div>
+      <div class="header">
+        <div class="brand">
+          <div style="width:44px;height:44px;border-radius:10px;background:#222"></div>
+          <div>
+            <div style="font-weight:800">Euphoria</div>
+            <div style="color:var(--muted);font-size:13px;margin-top:2px">Single-tab proxy — no iframe, no playwright</div>
+          </div>
         </div>
         <div style="display:flex;gap:8px">
-          <button class="btn" id="examples">Examples</button>
-          <button class="btn" id="repo">Repo</button>
+          <button id="repo" class="smallBtn">Repo</button>
         </div>
       </div>
 
-      <div class="row" style="margin-bottom:10px">
-        <div class="oval">
-          <input id="addr" placeholder="Enter URL (e.g. google.com) or search terms"/>
+      <div class="row">
+        <div class="oval" style="flex:1">
+          <input id="address" placeholder="Enter URL (eg. google.com) or search terms" />
+          <button id="go" class="goBtn">Go</button>
         </div>
-        <button id="open" style="margin-left:8px" class="oval button">Open</button>
       </div>
 
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-        <button class="btn" id="home">Home</button>
-        <button class="btn" id="google">Google</button>
-        <button class="btn" id="xbox">Xbox</button>
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <button id="homeBtn" class="smallBtn">Home</button>
+        <button id="googleBtn" class="smallBtn">Google</button>
+        <button id="xboxBtn" class="smallBtn">Xbox</button>
         <div style="flex:1"></div>
-        <div style="color:var(--muted);font-size:13px">Deployed: Koyeb-ready • No iframes • No puppeteer</div>
+        <div style="color:var(--muted);font-size:13px">Tip: press Enter to navigate</div>
       </div>
 
-      <footer>Open a site to start browsing via Euphoria's proxy.</footer>
+      <footer>Open the launcher then use the floating oval bar that will appear inside proxied pages.</footer>
     </div>
   </div>
 
 <script>
 (function(){
-  const addr = document.getElementById('addr');
-  const openBtn = document.getElementById('open');
-  const home = document.getElementById('home');
-  const google = document.getElementById('google');
-  const xbox = document.getElementById('xbox');
-  const examples = document.getElementById('examples');
+  const addr = document.getElementById('address');
+  const go = document.getElementById('go');
+  const homeBtn = document.getElementById('homeBtn');
+  const googleBtn = document.getElementById('googleBtn');
+  const xboxBtn = document.getElementById('xboxBtn');
   const repo = document.getElementById('repo');
 
   function isLikelySearch(v){
     if(!v) return true;
-    if(v.includes(' ')) return true;
-    if(/^https?:\\/\\//i.test(v)) return false;
-    if(/\\./.test(v)) return false;
+    if(v.indexOf(' ') !== -1) return true;
+    if(/^https?:\/\//i.test(v)) return false;
+    if(/\./.test(v)) return false;
     return true;
   }
   function normalize(v){
-    v = (v||'').trim();
+    v=(v||'').trim();
     if(!v) return 'https://www.google.com';
-    if(isLikelySearch(v)) return 'https://www.google.com/search?q=' + encodeURIComponent(v);
-    if(/^https?:\\/\\//i.test(v)) return v;
-    return 'https://' + v;
+    if(isLikelySearch(v)) return 'https://www.google.com/search?q='+encodeURIComponent(v);
+    if(/^https?:\/\//i.test(v)) return v;
+    return 'https://'+v;
   }
 
-  openBtn.addEventListener('click', ()=> {
+  go.addEventListener('click', ()=> {
     const v = addr.value;
     if(!v) return;
-    const normalized = normalize(v);
-    location.href = '/proxy?url=' + encodeURIComponent(normalized);
+    location.href = '/proxy?url=' + encodeURIComponent(normalize(v));
   });
-  addr.addEventListener('keydown', e => { if(e.key === 'Enter') openBtn.click(); });
+  addr.addEventListener('keydown', e=>{ if(e.key === 'Enter') go.click(); });
 
-  home.addEventListener('click', ()=> location.href = '/proxy?url=' + encodeURIComponent('https://www.google.com'));
-  google.addEventListener('click', ()=> location.href = '/proxy?url=' + encodeURIComponent('https://www.google.com'));
-  xbox.addEventListener('click', ()=> location.href = '/proxy?url=' + encodeURIComponent('https://xbox.com'));
+  homeBtn.addEventListener('click', ()=> location.href = '/proxy?url=' + encodeURIComponent('https://www.google.com'));
+  googleBtn.addEventListener('click', ()=> location.href = '/proxy?url=' + encodeURIComponent('https://www.google.com'));
+  xboxBtn.addEventListener('click', ()=> location.href = '/proxy?url=' + encodeURIComponent('https://xbox.com'));
 
-  examples.addEventListener('click', ()=> {
-    const list = ['https://www.google.com','https://xbox.com','https://news.ycombinator.com'];
-    const pick = list[Math.floor(Math.random()*list.length)];
-    location.href = '/proxy?url=' + encodeURIComponent(pick);
-  });
+  repo.addEventListener('click', ()=> window.open('https://github.com','_blank'));
 
-  repo.addEventListener('click', ()=> window.open('https://github.com', '_blank'));
-
-  // If index opened with ?url=, prefill
   try {
     const m = location.search.match(/[?&]url=([^&]+)/);
     if (m) addr.value = decodeURIComponent(m[1]);
-  } catch (e) {}
+  } catch(e){}
 })();
 </script>
 </body>
