@@ -46,11 +46,18 @@
     const home = document.getElementById('home');
     const full = document.getElementById('full');
 
+    function isLikelySearch(v) {
+      if (!v) return true;
+      if (v.includes(' ')) return true;
+      if (/^https?:\/\//i.test(v)) return false;
+      if (/\./.test(v)) return false;
+      return true;
+    }
     function normalize(v) {
       v = (v||'').trim();
       if (!v) return 'https://www.google.com';
+      if (isLikelySearch(v)) return 'https://www.google.com/search?q=' + encodeURIComponent(v);
       try { new URL(v); return v; } catch(e) {}
-      if (v.indexOf(' ') >= 0) return 'https://www.google.com/search?q=' + encodeURIComponent(v);
       return 'https://' + v;
     }
 
