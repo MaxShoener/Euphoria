@@ -1,210 +1,107 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Euphoria — single-tab proxy</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Euphoria</title>
   <style>
-    /* Minimal local UI for the file:// index page that launches /proxy */
-    :root {
-      --bg: #0b0c0d;
-      --panel: #111214;
-      --accent: #2e7d32;
-      --muted: #999;
-      --text: #eaeaea;
-    }
-
-    html,body {
-      height:100%;
-      margin:0;
-      padding:0;
-      background: var(--bg);
-      color: var(--text);
-      font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
-    }
-
-    .center {
-      min-height:100vh;
-      display:flex;
-      flex-direction:column;
-      align-items:center;
-      justify-content:center;
-      gap:16px;
-      padding:20px;
-      box-sizing:border-box;
-    }
-
-    .panel {
-      width:100%;
-      max-width:920px;
-      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
-      border-radius:16px;
-      padding:18px;
-      box-shadow: 0 8px 30px rgba(0,0,0,0.6);
-      border: 1px solid rgba(255,255,255,0.02);
-    }
-
-    .top-row {
-      display:flex;
-      align-items:center;
-      gap:12px;
-    }
-
-    .oval-input {
-      flex:1;
-      display:flex;
-      align-items:center;
-      gap:8px;
-      background:#111;
-      padding:8px;
-      border-radius:28px;
-      border: 1px solid rgba(255,255,255,0.03);
-    }
-
-    .oval-input input {
-      background:transparent;
-      border:0;
-      color:var(--text);
-      padding:8px 12px;
-      outline:none;
-      width:100%;
-      font-size:15px;
-    }
-
-    .oval-input button {
-      background: var(--accent);
-      color:#fff;
-      border:0;
-      padding:8px 12px;
-      border-radius:12px;
-      cursor:pointer;
-      font-weight:600;
-    }
-
-    .btn {
-      background:#222;
-      color:var(--text);
-      border:0;
-      padding:8px 10px;
-      border-radius:10px;
-      cursor:pointer;
-      font-size:14px;
-    }
-
-    .muted {
-      color:var(--muted);
-      font-size:13px;
-    }
-
-    footer {
-      margin-top:16px;
-      text-align:center;
-      color:var(--muted);
-      font-size:13px;
-    }
-
-    @media (max-width:600px) {
-      .panel { padding:12px; }
-      .oval-input input { font-size:14px; }
-    }
+    :root { --bg:#0b0c0d; --panel:#111; --accent:#2e7d32; --muted:#9aa; --text:#eee; }
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;}
+    .wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;}
+    .card{width:100%;max-width:980px;background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));border-radius:14px;padding:20px;box-shadow:0 12px 40px rgba(0,0,0,0.6);border:1px solid rgba(255,255,255,0.02)}
+    .row{display:flex;gap:10px;align-items:center}
+    .oval{flex:1;display:flex;align-items:center;background:#111;padding:8px;border-radius:28px;border:1px solid rgba(255,255,255,0.03)}
+    .oval input{background:transparent;border:0;padding:8px 12px;color:var(--text);outline:none;width:100%;font-size:15px}
+    .oval button{background:var(--accent);border:0;color:#fff;padding:8px 12px;border-radius:12px;cursor:pointer;font-weight:600}
+    .btn{background:#222;border:0;color:var(--text);padding:8px 10px;border-radius:10px;cursor:pointer}
+    footer{margin-top:18px;color:var(--muted);font-size:13px;text-align:center}
+    @media(max-width:640px){.row{flex-direction:column;align-items:stretch}.oval{width:100%}}
   </style>
 </head>
 <body>
-  <div class="center">
-    <div class="panel">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;">
-        <div style="display:flex;align-items:center;gap:12px;">
-          <img src="" alt="" style="width:36px;height:36px;border-radius:8px;background:#222;" />
-          <div>
-            <div style="font-weight:700;font-size:16px;">Euphoria</div>
-            <div class="muted" style="margin-top:2px;">Single-tab proxy browser — safe, simple, fast</div>
-          </div>
+  <div class="wrap">
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+        <div>
+          <div style="font-weight:700;font-size:18px">Euphoria</div>
+          <div style="color:var(--muted);font-size:13px">Single-tab proxy — type URL or search, press Enter</div>
         </div>
-
-        <div style="display:flex;gap:8px;">
-          <button class="btn" id="openExamples">Examples</button>
-          <button class="btn" id="github">GitHub</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn" id="examples">Examples</button>
+          <button class="btn" id="repo">Repo</button>
         </div>
       </div>
 
-      <div class="top-row" style="margin-bottom:12px;">
-        <div class="oval-input" role="search">
-          <input id="address" placeholder="Enter URL (e.g. google.com) or search terms" />
-          <button id="go" title="Open">Go</button>
+      <div class="row" style="margin-bottom:10px">
+        <div class="oval">
+          <input id="addr" placeholder="Enter URL (e.g. google.com) or search terms"/>
         </div>
+        <button id="open" style="margin-left:8px" class="oval button">Open</button>
       </div>
 
-      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
-        <button class="btn" id="homeBtn">Home</button>
-        <button class="btn" id="googleBtn">Google</button>
-        <button class="btn" id="xboxBtn">Xbox</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <button class="btn" id="home">Home</button>
+        <button class="btn" id="google">Google</button>
+        <button class="btn" id="xbox">Xbox</button>
         <div style="flex:1"></div>
-        <div class="muted">Tip: press Enter after typing to search / navigate</div>
+        <div style="color:var(--muted);font-size:13px">Deployed: Koyeb-ready • No iframes • No puppeteer</div>
       </div>
-    </div>
 
-    <footer>
-      Euphoria — local launcher for the proxy UI • Not an iframe • No puppeteer
-    </footer>
+      <footer>Open a site to start browsing via Euphoria's proxy.</footer>
+    </div>
   </div>
 
 <script>
-  // index.html logic: simple launcher which navigates to /proxy?url=...
-  (function(){
-    const address = document.getElementById('address');
-    const go = document.getElementById('go');
-    const homeBtn = document.getElementById('homeBtn');
-    const googleBtn = document.getElementById('googleBtn');
-    const xboxBtn = document.getElementById('xboxBtn');
-    const examples = document.getElementById('openExamples');
-    const github = document.getElementById('github');
+(function(){
+  const addr = document.getElementById('addr');
+  const openBtn = document.getElementById('open');
+  const home = document.getElementById('home');
+  const google = document.getElementById('google');
+  const xbox = document.getElementById('xbox');
+  const examples = document.getElementById('examples');
+  const repo = document.getElementById('repo');
 
-    function isLikelySearch(v){
-      if(!v) return true;
-      if(v.includes(' ')) return true;
-      if(/^https?:\/\//i.test(v)) return false;
-      if(/\./.test(v)) return false;
-      return true;
-    }
+  function isLikelySearch(v){
+    if(!v) return true;
+    if(v.includes(' ')) return true;
+    if(/^https?:\\/\\//i.test(v)) return false;
+    if(/\\./.test(v)) return false;
+    return true;
+  }
+  function normalize(v){
+    v = (v||'').trim();
+    if(!v) return 'https://www.google.com';
+    if(isLikelySearch(v)) return 'https://www.google.com/search?q=' + encodeURIComponent(v);
+    if(/^https?:\\/\\//i.test(v)) return v;
+    return 'https://' + v;
+  }
 
-    function normalize(v){
-      v = (v || '').trim();
-      if(!v) return 'https://www.google.com';
-      if(isLikelySearch(v)) return 'https://www.google.com/search?q=' + encodeURIComponent(v);
-      if(/^https?:\/\//i.test(v)) return v;
-      return 'https://' + v;
-    }
+  openBtn.addEventListener('click', ()=> {
+    const v = addr.value;
+    if(!v) return;
+    const normalized = normalize(v);
+    location.href = '/proxy?url=' + encodeURIComponent(normalized);
+  });
+  addr.addEventListener('keydown', e => { if(e.key === 'Enter') openBtn.click(); });
 
-    go.addEventListener('click', ()=> {
-      const v = address.value;
-      if(!v) return;
-      const normalized = normalize(v);
-      location.href = '/proxy?url=' + encodeURIComponent(normalized);
-    });
+  home.addEventListener('click', ()=> location.href = '/proxy?url=' + encodeURIComponent('https://www.google.com'));
+  google.addEventListener('click', ()=> location.href = '/proxy?url=' + encodeURIComponent('https://www.google.com'));
+  xbox.addEventListener('click', ()=> location.href = '/proxy?url=' + encodeURIComponent('https://xbox.com'));
 
-    address.addEventListener('keydown', (e) => { if(e.key === 'Enter') go.click(); });
+  examples.addEventListener('click', ()=> {
+    const list = ['https://www.google.com','https://xbox.com','https://news.ycombinator.com'];
+    const pick = list[Math.floor(Math.random()*list.length)];
+    location.href = '/proxy?url=' + encodeURIComponent(pick);
+  });
 
-    homeBtn.addEventListener('click', ()=> { location.href = '/proxy?url=' + encodeURIComponent('https://www.google.com'); });
-    googleBtn.addEventListener('click', ()=> { location.href = '/proxy?url=' + encodeURIComponent('https://www.google.com'); });
-    xboxBtn.addEventListener('click', ()=> { location.href = '/proxy?url=' + encodeURIComponent('https://xbox.com'); });
+  repo.addEventListener('click', ()=> window.open('https://github.com', '_blank'));
 
-    examples.addEventListener('click', ()=> {
-      // quick example list (opens /proxy)
-      const list = ['https://www.google.com', 'https://xbox.com', 'https://news.ycombinator.com'];
-      const pick = list[Math.floor(Math.random()*list.length)];
-      location.href = '/proxy?url=' + encodeURIComponent(pick);
-    });
-
-    github.addEventListener('click', ()=> {
-      window.open('https://github.com', '_blank');
-    });
-
-    // Prefill input if index.html opened with ?url=...
-    try {
-      const m = location.search.match(/[?&]url=([^&]+)/);
-      if(m) address.value = decodeURIComponent(m[1]);
-    } catch (e) {}
-  })();
+  // If index opened with ?url=, prefill
+  try {
+    const m = location.search.match(/[?&]url=([^&]+)/);
+    if (m) addr.value = decodeURIComponent(m[1]);
+  } catch (e) {}
+})();
 </script>
 </body>
 </html>
