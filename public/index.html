@@ -1,108 +1,188 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Euphoria — Launcher</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Euphoria</title>
 <style>
-  :root{
-    --bg:#0b0c0d;
-    --panel:#111214;
-    --accent:#2e7d32;
-    --muted:#9aa0a6;
-    --text:#eceff1;
+  body {
+    margin: 0;
+    background: radial-gradient(circle at top left, #101010, #1b1b1b, #0c0c0c);
+    font-family: "Inter", system-ui, sans-serif;
+    overflow: hidden;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
   }
-  html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:system-ui,Arial,sans-serif}
-  .wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:28px}
-  .card{width:100%;max-width:1000px;background:linear-gradient(180deg,rgba(255,255,255,0.02),rgba(255,255,255,0.01));border-radius:14px;padding:18px;box-shadow:0 8px 30px rgba(0,0,0,0.6)}
-  .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
-  .brand{display:flex;gap:12px;align-items:center}
-  .oval{display:flex;align-items:center;gap:8px;background:#111;padding:10px;border-radius:28px;flex:1}
-  .oval input{background:transparent;border:0;color:var(--text);padding:8px 12px;outline:none;width:100%;font-size:15px}
-  .goBtn{background:var(--accent);border:0;color:#fff;padding:8px 12px;border-radius:12px;cursor:pointer;font-weight:700}
-  .smallBtn{background:#222;border:0;color:var(--text);padding:8px 10px;border-radius:10px;cursor:pointer}
-  .row{display:flex;gap:12px;align-items:center;margin-bottom:12px}
-  footer{margin-top:14px;color:var(--muted);font-size:13px;text-align:center}
-  @media(max-width:560px){.card{padding:12px}}
+
+  /* Floating Top Bar */
+  .top-bar {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(30, 30, 30, 0.7);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 50px;
+    padding: 10px 20px;
+    z-index: 1000;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+  }
+
+  button {
+    background: rgba(255, 255, 255, 0.08);
+    border: none;
+    color: white;
+    font-size: 15px;
+    padding: 8px 12px;
+    border-radius: 30px;
+    cursor: pointer;
+    transition: background 0.25s ease, transform 0.1s ease;
+  }
+
+  button:hover {
+    background: rgba(255, 255, 255, 0.18);
+  }
+
+  button:active {
+    transform: scale(0.95);
+  }
+
+  input {
+    flex: 1;
+    min-width: 250px;
+    max-width: 450px;
+    padding: 8px 15px;
+    border-radius: 30px;
+    border: none;
+    outline: none;
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    font-size: 15px;
+    transition: background 0.3s ease;
+  }
+
+  input::placeholder {
+    color: rgba(255, 255, 255, 0.5);
+  }
+
+  input:focus {
+    background: rgba(255, 255, 255, 0.2);
+  }
+
+  iframe {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border: none;
+    z-index: 0;
+  }
+
+  .spacer {
+    height: 80px;
+  }
 </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="card">
-      <div class="header">
-        <div class="brand">
-          <div style="width:44px;height:44px;border-radius:10px;background:#222"></div>
-          <div>
-            <div style="font-weight:800">Euphoria</div>
-            <div style="color:var(--muted);font-size:13px;margin-top:2px">Single-tab proxy — no iframe, no playwright</div>
-          </div>
-        </div>
-        <div style="display:flex;gap:8px">
-          <button id="repo" class="smallBtn">Repo</button>
-        </div>
-      </div>
-
-      <div class="row">
-        <div class="oval" style="flex:1">
-          <input id="address" placeholder="Enter URL (eg. google.com) or search terms" />
-          <button id="go" class="goBtn">Go</button>
-        </div>
-      </div>
-
-      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-        <button id="homeBtn" class="smallBtn">Home</button>
-        <button id="googleBtn" class="smallBtn">Google</button>
-        <button id="xboxBtn" class="smallBtn">Xbox</button>
-        <div style="flex:1"></div>
-        <div style="color:var(--muted);font-size:13px">Tip: press Enter to navigate</div>
-      </div>
-
-      <footer>Open the launcher then use the floating oval bar that will appear inside proxied pages.</footer>
-    </div>
+  <div class="top-bar">
+    <button id="back">⟨</button>
+    <button id="forward">⟩</button>
+    <button id="refresh">⟳</button>
+    <button id="home">🏠</button>
+    <input id="urlInput" type="text" placeholder="Enter URL or search..." />
+    <button id="fullscreen">⛶</button>
   </div>
+  <div class="spacer"></div>
+  <iframe id="viewer" src="/proxy?url=https://www.google.com"></iframe>
 
-<script>
-(function(){
-  const addr = document.getElementById('address');
-  const go = document.getElementById('go');
-  const homeBtn = document.getElementById('homeBtn');
-  const googleBtn = document.getElementById('googleBtn');
-  const xboxBtn = document.getElementById('xboxBtn');
-  const repo = document.getElementById('repo');
+  <script>
+    const viewer = document.getElementById("viewer");
+    const urlInput = document.getElementById("urlInput");
 
-  function isLikelySearch(v){
-    if(!v) return true;
-    if(v.indexOf(' ') !== -1) return true;
-    if(/^https?:\/\//i.test(v)) return false;
-    if(/\./.test(v)) return false;
-    return true;
-  }
-  function normalize(v){
-    v=(v||'').trim();
-    if(!v) return 'https://www.google.com';
-    if(isLikelySearch(v)) return 'https://www.google.com/search?q='+encodeURIComponent(v);
-    if(/^https?:\/\//i.test(v)) return v;
-    return 'https://'+v;
-  }
+    // Button Elements
+    const backBtn = document.getElementById("back");
+    const forwardBtn = document.getElementById("forward");
+    const refreshBtn = document.getElementById("refresh");
+    const homeBtn = document.getElementById("home");
+    const fullscreenBtn = document.getElementById("fullscreen");
 
-  go.addEventListener('click', ()=> {
-    const v = addr.value;
-    if(!v) return;
-    location.href = '/proxy?url=' + encodeURIComponent(normalize(v));
-  });
-  addr.addEventListener('keydown', e=>{ if(e.key === 'Enter') go.click(); });
+    // Navigation History Stack
+    let historyStack = [];
+    let currentIndex = -1;
 
-  homeBtn.addEventListener('click', ()=> location.href = '/proxy?url=' + encodeURIComponent('https://www.google.com'));
-  googleBtn.addEventListener('click', ()=> location.href = '/proxy?url=' + encodeURIComponent('https://www.google.com'));
-  xboxBtn.addEventListener('click', ()=> location.href = '/proxy?url=' + encodeURIComponent('https://xbox.com'));
+    function loadURL(input) {
+      let url = input.trim();
+      if (!url) return;
 
-  repo.addEventListener('click', ()=> window.open('https://github.com','_blank'));
+      // Detect search term vs. URL
+      if (!url.startsWith("http://") && !url.startsWith("https://")) {
+        if (url.includes(".") && !url.includes(" ")) {
+          url = "https://" + url;
+        } else {
+          url = "https://www.google.com/search?q=" + encodeURIComponent(input);
+        }
+      }
 
-  try {
-    const m = location.search.match(/[?&]url=([^&]+)/);
-    if (m) addr.value = decodeURIComponent(m[1]);
-  } catch(e){}
-})();
-</script>
+      viewer.src = "/proxy?url=" + encodeURIComponent(url);
+
+      // Update history
+      if (currentIndex === -1 || historyStack[currentIndex] !== url) {
+        historyStack = historyStack.slice(0, currentIndex + 1);
+        historyStack.push(url);
+        currentIndex++;
+      }
+
+      urlInput.value = input;
+    }
+
+    // Handle input enter
+    urlInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") loadURL(urlInput.value);
+    });
+
+    // Back / Forward / Refresh / Home buttons
+    backBtn.addEventListener("click", () => {
+      if (currentIndex > 0) {
+        currentIndex--;
+        viewer.src = "/proxy?url=" + encodeURIComponent(historyStack[currentIndex]);
+      }
+    });
+
+    forwardBtn.addEventListener("click", () => {
+      if (currentIndex < historyStack.length - 1) {
+        currentIndex++;
+        viewer.src = "/proxy?url=" + encodeURIComponent(historyStack[currentIndex]);
+      }
+    });
+
+    refreshBtn.addEventListener("click", () => {
+      if (currentIndex >= 0) {
+        viewer.src = "/proxy?url=" + encodeURIComponent(historyStack[currentIndex]);
+      } else {
+        viewer.src = viewer.src;
+      }
+    });
+
+    homeBtn.addEventListener("click", () => {
+      loadURL("https://www.google.com");
+    });
+
+    fullscreenBtn.addEventListener("click", () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen();
+      } else {
+        document.exitFullscreen();
+      }
+    });
+
+    // Initial load
+    loadURL("https://www.google.com");
+  </script>
 </body>
 </html>
