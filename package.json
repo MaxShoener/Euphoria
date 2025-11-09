@@ -1,7 +1,7 @@
 {
   "name": "euphoria",
-  "version": "1.0.0",
-  "description": "Euphoria lightweight single-tab proxy browser",
+  "version": "2.0.0",
+  "description": "Euphoria — a Scramjet-based single-tab proxy browser",
   "main": "server.js",
   "type": "module",
   "scripts": {
@@ -10,6 +10,7 @@
   "dependencies": {
     "express": "^4.19.2",
     "node-fetch": "^3.3.2",
-    "cors": "^2.8.5"
+    "cors": "^2.8.5",
+    "scramjet": "^4.36.4"
   }
 }
