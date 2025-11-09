@@ -1,188 +1,93 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Euphoria</title>
-<style>
-  body {
-    margin: 0;
-    background: radial-gradient(circle at top left, #101010, #1b1b1b, #0c0c0c);
-    font-family: "Inter", system-ui, sans-serif;
-    overflow: hidden;
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-  }
-
-  /* Floating Top Bar */
-  .top-bar {
-    position: fixed;
-    top: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    background: rgba(30, 30, 30, 0.7);
-    backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 50px;
-    padding: 10px 20px;
-    z-index: 1000;
-    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
-  }
-
-  button {
-    background: rgba(255, 255, 255, 0.08);
-    border: none;
-    color: white;
-    font-size: 15px;
-    padding: 8px 12px;
-    border-radius: 30px;
-    cursor: pointer;
-    transition: background 0.25s ease, transform 0.1s ease;
-  }
-
-  button:hover {
-    background: rgba(255, 255, 255, 0.18);
-  }
-
-  button:active {
-    transform: scale(0.95);
-  }
-
-  input {
-    flex: 1;
-    min-width: 250px;
-    max-width: 450px;
-    padding: 8px 15px;
-    border-radius: 30px;
-    border: none;
-    outline: none;
-    background: rgba(255, 255, 255, 0.1);
-    color: white;
-    font-size: 15px;
-    transition: background 0.3s ease;
-  }
-
-  input::placeholder {
-    color: rgba(255, 255, 255, 0.5);
-  }
-
-  input:focus {
-    background: rgba(255, 255, 255, 0.2);
-  }
-
-  iframe {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    border: none;
-    z-index: 0;
-  }
-
-  .spacer {
-    height: 80px;
-  }
-</style>
+  <meta charset="UTF-8" />
+  <title>Euphoria</title>
+  <style>
+    body {
+      margin: 0;
+      background: #111;
+      overflow: hidden;
+    }
+    #browser-frame {
+      width: 100vw;
+      height: 100vh;
+      border: none;
+    }
+    #nav {
+      position: fixed;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      background: rgba(30, 30, 30, 0.85);
+      border-radius: 50px;
+      padding: 8px 15px;
+      z-index: 1000;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+    }
+    #nav button {
+      background: none;
+      border: none;
+      color: white;
+      font-size: 16px;
+      margin: 0 6px;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+    #nav button:hover {
+      color: #00c8ff;
+    }
+    #nav input {
+      border: none;
+      outline: none;
+      padding: 6px 12px;
+      border-radius: 20px;
+      margin: 0 8px;
+      width: 340px;
+      font-size: 15px;
+    }
+  </style>
 </head>
 <body>
-  <div class="top-bar">
-    <button id="back">⟨</button>
-    <button id="forward">⟩</button>
+  <div id="nav">
+    <button id="back">←</button>
+    <button id="forward">→</button>
     <button id="refresh">⟳</button>
     <button id="home">🏠</button>
     <input id="urlInput" type="text" placeholder="Enter URL or search..." />
+    <button id="go">Go</button>
     <button id="fullscreen">⛶</button>
   </div>
-  <div class="spacer"></div>
-  <iframe id="viewer" src="/proxy?url=https://www.google.com"></iframe>
+
+  <iframe id="browser-frame" src="/proxy?url=https://www.google.com"></iframe>
 
   <script>
-    const viewer = document.getElementById("viewer");
-    const urlInput = document.getElementById("urlInput");
+    const frame = document.getElementById("browser-frame");
+    const input = document.getElementById("urlInput");
 
-    // Button Elements
-    const backBtn = document.getElementById("back");
-    const forwardBtn = document.getElementById("forward");
-    const refreshBtn = document.getElementById("refresh");
-    const homeBtn = document.getElementById("home");
-    const fullscreenBtn = document.getElementById("fullscreen");
-
-    // Navigation History Stack
-    let historyStack = [];
-    let currentIndex = -1;
-
-    function loadURL(input) {
-      let url = input.trim();
-      if (!url) return;
-
-      // Detect search term vs. URL
-      if (!url.startsWith("http://") && !url.startsWith("https://")) {
-        if (url.includes(".") && !url.includes(" ")) {
-          url = "https://" + url;
-        } else {
-          url = "https://www.google.com/search?q=" + encodeURIComponent(input);
-        }
+    function loadURL(value) {
+      if (!value) return;
+      let url = value.trim();
+      if (!url.startsWith("http")) {
+        url = "https://www.google.com/search?q=" + encodeURIComponent(url);
       }
-
-      viewer.src = "/proxy?url=" + encodeURIComponent(url);
-
-      // Update history
-      if (currentIndex === -1 || historyStack[currentIndex] !== url) {
-        historyStack = historyStack.slice(0, currentIndex + 1);
-        historyStack.push(url);
-        currentIndex++;
-      }
-
-      urlInput.value = input;
+      frame.src = "/proxy?url=" + encodeURIComponent(url);
     }
 
-    // Handle input enter
-    urlInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") loadURL(urlInput.value);
-    });
+    document.getElementById("go").onclick = () => loadURL(input.value);
+    input.addEventListener("keydown", e => e.key === "Enter" && loadURL(input.value));
 
-    // Back / Forward / Refresh / Home buttons
-    backBtn.addEventListener("click", () => {
-      if (currentIndex > 0) {
-        currentIndex--;
-        viewer.src = "/proxy?url=" + encodeURIComponent(historyStack[currentIndex]);
-      }
-    });
+    document.getElementById("home").onclick = () => frame.src = "/proxy?url=https://www.google.com";
+    document.getElementById("refresh").onclick = () => frame.contentWindow.location.reload();
+    document.getElementById("back").onclick = () => frame.contentWindow.history.back();
+    document.getElementById("forward").onclick = () => frame.contentWindow.history.forward();
 
-    forwardBtn.addEventListener("click", () => {
-      if (currentIndex < historyStack.length - 1) {
-        currentIndex++;
-        viewer.src = "/proxy?url=" + encodeURIComponent(historyStack[currentIndex]);
-      }
-    });
-
-    refreshBtn.addEventListener("click", () => {
-      if (currentIndex >= 0) {
-        viewer.src = "/proxy?url=" + encodeURIComponent(historyStack[currentIndex]);
-      } else {
-        viewer.src = viewer.src;
-      }
-    });
-
-    homeBtn.addEventListener("click", () => {
-      loadURL("https://www.google.com");
-    });
-
-    fullscreenBtn.addEventListener("click", () => {
-      if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen();
-      } else {
-        document.exitFullscreen();
-      }
-    });
-
-    // Initial load
-    loadURL("https://www.google.com");
+    document.getElementById("fullscreen").onclick = () => {
+      if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+      else document.exitFullscreen();
+    };
   </script>
 </body>
 </html>
