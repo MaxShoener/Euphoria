@@ -1,111 +1,355 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Euphoria</title>
 <style>
-  body {
-    margin: 0;
-    background: #0c0c0c;
-    color: white;
-    font-family: system-ui;
-    overflow: hidden;
+  :root {
+    --bg: #0c0c0f;
+    --oval: rgba(18,18,20,0.85);
+    --button: rgba(255,255,255,0.07);
+    --accent: #2dbdff;
+    --text: #fff;
   }
-  #nav {
-    position: fixed;
-    top: 12px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(25,25,25,0.9);
-    border-radius: 50px;
-    display: flex;
-    align-items: center;
-    padding: 8px 15px;
-    z-index: 100;
+  html,body { height:100%; margin:0; background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial; }
+  /* floating oval top bar */
+  #topbar {
+    position:fixed;
+    left:50%;
+    top:18px;
+    transform:translateX(-50%);
+    width:78%;
+    max-width:1200px;
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:10px 14px;
+    background:var(--oval);
+    border-radius:32px;
+    box-shadow:0 10px 30px rgba(0,0,0,0.5);
+    z-index:2147483647;
+    backdrop-filter: blur(8px);
   }
-  #nav button {
-    border: none;
-    background: none;
-    color: #fff;
-    font-size: 16px;
-    margin: 0 6px;
-    cursor: pointer;
+  .nav-btn {
+    min-width:44px;
+    height:40px;
+    border-radius:12px;
+    border:0;
+    background:var(--button);
+    color:var(--text);
+    cursor:pointer;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    font-size:16px;
   }
-  #nav button:hover { color: #00b8ff; }
-  #url {
-    width: 350px;
-    padding: 6px 10px;
-    border: none;
-    border-radius: 25px;
-    margin: 0 8px;
+  .nav-btn:hover { background: rgba(255,255,255,0.12); }
+  #address {
+    flex:1;
+    min-width:220px;
+    max-width:680px;
+    height:40px;
+    border-radius:14px;
+    border:0;
+    padding:8px 12px;
+    background: rgba(255,255,255,0.04);
+    color:var(--text);
+    font-size:15px;
   }
+  #address::placeholder { color: rgba(255,255,255,0.55); }
+  #go { min-width:60px; background:#2e7d32; }
+  #spinner {
+    position:fixed;
+    top:80px;
+    left:50%;
+    transform:translateX(-50%);
+    display:none;
+    z-index:2147483646;
+  }
+  .spinner-dot {
+    width:44px; height:44px; border-radius:50%;
+    border:5px solid rgba(255,255,255,0.06);
+    border-top-color:var(--accent);
+    animation:spin 1s linear infinite;
+  }
+  @keyframes spin { 0% { transform:rotate(0deg);} 100%{transform:rotate(360deg);} }
+  /* content area */
   #content {
     position: absolute;
-    top: 0; left: 0;
-    width: 100%; height: 100%;
-    border: none;
+    top: 0;
+    left: 0;
+    right:0;
+    bottom:0;
+    padding-top:76px;
+    overflow:auto;
+    -webkit-overflow-scrolling:touch;
+    background:transparent;
+    color:initial;
   }
+  /* make proxied page visible */
+  #content > * { width:100%; min-height:100vh; }
+  /* small helpful message */
+  .msg { padding:40px; text-align:center; color:#eee; font-size:18px; }
 </style>
 </head>
 <body>
-  <div id="nav">
-    <button id="back">←</button>
-    <button id="forward">→</button>
-    <button id="refresh">⟳</button>
-    <button id="home">🏠</button>
-    <input id="url" list="history" placeholder="Enter URL or search...">
-    <datalist id="history"></datalist>
-    <button id="go">Go</button>
-    <button id="fullscreen">⛶</button>
+  <div id="topbar" role="navigation" aria-label="Euphoria navigation">
+    <button id="back" class="nav-btn" title="Back">◀</button>
+    <button id="forward" class="nav-btn" title="Forward">▶</button>
+    <button id="refresh" class="nav-btn" title="Refresh">⟳</button>
+    <button id="home" class="nav-btn" title="Home (Google)">🏠</button>
+    <input id="address" list="history-list" placeholder="Enter URL or search..." aria-label="Address bar" />
+    <datalist id="history-list"></datalist>
+    <button id="go" class="nav-btn" title="Go">Go</button>
+    <button id="fullscreen" class="nav-btn" title="Fullscreen">⛶</button>
   </div>
-  <div id="content"></div>
 
-  <script>
-    const content = document.getElementById("content");
-    const input = document.getElementById("url");
-    const historyData = JSON.parse(localStorage.getItem("history") || "[]");
-    const list = document.getElementById("history");
+  <div id="spinner"><div class="spinner-dot"></div></div>
 
-    function updateHistory(url) {
-      if (!historyData.includes(url)) {
-        historyData.unshift(url);
-        if (historyData.length > 25) historyData.pop();
-        localStorage.setItem("history", JSON.stringify(historyData));
-        renderList();
+  <div id="content" role="main" aria-live="polite">
+    <div class="msg">Loading Euphoria... (fetching Google)</div>
+  </div>
+
+<script>
+(async function(){
+  const content = document.getElementById("content");
+  const address = document.getElementById("address");
+  const historyListEl = document.getElementById("history-list");
+  const spinner = document.getElementById("spinner");
+  const backBtn = document.getElementById("back");
+  const forwardBtn = document.getElementById("forward");
+  const refreshBtn = document.getElementById("refresh");
+  const homeBtn = document.getElementById("home");
+  const goBtn = document.getElementById("go");
+  const fullBtn = document.getElementById("fullscreen");
+
+  // simple client-side history stack
+  let stack = [];
+  let idx = -1;
+
+  // address autofill (localStorage)
+  let historyItems = JSON.parse(localStorage.getItem("euphoria_history") || "[]");
+  function saveHistory() {
+    localStorage.setItem("euphoria_history", JSON.stringify(historyItems.slice(0,60)));
+    renderHistory();
+  }
+  function renderHistory() {
+    historyListEl.innerHTML = historyItems.map(u => `<option value="${u}">`).join("");
+  }
+  renderHistory();
+
+  function updateAddressBar(u) { address.value = u || ""; }
+
+  function showSpinner() { spinner.style.display = "block"; }
+  function hideSpinner() { spinner.style.display = "none"; }
+
+  function normalizeInput(input) {
+    input = (input || "").trim();
+    if (!input) return "https://www.google.com";
+    if (/^https?:\/\//i.test(input)) return input;
+    // search if contains spaces or no dot
+    if (input.includes(" ") || !input.includes(".")) return "https://www.google.com/search?q=" + encodeURIComponent(input);
+    return "https://" + input;
+  }
+
+  // load URL via proxy and inject into #content
+  async function loadUrl(rawUrl, pushHistory = true) {
+    try {
+      const url = normalizeInput(rawUrl);
+      showSpinner();
+
+      // Save to client history for autofill
+      if (!historyItems.includes(url)) {
+        historyItems.unshift(url);
+        if (historyItems.length > 60) historyItems.pop();
+        saveHistory();
       }
+
+      updateAddressBar(rawUrl.startsWith("http") ? rawUrl : rawUrl);
+
+      // fetch proxied HTML
+      const resp = await fetch("/proxy?url=" + encodeURIComponent(url), { method: "GET" });
+      if (!resp.ok) throw new Error("Failed to load: " + resp.status + " " + resp.statusText);
+      const html = await resp.text();
+
+      // replace content with proxied HTML
+      content.innerHTML = html;
+
+      // run script re-injection & link rewriting in the loaded content
+      runContainment(content, url);
+
+      // history
+      if (pushHistory) {
+        stack = stack.slice(0, idx + 1);
+        stack.push(url);
+        idx = stack.length - 1;
+      }
+    } catch (err) {
+      content.innerHTML = `<div style="padding:2rem;color:#fff;background:#111;font-family:system-ui;">Error loading page:<br>${String(err.message || err)}</div>`;
+      console.error("Load error", err);
+    } finally {
+      hideSpinner();
     }
-    function renderList() {
-      list.innerHTML = historyData.map(h => `<option value="${h}">`).join("");
+  }
+
+  // rewrite links and assets in the loaded DOM to route through /proxy and keep navigation in-app
+  function runContainment(container, baseUrl) {
+    try {
+      // convert NodeList to array
+      const toAbsolute = (href) => {
+        try { return new URL(href, baseUrl).href; } catch(e) { return href; }
+      };
+
+      // rewrite anchors
+      container.querySelectorAll("a[href]").forEach(a => {
+        try {
+          const raw = a.getAttribute("href");
+          if (!raw) return;
+          if (/^(javascript:|mailto:|tel:|#)/i.test(raw)) return;
+          // compute absolute
+          const abs = toAbsolute(raw);
+          a.setAttribute("href", "/proxy?url=" + encodeURIComponent(abs));
+          a.removeAttribute("target");
+          // prevent default and navigate via loadUrl to keep our stack updated
+          a.addEventListener("click", (ev) => {
+            ev.preventDefault();
+            loadUrl(abs);
+          });
+        } catch (e) { /* ignore */ }
+      });
+
+      // rewrite forms: change action to /proxy?url=abs
+      container.querySelectorAll("form[action]").forEach(f => {
+        try {
+          const raw = f.getAttribute("action") || "";
+          if (/^(javascript:|#)/i.test(raw)) return;
+          const abs = toAbsolute(raw);
+          f.setAttribute("action", "/proxy?url=" + encodeURIComponent(abs));
+          f.setAttribute("method", (f.getAttribute("method") || "GET").toUpperCase());
+          // intercept submit to assemble query params and call loadUrl
+          f.addEventListener("submit", (ev) => {
+            ev.preventDefault();
+            const data = new FormData(f);
+            const params = new URLSearchParams();
+            for (const [k, v] of data.entries()) params.append(k, v);
+            const dest = abs + (params.toString() ? (abs.includes("?") ? "&" : "?") + params.toString() : "");
+            loadUrl(dest);
+          });
+        } catch (e) {}
+      });
+
+      // rewrite img/src/srcset/etc to use /asset?url=... by simply intercepting src changes isn't reliable;
+      // here we leave assets as served by server rewriting, but protect clicks on resources
+      // re-execute inline scripts: remove old script tags and re-insert so they execute
+      const scripts = container.querySelectorAll("script");
+      scripts.forEach(s => {
+        try {
+          const newScript = document.createElement("script");
+          if (s.src) {
+            // external scripts — use proxied asset path if present
+            const src = s.getAttribute("src");
+            if (src && src.startsWith("/asset?url=")) {
+              // fetch proxied script and execute
+              fetch(src).then(r => r.text()).then(code => {
+                try {
+                  const exec = document.createElement("script");
+                  exec.textContent = code;
+                  document.body.appendChild(exec);
+                  exec.remove();
+                } catch(e) {}
+              }).catch(()=>{});
+            } else {
+              // for non-proxied external scripts, attempt to load via fetch and run (best effort)
+              fetch("/proxy?url=" + encodeURIComponent(toAbsolute(src))).then(r => r.text()).then(code => {
+                try {
+                  const exec = document.createElement("script");
+                  exec.textContent = code;
+                  document.body.appendChild(exec);
+                  exec.remove();
+                } catch(e){}
+              }).catch(()=>{});
+            }
+          } else {
+            // inline script: run it
+            try {
+              newScript.textContent = s.textContent;
+              document.body.appendChild(newScript);
+              newScript.remove();
+            } catch (e) {}
+          }
+          // remove original script node to avoid duplicate execution
+          s.remove();
+        } catch (e) {}
+      });
+
+      // intercept window.open in proxied scripts by replacing anchor target already done above.
+      // patch history API on the inserted content: we cannot fully override inner page's window.history,
+      // but we intercept links/forms and rely on the topbar for navigation.
+
+      // small delay rewrite for dynamically created nodes
+      const mo = new MutationObserver((mutations) => {
+        for (const m of mutations) {
+          if (m.type === "childList" && m.addedNodes.length) {
+            m.addedNodes.forEach(n => {
+              if (n.nodeType !== 1) return;
+              n.querySelectorAll && n.querySelectorAll("a[href]").forEach(a => {
+                // re-run the same rewrite logic
+                const raw = a.getAttribute("href");
+                if (!raw) return;
+                if (/^(javascript:|mailto:|tel:|#)/i.test(raw)) return;
+                const abs = toAbsolute(raw);
+                a.setAttribute("href", "/proxy?url=" + encodeURIComponent(abs));
+                a.removeAttribute("target");
+                a.addEventListener("click", (ev) => { ev.preventDefault(); loadUrl(abs); });
+              });
+            });
+          }
+        }
+      });
+      try { mo.observe(container, { childList: true, subtree: true }); } catch (e) {}
+    } catch (e) { console.error("containment error", e); }
+  }
+
+  // topbar wiring
+  backBtn.addEventListener("click", () => {
+    if (idx > 0) {
+      idx--;
+      loadUrl(stack[idx], false);
     }
-    renderList();
-
-    let stack = [], index = -1;
-
-    async function load(url) {
-      if (!url) return;
-      if (!url.startsWith("http")) url = "https://www.google.com/search?q=" + encodeURIComponent(url);
-      updateHistory(url);
-      input.value = url;
-      const res = await fetch(`/proxy?url=${encodeURIComponent(url)}`);
-      const text = await res.text();
-      content.innerHTML = text;
-      stack = stack.slice(0, index + 1);
-      stack.push(url);
-      index = stack.length - 1;
+  });
+  forwardBtn.addEventListener("click", () => {
+    if (idx < stack.length - 1) {
+      idx++;
+      loadUrl(stack[idx], false);
     }
+  });
+  refreshBtn.addEventListener("click", () => {
+    if (idx >= 0) loadUrl(stack[idx], false);
+    else loadUrl(address.value || "https://www.google.com", false);
+  });
+  homeBtn.addEventListener("click", () => loadUrl("https://www.google.com"));
+  goBtn.addEventListener("click", () => loadUrl(address.value));
+  address.addEventListener("keydown", (e) => { if (e.key === "Enter") loadUrl(address.value); });
+  fullBtn.addEventListener("click", () => {
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+    else document.exitFullscreen();
+  });
 
-    document.getElementById("go").onclick = () => load(input.value);
-    input.addEventListener("keydown", e => e.key === "Enter" && load(input.value));
-    document.getElementById("home").onclick = () => load("https://www.google.com");
-    document.getElementById("refresh").onclick = () => load(stack[index]);
-    document.getElementById("back").onclick = () => { if (index > 0) load(stack[--index]); };
-    document.getElementById("forward").onclick = () => { if (index < stack.length - 1) load(stack[++index]); };
-    document.getElementById("fullscreen").onclick = () => {
-      if (!document.fullscreenElement) document.documentElement.requestFullscreen();
-      else document.exitFullscreen();
-    };
+  // restore last open site if present
+  const last = localStorage.getItem("euphoria_last");
+  if (last) {
+    loadUrl(last);
+  } else {
+    loadUrl("https://www.google.com");
+  }
 
-    load("https://www.google.com");
-  </script>
+  // save last on unload
+  window.addEventListener("beforeunload", () => {
+    if (stack[idx]) localStorage.setItem("euphoria_last", stack[idx]);
+  });
+
+})();
+</script>
 </body>
 </html>
