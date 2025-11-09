@@ -7,46 +7,27 @@
 <style>
   :root{
     --bg:#06060a;
-    --oval: rgba(12, 14, 18, 0.75);
+    --oval: rgba(12,14,18,0.82);
     --btn: rgba(255,255,255,0.06);
     --accent:#5ee0ff;
     --text:#e9f0f6;
     --muted: rgba(255,255,255,0.45);
   }
   html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;}
-  /* Floating modern oval topbar */
   #topbar{
-    position:fixed;
-    left:50%;
-    top:18px;
-    transform:translateX(-50%);
-    width:84%;
-    max-width:1200px;
-    display:flex;
-    align-items:center;
-    gap:10px;
-    padding:12px 16px;
-    background:var(--oval);
-    border-radius:36px;
-    box-shadow:0 12px 30px rgba(0,0,0,0.6);
-    z-index:2147483647;
-    backdrop-filter: blur(10px) saturate(120%);
-    -webkit-backdrop-filter: blur(10px) saturate(120%);
+    position:fixed;left:50%;top:18px;transform:translateX(-50%);width:84%;max-width:1200px;display:flex;align-items:center;gap:10px;padding:12px 16px;background:var(--oval);border-radius:36px;box-shadow:0 12px 30px rgba(0,0,0,0.6);z-index:2147483647;backdrop-filter: blur(10px) saturate(120%);
   }
-  .nav-btn{
-    width:46px;height:46px;border-radius:12px;border:0;background:var(--btn);color:var(--text);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;
-  }
+  .nav-btn{width:46px;height:46px;border-radius:12px;border:0;background:var(--btn);color:var(--text);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px}
   .nav-btn:hover{ background: rgba(255,255,255,0.12); transform:translateY(-1px); transition:all .12s ease;}
-  #address{flex:1;height:46px;border-radius:14px;border:0;padding:10px 14px;background:rgba(255,255,255,0.02);color:var(--text);font-size:15px;outline:none;}
-  #address::placeholder{color:var(--muted);}
-  #go{min-width:68px;background:linear-gradient(90deg,var(--accent), #3fb5ff);box-shadow:0 6px 18px rgba(60,200,255,0.08);}
+  #address{flex:1;height:46px;border-radius:14px;border:0;padding:10px 14px;background:rgba(255,255,255,0.02);color:var(--text);font-size:15px;outline:none}
+  #address::placeholder{color:var(--muted)}
+  #go{min-width:68px;background:linear-gradient(90deg,var(--accent), #3fb5ff);box-shadow:0 6px 18px rgba(60,200,255,0.08)}
   #spinner{position:fixed;top:86px;left:50%;transform:translateX(-50%);display:none;z-index:2147483646}
   .spinner-dot{width:44px;height:44px;border-radius:50%;border:5px solid rgba(255,255,255,0.06);border-top-color:var(--accent);animation:spin 1s linear infinite}
   @keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
   #content{position:absolute;top:0;left:0;right:0;bottom:0;padding-top:86px;overflow:auto;background:transparent}
   #content > *{width:100%;min-height:100vh}
   .msg{padding:40px;text-align:center;color:var(--muted);font-size:16px}
-  /* small responsive tweaks */
   @media (max-width:720px){
     #topbar{width:94%;padding:10px 12px;border-radius:20px}
     .nav-btn{width:40px;height:40px}
@@ -60,150 +41,155 @@
     <button id="forward" class="nav-btn" title="Forward">▶</button>
     <button id="refresh" class="nav-btn" title="Refresh">⟳</button>
     <button id="home" class="nav-btn" title="Home (Google)">🏠</button>
-    <input id="address" placeholder="Enter URL or search..." list="history-list" aria-label="Address bar" />
-    <datalist id="history-list"></datalist>
+    <input id="address" placeholder="Enter URL or search..." list="hist" aria-label="Address" />
+    <datalist id="hist"></datalist>
     <button id="go" class="nav-btn" title="Go">Go</button>
     <button id="fullscreen" class="nav-btn" title="Fullscreen">⛶</button>
   </div>
 
   <div id="spinner"><div class="spinner-dot"></div></div>
 
-  <div id="content" role="main" aria-live="polite">
+  <main id="content" role="main" aria-live="polite">
     <div class="msg">Welcome to Euphoria — loading Google...</div>
-  </div>
+  </main>
 
 <script>
-/* index.js-like: topbar wiring, proxy loader, containment (no iframe), small history/autofill */
 (async function(){
-  const content = document.getElementById("content");
-  const address = document.getElementById("address");
-  const historyList = document.getElementById("history-list");
-  const spinner = document.getElementById("spinner");
-  const backBtn = document.getElementById("back");
-  const forwardBtn = document.getElementById("forward");
-  const refreshBtn = document.getElementById("refresh");
-  const homeBtn = document.getElementById("home");
-  const goBtn = document.getElementById("go");
-  const fullBtn = document.getElementById("fullscreen");
+  const content = document.getElementById('content');
+  const address = document.getElementById('address');
+  const histList = document.getElementById('hist');
+  const spinner = document.getElementById('spinner');
+  const back = document.getElementById('back');
+  const forward = document.getElementById('forward');
+  const refresh = document.getElementById('refresh');
+  const home = document.getElementById('home');
+  const go = document.getElementById('go');
+  const full = document.getElementById('fullscreen');
 
-  let stack = []; let idx = -1;
-  let suggestions = JSON.parse(localStorage.getItem("euphoria_suggestions") || "[]");
-  function saveSuggestions(){ localStorage.setItem("euphoria_suggestions", JSON.stringify(suggestions.slice(0,100))); renderSuggestions(); }
-  function renderSuggestions(){ historyList.innerHTML = suggestions.map(u => `<option value="${u}">`).join(""); }
+  let stack = [], idx = -1;
+  let suggestions = JSON.parse(localStorage.getItem('euphoria_suggestions') || '[]');
+
+  function saveSuggestions(){ localStorage.setItem('euphoria_suggestions', JSON.stringify(suggestions.slice(0,200))); renderSuggestions(); }
+  function renderSuggestions(){ histList.innerHTML = suggestions.map(u=>`<option value="${u}">`).join(''); }
   renderSuggestions();
 
-  function normalizeInput(raw) {
-    raw = (raw || "").trim();
-    if (!raw) return "https://www.google.com";
-    if (/^https?:\/\//i.test(raw)) return raw;
-    if (raw.includes(" ") || !raw.includes(".")) return "https://www.google.com/search?q=" + encodeURIComponent(raw);
-    return "https://" + raw;
+  function isLikelySearch(val){
+    if(!val) return true;
+    if(val.includes(' ')) return true;
+    if(/^https?:\\/\\//i.test(val)) return false;
+    if(!val.includes('.')) return true;
+    return false;
   }
-  function showSpinner(){ spinner.style.display = "block"; }
-  function hideSpinner(){ spinner.style.display = "none"; }
+  function normalize(val){
+    val = (val||'').trim();
+    if(!val) return 'https://www.google.com';
+    if(/^https?:\\/\\//i.test(val)) return val;
+    if(isLikelySearch(val)) return 'https://www.google.com/search?q=' + encodeURIComponent(val);
+    return 'https://' + val;
+  }
+  function showSpinner(){ spinner.style.display = 'block'; }
+  function hideSpinner(){ spinner.style.display = 'none'; }
 
-  async function loadUrl(raw, push = true) {
-    const start = performance.now();
+  async function loadUrl(raw, push=true){
+    const url = normalize(raw);
+    showSpinner();
     try {
-      const url = normalizeInput(raw);
-      showSpinner();
       // save suggestion
-      if (url && !suggestions.includes(url)) { suggestions.unshift(url); if (suggestions.length>100) suggestions.pop(); saveSuggestions(); }
-
-      // fetch proxied HTML
-      const r = await fetch("/proxy?url=" + encodeURIComponent(url), { method: "GET" });
-      if (!r.ok) throw new Error("Failed to load: " + r.status);
+      if(url && !suggestions.includes(url)){
+        suggestions.unshift(url);
+        if(suggestions.length>200) suggestions.pop();
+        saveSuggestions();
+      }
+      const r = await fetch('/proxy?url=' + encodeURIComponent(url));
+      if(!r.ok) throw new Error('Load failed: ' + r.status);
       const html = await r.text();
-
-      // render proxied HTML
       content.innerHTML = html;
 
-      // containment: rewrite anchors, forms and run inline scripts
-      containment(content, url);
+      // containment: rewrite anchors/forms and execute inline scripts where necessary
+      contain(content, url);
 
-      if (push) { stack = stack.slice(0, idx+1); stack.push(url); idx = stack.length - 1; }
-
-      // update address input display
+      if(push){
+        stack = stack.slice(0, idx+1);
+        stack.push(url);
+        idx = stack.length - 1;
+      }
       address.value = url;
     } catch (err) {
-      content.innerHTML = `<div style="padding:20px;color:#fff;background:#081018;font-family:system-ui;">Error loading page: ${(err && err.message) || err}</div>`;
       console.error(err);
+      content.innerHTML = '<div class="msg">Error loading page: ' + (err.message || err) + '</div>';
     } finally {
       hideSpinner();
-      const took = Math.round(performance.now() - start);
-      console.log("loaded in", took, "ms");
     }
   }
 
-  // containment: keep navigation inside /proxy, rewrite anchors/forms dynamically, execute inline scripts
-  function containment(root, baseUrl) {
-    try {
-      const toAbs = (h) => { try { return new URL(h, baseUrl).href } catch { return h } };
+  // containment: keep navigation within /proxy by rewriting anchors/forms dynamically and executing inline scripts
+  function contain(root, baseUrl){
+    try{
+      const toAbs = (h)=>{ try { return new URL(h, baseUrl).href; } catch(e){ return h; } };
 
-      // anchors
-      root.querySelectorAll("a[href]").forEach(a=>{
+      function rewriteAnchor(a){
         try{
-          const h = a.getAttribute("href");
-          if (!h) return;
-          if (/^(javascript:|mailto:|tel:|#)/i.test(h)) return;
+          const h = a.getAttribute('href');
+          if(!h) return;
+          if(/^(javascript:|mailto:|tel:|#)/i.test(h)) return;
           const abs = toAbs(h);
-          a.setAttribute("href", "/proxy?url=" + encodeURIComponent(abs));
-          a.removeAttribute("target");
+          a.setAttribute('href','/proxy?url=' + encodeURIComponent(abs));
+          a.removeAttribute('target');
           a.onclick = (ev)=>{ ev.preventDefault(); loadUrl(abs); };
         }catch(e){}
-      });
+      }
+      root.querySelectorAll && root.querySelectorAll('a[href]').forEach(rewriteAnchor);
 
-      // forms
-      root.querySelectorAll("form[action]").forEach(f=>{
+      root.querySelectorAll && root.querySelectorAll('form[action]').forEach(f=>{
         try{
-          const a = f.getAttribute("action") || "";
-          if (/^(javascript:|#)/i.test(a)) return;
+          const a = f.getAttribute('action') || '';
+          if(/^(javascript:|#)/i.test(a)) return;
           const abs = toAbs(a || baseUrl);
-          f.setAttribute("action", "/proxy?url=" + encodeURIComponent(abs));
+          f.setAttribute('action', '/proxy?url=' + encodeURIComponent(abs));
           f.onsubmit = (ev)=>{
             ev.preventDefault();
             const fd = new FormData(f);
             const params = new URLSearchParams();
             for(const [k,v] of fd.entries()) params.append(k,v);
-            const dest = abs + (params.toString() ? (abs.includes("?")?"&":"?") + params.toString() : "");
+            const dest = abs + (params.toString() ? (abs.includes('?') ? '&' : '?') + params.toString() : '');
             loadUrl(dest);
           };
         }catch(e){}
       });
 
-      // execute external scripts via fetch -> eval (best-effort)
-      const scripts = Array.from(root.querySelectorAll("script"));
+      // execute scripts: external scripts fetched via /asset and evaluated, inline scripts executed
+      const scripts = Array.from(root.querySelectorAll('script'));
       for(const s of scripts){
         try{
-          if (s.src) {
-            const src = s.getAttribute("src");
-            const final = src.startsWith("/asset?url=") ? src : "/asset?url=" + encodeURIComponent(toAbs(src));
-            fetch(final).then(r=>r.text()).then(code=>{
-              try { const exec = document.createElement("script"); exec.textContent = code; document.body.appendChild(exec); exec.remove(); } catch(e){}
+          if(s.src){
+            const src = s.getAttribute('src');
+            const fetchUrl = src.startsWith('/asset?url=') ? src : '/asset?url=' + encodeURIComponent(toAbs(src));
+            fetch(fetchUrl).then(r=>r.text()).then(code=>{
+              try { const el = document.createElement('script'); el.textContent = code; document.body.appendChild(el); el.remove(); } catch(e){}
             }).catch(()=>{});
           } else {
-            const exec = document.createElement("script");
-            exec.textContent = s.textContent || "";
-            document.body.appendChild(exec);
-            exec.remove();
+            const el = document.createElement('script');
+            el.textContent = s.textContent || '';
+            document.body.appendChild(el);
+            el.remove();
           }
           s.remove();
         } catch(e){}
       }
 
-      // observe DOM for dynamic links
+      // observe new nodes
       const mo = new MutationObserver(muts=>{
         for(const m of muts){
-          if(m.type === "childList" && m.addedNodes.length){
+          if(m.type === 'childList' && m.addedNodes.length){
             m.addedNodes.forEach(n=>{
               if(n.nodeType !== 1) return;
-              n.querySelectorAll && n.querySelectorAll("a[href]").forEach(a=>{
-                const h = a.getAttribute("href");
+              n.querySelectorAll && n.querySelectorAll('a[href]').forEach(a=>{
+                const h = a.getAttribute('href');
                 if(!h) return;
                 if(/^(javascript:|mailto:|tel:|#)/i.test(h)) return;
                 const abs = toAbs(h);
-                a.setAttribute("href", "/proxy?url=" + encodeURIComponent(abs));
-                a.removeAttribute("target");
+                a.setAttribute('href','/proxy?url=' + encodeURIComponent(abs));
+                a.removeAttribute('target');
                 a.onclick = (ev)=>{ ev.preventDefault(); loadUrl(abs); };
               });
             });
@@ -211,23 +197,22 @@
         }
       });
       try{ mo.observe(root, { childList:true, subtree:true }); } catch(e){}
-    } catch (e) { console.error("containment error", e); }
+    } catch(e){ console.error('contain error', e); }
   }
 
-  // topbar events
-  backBtn.onclick = ()=>{ if(idx>0){ idx--; loadUrl(stack[idx], false); } };
-  forwardBtn.onclick = ()=>{ if(idx < stack.length-1){ idx++; loadUrl(stack[idx], false); } };
-  refreshBtn.onclick = ()=>{ if(idx>=0) loadUrl(stack[idx], false); else loadUrl(address.value || "https://www.google.com", false); };
-  homeBtn.onclick = ()=> loadUrl("https://www.google.com");
-  goBtn.onclick = ()=> loadUrl(address.value);
-  address.onkeydown = (e)=>{ if(e.key === "Enter") loadUrl(address.value); };
-  fullBtn.onclick = ()=>{ if(!document.fullscreenElement) document.documentElement.requestFullscreen(); else document.exitFullscreen(); };
+  back.onclick = ()=>{ if(idx>0){ idx--; loadUrl(stack[idx], false); } };
+  forward.onclick = ()=>{ if(idx < stack.length-1){ idx++; loadUrl(stack[idx], false); } };
+  refresh.onclick = ()=>{ if(idx>=0) loadUrl(stack[idx], false); else loadUrl(address.value || 'https://www.google.com', false); };
+  home.onclick = ()=> loadUrl('https://www.google.com');
+  go.onclick = ()=> loadUrl(address.value);
+  address.onkeydown = (e)=>{ if(e.key === 'Enter') go.onclick(); };
+  full.onclick = ()=>{ if(!document.fullscreenElement) document.documentElement.requestFullscreen(); else document.exitFullscreen(); };
 
-  // load last or google
-  const last = localStorage.getItem("euphoria_last");
-  if(last) loadUrl(last); else loadUrl("https://www.google.com");
+  // initial load
+  const last = localStorage.getItem('euphoria_last');
+  if(last) loadUrl(last); else loadUrl('https://www.google.com');
 
-  window.addEventListener("beforeunload", ()=>{ if(stack[idx]) localStorage.setItem("euphoria_last", stack[idx]); });
+  window.addEventListener('beforeunload', ()=>{ if(stack[idx]) localStorage.setItem('euphoria_last', stack[idx]); });
 })();
 </script>
 </body>
