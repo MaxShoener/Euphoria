@@ -5,101 +5,62 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Euphoria</title>
 <style>
-  :root {
-    --bg: #0c0c0f;
-    --oval: rgba(18,18,20,0.85);
-    --button: rgba(255,255,255,0.07);
-    --accent: #2dbdff;
-    --text: #fff;
+  :root{
+    --bg:#06060a;
+    --oval: rgba(12, 14, 18, 0.75);
+    --btn: rgba(255,255,255,0.06);
+    --accent:#5ee0ff;
+    --text:#e9f0f6;
+    --muted: rgba(255,255,255,0.45);
   }
-  html,body { height:100%; margin:0; background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial; }
-  /* floating oval top bar */
-  #topbar {
+  html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;}
+  /* Floating modern oval topbar */
+  #topbar{
     position:fixed;
     left:50%;
     top:18px;
     transform:translateX(-50%);
-    width:78%;
+    width:84%;
     max-width:1200px;
     display:flex;
     align-items:center;
     gap:10px;
-    padding:10px 14px;
+    padding:12px 16px;
     background:var(--oval);
-    border-radius:32px;
-    box-shadow:0 10px 30px rgba(0,0,0,0.5);
+    border-radius:36px;
+    box-shadow:0 12px 30px rgba(0,0,0,0.6);
     z-index:2147483647;
-    backdrop-filter: blur(8px);
+    backdrop-filter: blur(10px) saturate(120%);
+    -webkit-backdrop-filter: blur(10px) saturate(120%);
   }
-  .nav-btn {
-    min-width:44px;
-    height:40px;
-    border-radius:12px;
-    border:0;
-    background:var(--button);
-    color:var(--text);
-    cursor:pointer;
-    display:inline-flex;
-    align-items:center;
-    justify-content:center;
-    font-size:16px;
+  .nav-btn{
+    width:46px;height:46px;border-radius:12px;border:0;background:var(--btn);color:var(--text);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;
   }
-  .nav-btn:hover { background: rgba(255,255,255,0.12); }
-  #address {
-    flex:1;
-    min-width:220px;
-    max-width:680px;
-    height:40px;
-    border-radius:14px;
-    border:0;
-    padding:8px 12px;
-    background: rgba(255,255,255,0.04);
-    color:var(--text);
-    font-size:15px;
+  .nav-btn:hover{ background: rgba(255,255,255,0.12); transform:translateY(-1px); transition:all .12s ease;}
+  #address{flex:1;height:46px;border-radius:14px;border:0;padding:10px 14px;background:rgba(255,255,255,0.02);color:var(--text);font-size:15px;outline:none;}
+  #address::placeholder{color:var(--muted);}
+  #go{min-width:68px;background:linear-gradient(90deg,var(--accent), #3fb5ff);box-shadow:0 6px 18px rgba(60,200,255,0.08);}
+  #spinner{position:fixed;top:86px;left:50%;transform:translateX(-50%);display:none;z-index:2147483646}
+  .spinner-dot{width:44px;height:44px;border-radius:50%;border:5px solid rgba(255,255,255,0.06);border-top-color:var(--accent);animation:spin 1s linear infinite}
+  @keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+  #content{position:absolute;top:0;left:0;right:0;bottom:0;padding-top:86px;overflow:auto;background:transparent}
+  #content > *{width:100%;min-height:100vh}
+  .msg{padding:40px;text-align:center;color:var(--muted);font-size:16px}
+  /* small responsive tweaks */
+  @media (max-width:720px){
+    #topbar{width:94%;padding:10px 12px;border-radius:20px}
+    .nav-btn{width:40px;height:40px}
+    #address{font-size:14px}
   }
-  #address::placeholder { color: rgba(255,255,255,0.55); }
-  #go { min-width:60px; background:#2e7d32; }
-  #spinner {
-    position:fixed;
-    top:80px;
-    left:50%;
-    transform:translateX(-50%);
-    display:none;
-    z-index:2147483646;
-  }
-  .spinner-dot {
-    width:44px; height:44px; border-radius:50%;
-    border:5px solid rgba(255,255,255,0.06);
-    border-top-color:var(--accent);
-    animation:spin 1s linear infinite;
-  }
-  @keyframes spin { 0% { transform:rotate(0deg);} 100%{transform:rotate(360deg);} }
-  /* content area */
-  #content {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right:0;
-    bottom:0;
-    padding-top:76px;
-    overflow:auto;
-    -webkit-overflow-scrolling:touch;
-    background:transparent;
-    color:initial;
-  }
-  /* make proxied page visible */
-  #content > * { width:100%; min-height:100vh; }
-  /* small helpful message */
-  .msg { padding:40px; text-align:center; color:#eee; font-size:18px; }
 </style>
 </head>
 <body>
-  <div id="topbar" role="navigation" aria-label="Euphoria navigation">
+  <div id="topbar" role="navigation" aria-label="Euphoria topbar">
     <button id="back" class="nav-btn" title="Back">◀</button>
     <button id="forward" class="nav-btn" title="Forward">▶</button>
     <button id="refresh" class="nav-btn" title="Refresh">⟳</button>
     <button id="home" class="nav-btn" title="Home (Google)">🏠</button>
-    <input id="address" list="history-list" placeholder="Enter URL or search..." aria-label="Address bar" />
+    <input id="address" placeholder="Enter URL or search..." list="history-list" aria-label="Address bar" />
     <datalist id="history-list"></datalist>
     <button id="go" class="nav-btn" title="Go">Go</button>
     <button id="fullscreen" class="nav-btn" title="Fullscreen">⛶</button>
@@ -108,14 +69,15 @@
   <div id="spinner"><div class="spinner-dot"></div></div>
 
   <div id="content" role="main" aria-live="polite">
-    <div class="msg">Loading Euphoria... (fetching Google)</div>
+    <div class="msg">Welcome to Euphoria — loading Google...</div>
   </div>
 
 <script>
+/* index.js-like: topbar wiring, proxy loader, containment (no iframe), small history/autofill */
 (async function(){
   const content = document.getElementById("content");
   const address = document.getElementById("address");
-  const historyListEl = document.getElementById("history-list");
+  const historyList = document.getElementById("history-list");
   const spinner = document.getElementById("spinner");
   const backBtn = document.getElementById("back");
   const forwardBtn = document.getElementById("forward");
@@ -124,231 +86,148 @@
   const goBtn = document.getElementById("go");
   const fullBtn = document.getElementById("fullscreen");
 
-  // simple client-side history stack
-  let stack = [];
-  let idx = -1;
+  let stack = []; let idx = -1;
+  let suggestions = JSON.parse(localStorage.getItem("euphoria_suggestions") || "[]");
+  function saveSuggestions(){ localStorage.setItem("euphoria_suggestions", JSON.stringify(suggestions.slice(0,100))); renderSuggestions(); }
+  function renderSuggestions(){ historyList.innerHTML = suggestions.map(u => `<option value="${u}">`).join(""); }
+  renderSuggestions();
 
-  // address autofill (localStorage)
-  let historyItems = JSON.parse(localStorage.getItem("euphoria_history") || "[]");
-  function saveHistory() {
-    localStorage.setItem("euphoria_history", JSON.stringify(historyItems.slice(0,60)));
-    renderHistory();
+  function normalizeInput(raw) {
+    raw = (raw || "").trim();
+    if (!raw) return "https://www.google.com";
+    if (/^https?:\/\//i.test(raw)) return raw;
+    if (raw.includes(" ") || !raw.includes(".")) return "https://www.google.com/search?q=" + encodeURIComponent(raw);
+    return "https://" + raw;
   }
-  function renderHistory() {
-    historyListEl.innerHTML = historyItems.map(u => `<option value="${u}">`).join("");
-  }
-  renderHistory();
+  function showSpinner(){ spinner.style.display = "block"; }
+  function hideSpinner(){ spinner.style.display = "none"; }
 
-  function updateAddressBar(u) { address.value = u || ""; }
-
-  function showSpinner() { spinner.style.display = "block"; }
-  function hideSpinner() { spinner.style.display = "none"; }
-
-  function normalizeInput(input) {
-    input = (input || "").trim();
-    if (!input) return "https://www.google.com";
-    if (/^https?:\/\//i.test(input)) return input;
-    // search if contains spaces or no dot
-    if (input.includes(" ") || !input.includes(".")) return "https://www.google.com/search?q=" + encodeURIComponent(input);
-    return "https://" + input;
-  }
-
-  // load URL via proxy and inject into #content
-  async function loadUrl(rawUrl, pushHistory = true) {
+  async function loadUrl(raw, push = true) {
+    const start = performance.now();
     try {
-      const url = normalizeInput(rawUrl);
+      const url = normalizeInput(raw);
       showSpinner();
-
-      // Save to client history for autofill
-      if (!historyItems.includes(url)) {
-        historyItems.unshift(url);
-        if (historyItems.length > 60) historyItems.pop();
-        saveHistory();
-      }
-
-      updateAddressBar(rawUrl.startsWith("http") ? rawUrl : rawUrl);
+      // save suggestion
+      if (url && !suggestions.includes(url)) { suggestions.unshift(url); if (suggestions.length>100) suggestions.pop(); saveSuggestions(); }
 
       // fetch proxied HTML
-      const resp = await fetch("/proxy?url=" + encodeURIComponent(url), { method: "GET" });
-      if (!resp.ok) throw new Error("Failed to load: " + resp.status + " " + resp.statusText);
-      const html = await resp.text();
+      const r = await fetch("/proxy?url=" + encodeURIComponent(url), { method: "GET" });
+      if (!r.ok) throw new Error("Failed to load: " + r.status);
+      const html = await r.text();
 
-      // replace content with proxied HTML
+      // render proxied HTML
       content.innerHTML = html;
 
-      // run script re-injection & link rewriting in the loaded content
-      runContainment(content, url);
+      // containment: rewrite anchors, forms and run inline scripts
+      containment(content, url);
 
-      // history
-      if (pushHistory) {
-        stack = stack.slice(0, idx + 1);
-        stack.push(url);
-        idx = stack.length - 1;
-      }
+      if (push) { stack = stack.slice(0, idx+1); stack.push(url); idx = stack.length - 1; }
+
+      // update address input display
+      address.value = url;
     } catch (err) {
-      content.innerHTML = `<div style="padding:2rem;color:#fff;background:#111;font-family:system-ui;">Error loading page:<br>${String(err.message || err)}</div>`;
-      console.error("Load error", err);
+      content.innerHTML = `<div style="padding:20px;color:#fff;background:#081018;font-family:system-ui;">Error loading page: ${(err && err.message) || err}</div>`;
+      console.error(err);
     } finally {
       hideSpinner();
+      const took = Math.round(performance.now() - start);
+      console.log("loaded in", took, "ms");
     }
   }
 
-  // rewrite links and assets in the loaded DOM to route through /proxy and keep navigation in-app
-  function runContainment(container, baseUrl) {
+  // containment: keep navigation inside /proxy, rewrite anchors/forms dynamically, execute inline scripts
+  function containment(root, baseUrl) {
     try {
-      // convert NodeList to array
-      const toAbsolute = (href) => {
-        try { return new URL(href, baseUrl).href; } catch(e) { return href; }
-      };
+      const toAbs = (h) => { try { return new URL(h, baseUrl).href } catch { return h } };
 
-      // rewrite anchors
-      container.querySelectorAll("a[href]").forEach(a => {
-        try {
-          const raw = a.getAttribute("href");
-          if (!raw) return;
-          if (/^(javascript:|mailto:|tel:|#)/i.test(raw)) return;
-          // compute absolute
-          const abs = toAbsolute(raw);
+      // anchors
+      root.querySelectorAll("a[href]").forEach(a=>{
+        try{
+          const h = a.getAttribute("href");
+          if (!h) return;
+          if (/^(javascript:|mailto:|tel:|#)/i.test(h)) return;
+          const abs = toAbs(h);
           a.setAttribute("href", "/proxy?url=" + encodeURIComponent(abs));
           a.removeAttribute("target");
-          // prevent default and navigate via loadUrl to keep our stack updated
-          a.addEventListener("click", (ev) => {
-            ev.preventDefault();
-            loadUrl(abs);
-          });
-        } catch (e) { /* ignore */ }
+          a.onclick = (ev)=>{ ev.preventDefault(); loadUrl(abs); };
+        }catch(e){}
       });
 
-      // rewrite forms: change action to /proxy?url=abs
-      container.querySelectorAll("form[action]").forEach(f => {
-        try {
-          const raw = f.getAttribute("action") || "";
-          if (/^(javascript:|#)/i.test(raw)) return;
-          const abs = toAbsolute(raw);
+      // forms
+      root.querySelectorAll("form[action]").forEach(f=>{
+        try{
+          const a = f.getAttribute("action") || "";
+          if (/^(javascript:|#)/i.test(a)) return;
+          const abs = toAbs(a || baseUrl);
           f.setAttribute("action", "/proxy?url=" + encodeURIComponent(abs));
-          f.setAttribute("method", (f.getAttribute("method") || "GET").toUpperCase());
-          // intercept submit to assemble query params and call loadUrl
-          f.addEventListener("submit", (ev) => {
+          f.onsubmit = (ev)=>{
             ev.preventDefault();
-            const data = new FormData(f);
+            const fd = new FormData(f);
             const params = new URLSearchParams();
-            for (const [k, v] of data.entries()) params.append(k, v);
-            const dest = abs + (params.toString() ? (abs.includes("?") ? "&" : "?") + params.toString() : "");
+            for(const [k,v] of fd.entries()) params.append(k,v);
+            const dest = abs + (params.toString() ? (abs.includes("?")?"&":"?") + params.toString() : "");
             loadUrl(dest);
-          });
-        } catch (e) {}
+          };
+        }catch(e){}
       });
 
-      // rewrite img/src/srcset/etc to use /asset?url=... by simply intercepting src changes isn't reliable;
-      // here we leave assets as served by server rewriting, but protect clicks on resources
-      // re-execute inline scripts: remove old script tags and re-insert so they execute
-      const scripts = container.querySelectorAll("script");
-      scripts.forEach(s => {
-        try {
-          const newScript = document.createElement("script");
+      // execute external scripts via fetch -> eval (best-effort)
+      const scripts = Array.from(root.querySelectorAll("script"));
+      for(const s of scripts){
+        try{
           if (s.src) {
-            // external scripts — use proxied asset path if present
             const src = s.getAttribute("src");
-            if (src && src.startsWith("/asset?url=")) {
-              // fetch proxied script and execute
-              fetch(src).then(r => r.text()).then(code => {
-                try {
-                  const exec = document.createElement("script");
-                  exec.textContent = code;
-                  document.body.appendChild(exec);
-                  exec.remove();
-                } catch(e) {}
-              }).catch(()=>{});
-            } else {
-              // for non-proxied external scripts, attempt to load via fetch and run (best effort)
-              fetch("/proxy?url=" + encodeURIComponent(toAbsolute(src))).then(r => r.text()).then(code => {
-                try {
-                  const exec = document.createElement("script");
-                  exec.textContent = code;
-                  document.body.appendChild(exec);
-                  exec.remove();
-                } catch(e){}
-              }).catch(()=>{});
-            }
+            const final = src.startsWith("/asset?url=") ? src : "/asset?url=" + encodeURIComponent(toAbs(src));
+            fetch(final).then(r=>r.text()).then(code=>{
+              try { const exec = document.createElement("script"); exec.textContent = code; document.body.appendChild(exec); exec.remove(); } catch(e){}
+            }).catch(()=>{});
           } else {
-            // inline script: run it
-            try {
-              newScript.textContent = s.textContent;
-              document.body.appendChild(newScript);
-              newScript.remove();
-            } catch (e) {}
+            const exec = document.createElement("script");
+            exec.textContent = s.textContent || "";
+            document.body.appendChild(exec);
+            exec.remove();
           }
-          // remove original script node to avoid duplicate execution
           s.remove();
-        } catch (e) {}
-      });
+        } catch(e){}
+      }
 
-      // intercept window.open in proxied scripts by replacing anchor target already done above.
-      // patch history API on the inserted content: we cannot fully override inner page's window.history,
-      // but we intercept links/forms and rely on the topbar for navigation.
-
-      // small delay rewrite for dynamically created nodes
-      const mo = new MutationObserver((mutations) => {
-        for (const m of mutations) {
-          if (m.type === "childList" && m.addedNodes.length) {
-            m.addedNodes.forEach(n => {
-              if (n.nodeType !== 1) return;
-              n.querySelectorAll && n.querySelectorAll("a[href]").forEach(a => {
-                // re-run the same rewrite logic
-                const raw = a.getAttribute("href");
-                if (!raw) return;
-                if (/^(javascript:|mailto:|tel:|#)/i.test(raw)) return;
-                const abs = toAbsolute(raw);
+      // observe DOM for dynamic links
+      const mo = new MutationObserver(muts=>{
+        for(const m of muts){
+          if(m.type === "childList" && m.addedNodes.length){
+            m.addedNodes.forEach(n=>{
+              if(n.nodeType !== 1) return;
+              n.querySelectorAll && n.querySelectorAll("a[href]").forEach(a=>{
+                const h = a.getAttribute("href");
+                if(!h) return;
+                if(/^(javascript:|mailto:|tel:|#)/i.test(h)) return;
+                const abs = toAbs(h);
                 a.setAttribute("href", "/proxy?url=" + encodeURIComponent(abs));
                 a.removeAttribute("target");
-                a.addEventListener("click", (ev) => { ev.preventDefault(); loadUrl(abs); });
+                a.onclick = (ev)=>{ ev.preventDefault(); loadUrl(abs); };
               });
             });
           }
         }
       });
-      try { mo.observe(container, { childList: true, subtree: true }); } catch (e) {}
+      try{ mo.observe(root, { childList:true, subtree:true }); } catch(e){}
     } catch (e) { console.error("containment error", e); }
   }
 
-  // topbar wiring
-  backBtn.addEventListener("click", () => {
-    if (idx > 0) {
-      idx--;
-      loadUrl(stack[idx], false);
-    }
-  });
-  forwardBtn.addEventListener("click", () => {
-    if (idx < stack.length - 1) {
-      idx++;
-      loadUrl(stack[idx], false);
-    }
-  });
-  refreshBtn.addEventListener("click", () => {
-    if (idx >= 0) loadUrl(stack[idx], false);
-    else loadUrl(address.value || "https://www.google.com", false);
-  });
-  homeBtn.addEventListener("click", () => loadUrl("https://www.google.com"));
-  goBtn.addEventListener("click", () => loadUrl(address.value));
-  address.addEventListener("keydown", (e) => { if (e.key === "Enter") loadUrl(address.value); });
-  fullBtn.addEventListener("click", () => {
-    if (!document.fullscreenElement) document.documentElement.requestFullscreen();
-    else document.exitFullscreen();
-  });
+  // topbar events
+  backBtn.onclick = ()=>{ if(idx>0){ idx--; loadUrl(stack[idx], false); } };
+  forwardBtn.onclick = ()=>{ if(idx < stack.length-1){ idx++; loadUrl(stack[idx], false); } };
+  refreshBtn.onclick = ()=>{ if(idx>=0) loadUrl(stack[idx], false); else loadUrl(address.value || "https://www.google.com", false); };
+  homeBtn.onclick = ()=> loadUrl("https://www.google.com");
+  goBtn.onclick = ()=> loadUrl(address.value);
+  address.onkeydown = (e)=>{ if(e.key === "Enter") loadUrl(address.value); };
+  fullBtn.onclick = ()=>{ if(!document.fullscreenElement) document.documentElement.requestFullscreen(); else document.exitFullscreen(); };
 
-  // restore last open site if present
+  // load last or google
   const last = localStorage.getItem("euphoria_last");
-  if (last) {
-    loadUrl(last);
-  } else {
-    loadUrl("https://www.google.com");
-  }
+  if(last) loadUrl(last); else loadUrl("https://www.google.com");
 
-  // save last on unload
-  window.addEventListener("beforeunload", () => {
-    if (stack[idx]) localStorage.setItem("euphoria_last", stack[idx]);
-  });
-
+  window.addEventListener("beforeunload", ()=>{ if(stack[idx]) localStorage.setItem("euphoria_last", stack[idx]); });
 })();
 </script>
 </body>
