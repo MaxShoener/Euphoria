@@ -4,7 +4,7 @@ WORKDIR /app
 
 COPY package*.json ./
 
-# npm install without dev dependencies; doesn't require package-lock.json
+# Install only production deps — avoids needing package-lock.json
 RUN npm install --omit=dev
 
 COPY . .
