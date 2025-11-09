@@ -3,7 +3,9 @@ FROM node:20
 WORKDIR /app
 
 COPY package*.json ./
-RUN npm ci --only=production
+
+# npm install without dev dependencies; doesn't require package-lock.json
+RUN npm install --omit=dev
 
 COPY . .
 
