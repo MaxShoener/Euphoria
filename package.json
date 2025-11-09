@@ -1,7 +1,7 @@
 {
   "name": "euphoria",
   "version": "1.0.0",
-  "description": "Euphoria — Scramjet interception proxy (no iframe)",
+  "description": "Euphoria - interception proxy (no headless browser)",
   "main": "server.js",
   "type": "module",
   "scripts": {
