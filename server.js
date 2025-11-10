@@ -1,110 +1,63 @@
 // server.js
 import express from "express";
 import cookieParser from "cookie-parser";
-import path from "path";
-import { fileURLToPath } from "url";
-import LRU from "lru-cache";
-import fetch from "node-fetch"; // node-fetch v3 is ESM compatible
-import pkg from "scramjet";      // CommonJS import
+import pkg from "scramjet";
 const { DataStream } = pkg;
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { LRUCache } from "lru-cache";
+import fetch from "node-fetch";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// -------- Middleware --------
+// Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
-app.use(express.static(path.join(__dirname, "public"))); // serve index.html and assets
+app.use(express.static("public"));
 
-// -------- LRU Cache --------
-const cache = new LRU({
-  max: 500,
-  ttl: 1000 * 60 * 5 // 5 minutes
+// Simple LRU cache
+const cache = new LRUCache({
+  max: 500, // max 500 items
+  ttl: 1000 * 60 * 5 // 5 minutes TTL
 });
 
-// -------- Logging Middleware --------
-app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} ${req.method} ${req.url}`);
-  next();
-});
+// Example route with caching
+app.get("/api/data", async (req, res) => {
+  const cacheKey = "data";
 
-// -------- Routes --------
-
-// Home route
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
-
-// Google login stub
-app.get("/auth/google", async (req, res) => {
-  try {
-    // Example: redirect to Google OAuth (placeholder)
-    res.redirect("https://accounts.google.com/o/oauth2/auth");
-  } catch (err) {
-    console.error("Google login error:", err);
-    res.status(500).send("Error during Google login");
-  }
-});
-
-// Cache example route
-app.get("/data/:id", async (req, res) => {
-  const { id } = req.params;
-  if (cache.has(id)) {
-    return res.json({ source: "cache", data: cache.get(id) });
+  if (cache.has(cacheKey)) {
+    return res.json({ source: "cache", data: cache.get(cacheKey) });
   }
 
   try {
-    // Example fetch (replace with real API)
-    const response = await fetch(`https://jsonplaceholder.typicode.com/todos/${id}`);
+    // Example fetch, replace with your actual data source
+    const response = await fetch("https://jsonplaceholder.typicode.com/todos/1");
     const data = await response.json();
 
-    // Cache the response
-    cache.set(id, data);
-
-    res.json({ source: "api", data });
+    cache.set(cacheKey, data);
+    res.json({ source: "fetch", data });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to fetch data" });
   }
 });
 
-// Scramjet example route
-app.get("/stream", async (req, res) => {
-  try {
-    const data = [1, 2, 3, 4, 5];
-    const stream = DataStream.fromArray(data)
-      .map(x => x * 2);
+// Example DataStream usage
+app.get("/api/stream", async (req, res) => {
+  const items = [1, 2, 3, 4, 5];
 
-    const result = [];
-    await stream.each(x => result.push(x));
-
-    res.json({ result });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Stream failed" });
-  }
+  DataStream.from(items)
+    .map(x => x * 2)
+    .reduce((acc, val) => acc + val, 0)
+    .then(result => res.json({ result }))
+    .catch(err => res.status(500).json({ error: err.message }));
 });
 
-// Cookie example
-app.get("/set-cookie", (req, res) => {
-  res.cookie("test", "hello", { maxAge: 1000 * 60 * 60 }); // 1 hour
-  res.send("Cookie set!");
+// Default route
+app.get("/", (req, res) => {
+  res.sendFile(`${process.cwd()}/public/index.html`);
 });
 
-app.get("/get-cookie", (req, res) => {
-  res.json(req.cookies);
-});
-
-// Fallback route
-app.use((req, res) => {
-  res.status(404).send("Page not found");
-});
-
-// -------- Start server --------
 app.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}`);
+  console.log(`Server running on port ${PORT}`);
 });
