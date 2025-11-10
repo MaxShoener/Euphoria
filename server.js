@@ -1,150 +1,110 @@
-// server.js - Full 500-line version
+// server.js
 import express from "express";
 import cookieParser from "cookie-parser";
-import fetch from "node-fetch";
-import { DataStream } from "scramjet";
-import LRU from "lru-cache";
 import path from "path";
 import { fileURLToPath } from "url";
+import LRU from "lru-cache";
+import fetch from "node-fetch"; // node-fetch v3 is ESM compatible
+import pkg from "scramjet";      // CommonJS import
+const { DataStream } = pkg;
 
-// Basic setup
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
-app.use(express.json({ limit: "5mb" }));
-app.use(express.urlencoded({ extended: true, limit: "5mb" }));
+// -------- Middleware --------
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+app.use(express.static(path.join(__dirname, "public"))); // serve index.html and assets
 
-// Cache setup
-const pageCache = new LRU({
+// -------- LRU Cache --------
+const cache = new LRU({
   max: 500,
-  ttl: 1000 * 60 * 10, // 10 min cache
+  ttl: 1000 * 60 * 5 // 5 minutes
 });
 
-// Logging helper
-function log(message, type = "info") {
-  const ts = new Date().toISOString();
-  console.log(`[${ts}] [${type.toUpperCase()}] ${message}`);
-}
+// -------- Logging Middleware --------
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} ${req.method} ${req.url}`);
+  next();
+});
 
-// Utility: validate URL
-function isValidURL(url) {
+// -------- Routes --------
+
+// Home route
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+// Google login stub
+app.get("/auth/google", async (req, res) => {
   try {
-    new URL(url);
-    return true;
-  } catch (e) {
-    return false;
-  }
-}
-
-// Utility: sanitize HTML (basic)
-function sanitizeHTML(html) {
-  return html.replace(/<script[^>]*>([\s\S]*?)<\/script>/gi, "");
-}
-
-// Utility: fetch page with caching
-async function fetchPage(url) {
-  if (pageCache.has(url)) {
-    log(`Cache hit for URL: ${url}`, "cache");
-    return pageCache.get(url);
-  }
-
-  log(`Fetching URL: ${url}`, "fetch");
-  try {
-    const response = await fetch(url);
-    let html = await response.text();
-    html = sanitizeHTML(html);
-    pageCache.set(url, html);
-    return html;
+    // Example: redirect to Google OAuth (placeholder)
+    res.redirect("https://accounts.google.com/o/oauth2/auth");
   } catch (err) {
-    log(`Error fetching URL: ${url} - ${err.message}`, "error");
-    throw new Error("Failed to fetch page");
-  }
-}
-
-// Utility: autofill extraction using Scramjet
-async function extractAutofill(html) {
-  const inputs = [];
-  await DataStream.fromArray(html.split(/<input/gi))
-    .map(str => {
-      const match = str.match(/name=["']?([\w-]+)["']?/i);
-      return match ? match[1] : null;
-    })
-    .filter(Boolean)
-    .each(name => inputs.push(name));
-  return inputs;
-}
-
-// Routes
-app.get("/", async (req, res) => {
-  const homeURL = "https://www.google.com";
-  try {
-    const html = await fetchPage(homeURL);
-    res.send(html);
-  } catch {
-    res.status(500).send("Failed to load home page");
+    console.error("Google login error:", err);
+    res.status(500).send("Error during Google login");
   }
 });
 
-app.post("/navigate", async (req, res) => {
-  const { url } = req.body;
-  if (!url || !isValidURL(url)) {
-    return res.status(400).json({ error: "Invalid URL" });
+// Cache example route
+app.get("/data/:id", async (req, res) => {
+  const { id } = req.params;
+  if (cache.has(id)) {
+    return res.json({ source: "cache", data: cache.get(id) });
   }
 
   try {
-    const html = await fetchPage(url);
-    res.json({ html });
+    // Example fetch (replace with real API)
+    const response = await fetch(`https://jsonplaceholder.typicode.com/todos/${id}`);
+    const data = await response.json();
+
+    // Cache the response
+    cache.set(id, data);
+
+    res.json({ source: "api", data });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch data" });
   }
 });
 
-app.post("/autofill", async (req, res) => {
-  const { url } = req.body;
-  if (!url || !isValidURL(url)) {
-    return res.status(400).json({ error: "Invalid URL" });
-  }
-
+// Scramjet example route
+app.get("/stream", async (req, res) => {
   try {
-    const html = await fetchPage(url);
-    const fields = await extractAutofill(html);
-    res.json({ fields });
+    const data = [1, 2, 3, 4, 5];
+    const stream = DataStream.fromArray(data)
+      .map(x => x * 2);
+
+    const result = [];
+    await stream.each(x => result.push(x));
+
+    res.json({ result });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: "Stream failed" });
   }
 });
 
-// Health check
-app.get("/health", (req, res) => res.json({ status: "ok" }));
-
-// Error handler
-app.use((err, req, res, next) => {
-  log(`Unhandled error: ${err.message}`, "error");
-  res.status(500).json({ error: "Internal server error" });
+// Cookie example
+app.get("/set-cookie", (req, res) => {
+  res.cookie("test", "hello", { maxAge: 1000 * 60 * 60 }); // 1 hour
+  res.send("Cookie set!");
 });
 
-// Server start
-app.listen(PORT, () => log(`Server running on port ${PORT}`));
-
-// Additional verbose logging and cache cleanup every 5 mins
-setInterval(() => {
-  log(`Cache size: ${pageCache.size}`, "cache");
-  pageCache.purgeStale();
-}, 1000 * 60 * 5);
-
-// Extra helpers to emulate browser navigation
-const historyMap = {};
-app.post("/history", (req, res) => {
-  const { sessionId, action } = req.body;
-  if (!historyMap[sessionId]) historyMap[sessionId] = [];
-  if (action === "push") historyMap[sessionId].push(req.body.url);
-  res.json({ history: historyMap[sessionId] });
+app.get("/get-cookie", (req, res) => {
+  res.json(req.cookies);
 });
 
 // Fallback route
-app.use("*", (req, res) => res.status(404).send("Page not found"));
+app.use((req, res) => {
+  res.status(404).send("Page not found");
+});
+
+// -------- Start server --------
+app.listen(PORT, () => {
+  console.log(`Server running at http://localhost:${PORT}`);
+});
