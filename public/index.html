@@ -5,144 +5,181 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Euphoria</title>
 <style>
-  :root {
-    --bg:#0b0b0b; --top:#111; --muted:#999; --accent:#2e7d32;
-  }
-  html,body{height:100%;margin:0;background:var(--bg);color:#fff;font-family:system-ui,Segoe UI,Arial;}
+  :root { --bg:#0b0c0d; --bar:#111; --muted:#999; --accent:#2e7d32; }
+  html,body{height:100%;margin:0;background:var(--bg);color:#fff;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;}
   /* floating oval top bar */
-  #topbar {
+  .topbar {
     position:fixed; top:12px; left:50%; transform:translateX(-50%);
-    width:88%; max-width:1200px; background:var(--top); border-radius:28px;
-    padding:10px 12px; display:flex; gap:8px; align-items:center; z-index:2147483647;
-    box-shadow:0 8px 28px rgba(0,0,0,0.6);
+    width:84%; max-width:1200px; background:var(--bar); border-radius:28px;
+    padding:8px 12px; box-shadow:0 10px 30px rgba(0,0,0,0.6); display:flex; gap:8px; align-items:center;
+    z-index:9999;
   }
-  .btn {
-    background:#1e1e1e; border:0; color:#fff; padding:8px 12px; border-radius:12px;
-    min-width:44px; cursor:pointer; font-size:15px;
+  .topbar button {
+    min-width:44px; padding:8px; border-radius:12px; border:0; background:#161718; color:#fff; cursor:pointer;
+    font-size:14px;
   }
-  .btn.positive { background:var(--accent); }
-  #address { flex:1; background:#141414; border-radius:12px; border:0; padding:9px 12px; color:#fff; }
-  #address::placeholder { color:#777; }
-  /* content area */
-  #content { position:absolute; left:0; right:0; top:64px; bottom:0; overflow:auto; padding:18px; box-sizing:border-box; }
-  .spinnerWrap { position:fixed; top:64px; left:0; right:0; bottom:0; display:none; align-items:center; justify-content:center; z-index:999; pointer-events:none; }
-  .spinner { width:42px;height:42px;border-radius:50%;border:6px solid #222;border-top-color:var(--accent); animation:spin 1s linear infinite; }
-  @keyframes spin { from { transform:rotate(0) } to { transform:rotate(360deg) } }
-  /* proxied content should appear on light background to resemble real page */
-  .pageWrap { background:#fff;color:#111;border-radius:10px;padding:12px; min-height:600px; box-shadow:0 10px 30px rgba(0,0,0,0.5); }
+  .topbar .go { background:var(--accent); }
+  .topbar input {
+    flex:1; padding:8px 12px; border-radius:12px; border:0; outline:none; background:#141516; color:#fff; font-size:14px;
+  }
+  main.content { position:fixed; top:76px; bottom:0; left:8px; right:8px; overflow:auto; background:transparent; border-radius:8px; }
+  .placeholder { height:100%; display:flex; align-items:center; justify-content:center; color:var(--muted); font-size:18px; }
+  /* spinner */
+  .spinnerWrap { position:fixed; top:76px; left:0; right:0; bottom:0; display:none; align-items:center; justify-content:center; z-index:998; pointer-events:none; }
+  .spinner { width:48px; height:48px; border-radius:50%; border:6px solid rgba(255,255,255,0.08); border-top-color:#2e7d32; animation:spin 1s linear infinite; }
+  @keyframes spin { to { transform:rotate(360deg); } }
+  /* ensure injected pages visually sit nicely */
+  .proxied { width:100%; min-height:80vh; background:transparent; color:#000; }
+  /* small responsive tweak */
+  @media (max-width:600px){ .topbar { width:calc(100% - 16px); } .topbar button{padding:6px} }
 </style>
 </head>
 <body>
-  <div id="topbar" role="navigation" aria-label="Euphoria top bar">
-    <button class="btn" id="back">◀</button>
-    <button class="btn" id="forward">▶</button>
-    <button class="btn" id="refresh">⟳</button>
-    <button class="btn" id="home">🏠</button>
-    <input id="address" placeholder="Enter URL or search (press Enter)" aria-label="Address or search"/>
-    <button class="btn positive" id="go">Go</button>
-    <button class="btn" id="fullscreen">⛶</button>
+  <div class="topbar" role="navigation" aria-label="Euphoria topbar">
+    <button id="back" title="Back">◀</button>
+    <button id="forward" title="Forward">▶</button>
+    <button id="refresh" title="Refresh">⟳</button>
+    <button id="home" title="Home">🏠</button>
+    <input id="address" placeholder="Enter URL or search (e.g. google.com or 'xbox remote play')" />
+    <button id="go" class="go" title="Go">Go</button>
+    <button id="fullscreen" title="Fullscreen">⛶</button>
   </div>
 
   <div class="spinnerWrap" id="spinnerWrap"><div class="spinner"></div></div>
 
-  <main id="content">
-    <!-- proxied HTML will be injected into pageWrap -->
-    <div id="pageWrap" class="pageWrap">Welcome to Euphoria — enter a URL or search above.</div>
+  <main class="content" id="content">
+    <div class="placeholder" id="placeholder">Welcome to Euphoria — enter a URL or search above and press Enter / Go.</div>
   </main>
 
 <script>
-(function(){
-  const address = document.getElementById('address');
-  const go = document.getElementById('go');
-  const back = document.getElementById('back');
-  const forward = document.getElementById('forward');
-  const refresh = document.getElementById('refresh');
-  const home = document.getElementById('home');
-  const full = document.getElementById('fullscreen');
-  const spinnerWrap = document.getElementById('spinnerWrap');
-  const pageWrap = document.getElementById('pageWrap');
+  (function(){
+    const address = document.getElementById('address');
+    const goBtn = document.getElementById('go');
+    const backBtn = document.getElementById('back');
+    const forwardBtn = document.getElementById('forward');
+    const refreshBtn = document.getElementById('refresh');
+    const homeBtn = document.getElementById('home');
+    const fullBtn = document.getElementById('fullscreen');
+    const content = document.getElementById('content');
+    const placeholder = document.getElementById('placeholder');
+    const spinnerWrap = document.getElementById('spinnerWrap');
 
-  // client-side simple session & history
-  let historyStack = [];
-  let historyIndex = -1;
+    let historyStack = [];
+    let historyIndex = -1;
 
-  function showSpinner(on=true){ spinnerWrap.style.display = on ? 'flex' : 'none'; }
-  function normalizeInput(v){
-    v = (v||'').trim();
-    if(!v) return 'https://www.google.com';
-    if(v.includes(' ') || (!v.includes('.') && !v.startsWith('http'))) return 'https://www.google.com/search?q=' + encodeURIComponent(v);
-    if(!/^https?:\/\//i.test(v)) v = 'https://' + v;
-    return v;
-  }
+    function showSpinner(){ spinnerWrap.style.display = 'flex'; }
+    function hideSpinner(){ spinnerWrap.style.display = 'none'; }
 
-  async function loadURL(url, pushHistory=true){
-    showSpinner(true);
-    try {
-      // fetch proxied HTML
-      const res = await fetch('/proxy?url=' + encodeURIComponent(url), { credentials: 'include' });
-      if (!res.ok) throw new Error('Load failed: ' + res.status + ' ' + res.statusText);
-      const html = await res.text();
-      // Put markup into pageWrap safely
-      pageWrap.innerHTML = html;
-      // Update address (store the canonical url)
-      const canonical = url;
-      address.value = canonical;
-      if (pushHistory) {
-        historyStack = historyStack.slice(0, historyIndex + 1);
-        historyStack.push(canonical);
-        historyIndex++;
-      }
-      // Small delay then re-enable rewriting by injected containment script (injected by server)
-      setTimeout(()=>{ try { /* nothing - server-side injection rewrites anchors/assets */ } catch(e) {} }, 200);
-    } catch (err) {
-      pageWrap.innerHTML = `<div style="padding:2rem;color:#900;background:#fff;border-radius:8px;">Error loading page:<br>${String(err)}</div>`;
-      console.error(err);
-    } finally {
-      showSpinner(false);
+    function isLikelySearch(v){
+      if(!v) return true;
+      if(v.indexOf(' ') !== -1) return true;
+      if(/^https?:\\/\\//i.test(v)) return false;
+      if(/\\./.test(v)) return false;
+      return true;
     }
-  }
+    function normalize(v){
+      v = (v||'').trim();
+      if(!v) return 'https://www.google.com';
+      if(isLikelySearch(v)) return 'https://www.google.com/search?q=' + encodeURIComponent(v);
+      if(/^https?:\\/\\//i.test(v)) return v;
+      return 'https://' + v;
+    }
 
-  // navigation buttons
-  back.onclick = () => { if (historyIndex > 0) { historyIndex--; loadURL(historyStack[historyIndex], false); } };
-  forward.onclick = () => { if (historyIndex < historyStack.length - 1) { historyIndex++; loadURL(historyStack[historyIndex], false); } };
-  refresh.onclick = () => { if (historyIndex >= 0) loadURL(historyStack[historyIndex], false); };
-  home.onclick = () => { loadURL('https://www.google.com'); };
-  full.onclick = () => { if (!document.fullscreenElement) document.documentElement.requestFullscreen(); else document.exitFullscreen(); };
-
-  function doGo(){
-    const v = normalizeInput(address.value);
-    loadURL(v);
-  }
-  go.onclick = doGo;
-  address.addEventListener('keydown', (e)=> { if (e.key === 'Enter') doGo(); });
-
-  // Autofill (basic, calls /autocomplete which server can provide)
-  let afTimer = 0;
-  address.addEventListener('input', (e)=>{
-    clearTimeout(afTimer);
-    afTimer = setTimeout(async ()=>{
-      const q = address.value.trim();
-      if (!q) return;
+    async function loadUrl(url, pushHistory=true){
       try {
-        const r = await fetch('/autocomplete?q=' + encodeURIComponent(q));
-        if (!r.ok) return;
-        const suggestions = await r.json();
-        // Show tiny suggestion dropdown (simple)
-        let dd = document.getElementById('eph-sugg');
-        if (!dd) { dd = document.createElement('div'); dd.id='eph-sugg'; dd.style.position='absolute'; dd.style.background='#111'; dd.style.color='#fff'; dd.style.border='1px solid #222'; dd.style.zIndex=999999; dd.style.padding='6px'; dd.style.borderRadius='8px'; dd.style.marginTop='6px'; dd.style.left = (address.getBoundingClientRect().left) + 'px'; document.body.appendChild(dd); }
-        dd.innerHTML = suggestions.slice(0,6).map(s=>`<div style="padding:6px;cursor:pointer" data-val="${s}">${s}</div>`).join('');
-        dd.querySelectorAll('div').forEach(el=>el.onclick = ()=> { address.value = el.dataset.val; dd.remove(); doGo(); });
-        setTimeout(()=>{ try{ dd.remove(); } catch(e){} }, 8000);
-      } catch(e){}
-    }, 250);
-  });
+        showSpinner();
+        // fetch proxied HTML
+        const prox = '/proxy?url=' + encodeURIComponent(url);
+        const res = await fetch(prox, { credentials: 'include' });
+        if(!res.ok) throw new Error('Load failed: ' + res.status);
+        const html = await res.text();
 
-  // initial load
-  loadURL('https://www.google.com');
+        // create container div to hold proxied HTML
+        const wrapper = document.createElement('div');
+        wrapper.className = 'proxied';
+        // set innerHTML (this contains the injected topbar from server too but server already injects containment script)
+        wrapper.innerHTML = html;
 
-  // make topbar usable when spinner is on (spinner pointer-events none used)
-  spinnerWrap.style.pointerEvents = 'none';
-})();
+        // remove previous content
+        content.innerHTML = '';
+        content.appendChild(wrapper);
+
+        // update address input (server-side final URL is provided as base href so location might not reflect; keep our url)
+        address.value = url;
+
+        // push history
+        if(pushHistory){
+          historyStack = historyStack.slice(0, historyIndex + 1);
+          historyStack.push(url);
+          historyIndex++;
+        }
+        hideSpinner();
+
+      } catch (err) {
+        hideSpinner();
+        content.innerHTML = '<div class="placeholder" style="color:#f66">Error loading page:<br>' + String(err) + '</div>';
+      }
+    }
+
+    // nav button wiring
+    backBtn.onclick = () => { if(historyIndex > 0) loadUrl(historyStack[--historyIndex], false); };
+    forwardBtn.onclick = () => { if(historyIndex < historyStack.length - 1) loadUrl(historyStack[++historyIndex], false); };
+    refreshBtn.onclick = () => { if(historyIndex >= 0) loadUrl(historyStack[historyIndex], false); };
+    homeBtn.onclick = () => loadUrl('https://www.google.com');
+    fullBtn.onclick = () => { if(!document.fullscreenElement) document.documentElement.requestFullscreen(); else document.exitFullscreen(); };
+
+    function doSearchGo(){ const val = address.value; const u = normalize(val); loadUrl(u); }
+    goBtn.onclick = doSearchGo;
+    address.addEventListener('keydown', e => { if(e.key === 'Enter') doSearchGo(); });
+
+    // simple autofill from recent (localStorage)
+    const REC_KEY = 'euphoria_recent';
+    function saveRecent(url){
+      try{
+        let list = JSON.parse(localStorage.getItem(REC_KEY) || '[]');
+        list = list.filter(x=>x!==url);
+        list.unshift(url);
+        if(list.length > 20) list.pop();
+        localStorage.setItem(REC_KEY, JSON.stringify(list));
+      }catch(e){}
+    }
+    // optional simple suggestion dropdown (minimal)
+    address.addEventListener('input', e=>{
+      try{
+        const q = address.value.toLowerCase();
+        const list = JSON.parse(localStorage.getItem(REC_KEY)||'[]') || [];
+        // if you want, add UI to show suggestions — omitted for brevity
+      }catch(e){}
+    });
+
+    // ensure deep links (if user opens /?url=...) load
+    (function initFromQuery(){
+      try{
+        const m = location.search.match(/[?&]url=([^&]+)/);
+        if(m){
+          const u = decodeURIComponent(m[1]);
+          address.value = u;
+          loadUrl(u);
+        } else {
+          // initial home page
+          address.value = 'https://www.google.com';
+          loadUrl('https://www.google.com');
+        }
+      }catch(e){
+        address.value = 'https://www.google.com';
+        loadUrl('https://www.google.com');
+      }
+    })();
+
+    // maintain local history array when user navigates inside proxied DOM by clicking proxied anchors:
+    // since server injects containment script that re-routes anchors to /proxy?url=..., clicking those links will change our location; handle popstate
+    window.addEventListener('popstate', () => {
+      const m = location.search.match(/[?&]url=([^&]+)/);
+      if(m){ const u = decodeURIComponent(m[1]); address.value = u; loadUrl(u, false); }
+    });
+
+    // ensure topbar remains interactive even while proxied page has heavy overlays — keep pointer-events enabled on topbar by CSS (done)
+  })();
 </script>
 </body>
 </html>
