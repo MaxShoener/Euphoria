@@ -3,19 +3,16 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Euphoria App</title>
+<title>Euphoria Proxy</title>
 <style>
-  /* Background and font */
   body {
     margin: 0;
-    padding: 0;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    font-family: 'Segoe UI', sans-serif;
     background: linear-gradient(135deg, #1f1c2c, #928dab);
     color: #fff;
     height: 100vh;
   }
 
-  /* Translucent top oval bar */
   header {
     position: fixed;
     top: 10px;
@@ -33,14 +30,17 @@
 
   main {
     padding: 120px 20px 20px 20px;
-    max-width: 800px;
+    max-width: 1000px;
     margin: auto;
+    height: calc(100vh - 140px);
+    display: flex;
+    flex-direction: column;
   }
 
   .search-container {
     display: flex;
     gap: 0.5rem;
-    margin-bottom: 1.5rem;
+    margin-bottom: 1rem;
   }
 
   input[type="text"] {
@@ -83,99 +83,54 @@
     100% { transform: rotate(360deg); } 
   }
 
-  .card {
-    background: rgba(255, 255, 255, 0.1);
-    padding: 1rem;
-    margin-bottom: 1rem;
+  iframe {
+    flex: 1;
+    width: 100%;
+    border: none;
     border-radius: 15px;
-    backdrop-filter: blur(5px);
-    transition: transform 0.2s;
-  }
-
-  .card:hover {
-    transform: scale(1.02);
-  }
-
-  .card h3 {
-    margin: 0 0 0.5rem 0;
-    font-size: 1.1rem;
-  }
-
-  .card p {
-    margin: 0.2rem 0;
-    font-size: 0.95rem;
-  }
-
-  .no-results {
-    text-align: center;
-    font-style: italic;
-    opacity: 0.7;
+    background: white;
   }
 </style>
 </head>
 <body>
 
-<header>Euphoria Dashboard</header>
+<header>Euphoria Proxy</header>
 
 <main>
   <div class="search-container">
-    <input type="text" id="query" placeholder="Search by title...">
-    <button id="searchBtn">Search</button>
+    <input type="text" id="urlInput" placeholder="Enter URL (example: https://example.com)">
+    <button id="goBtn">Go</button>
   </div>
   <div class="spinner" id="spinner"></div>
-  <div id="cardsContainer"></div>
+  <iframe id="proxyFrame" src=""></iframe>
 </main>
 
 <script>
-const searchBtn = document.getElementById('searchBtn');
-const queryInput = document.getElementById('query');
+const goBtn = document.getElementById('goBtn');
+const urlInput = document.getElementById('urlInput');
 const spinner = document.getElementById('spinner');
-const cardsContainer = document.getElementById('cardsContainer');
+const proxyFrame = document.getElementById('proxyFrame');
 
-async function fetchData() {
-  const query = queryInput.value.trim().toLowerCase();
-  cardsContainer.innerHTML = '';
-  spinner.style.display = 'block';
+function loadURL() {
+  let url = urlInput.value.trim();
+  if (!url) return;
 
-  try {
-    const res = await fetch('/api/data');
-    const json = await res.json();
-
-    // Wrap single object into array
-    const items = Array.isArray(json.data) ? json.data : [json.data];
-
-    const filtered = query
-      ? items.filter(item => item.title.toLowerCase().includes(query))
-      : items;
-
-    if (filtered.length === 0) {
-      cardsContainer.innerHTML = '<p class="no-results">No results found.</p>';
-    } else {
-      filtered.forEach(item => {
-        const card = document.createElement('div');
-        card.className = 'card';
-        card.innerHTML = `
-          <h3>${item.title}</h3>
-          <p><strong>User ID:</strong> ${item.userId}</p>
-          <p><strong>ID:</strong> ${item.id}</p>
-          <p><strong>Completed:</strong> ${item.completed}</p>
-        `;
-        cardsContainer.appendChild(card);
-      });
-    }
-  } catch (err) {
-    cardsContainer.innerHTML = '<p class="no-results">Error fetching data.</p>';
-    console.error(err);
-  } finally {
-    spinner.style.display = 'none';
+  // Ensure protocol
+  if (!/^https?:\/\//i.test(url)) {
+    url = 'https://' + url;
   }
+
+  spinner.style.display = 'block';
+  proxyFrame.src = url;
 }
 
-searchBtn.addEventListener('click', fetchData);
-queryInput.addEventListener('keypress', e => { if(e.key === 'Enter') fetchData(); });
+// Hide spinner when iframe loads
+proxyFrame.addEventListener('load', () => {
+  spinner.style.display = 'none';
+});
 
-// Initial load
-fetchData();
+goBtn.addEventListener('click', loadURL);
+urlInput.addEventListener('keypress', e => { if(e.key === 'Enter') loadURL(); });
 </script>
 
 </body>
