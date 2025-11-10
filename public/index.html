@@ -5,90 +5,125 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Euphoria App</title>
 <style>
+  /* Background and font */
   body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: #f4f5f7;
     margin: 0;
     padding: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #1f1c2c, #928dab);
+    color: #fff;
+    height: 100vh;
   }
+
+  /* Translucent top oval bar */
   header {
-    background: #5b21b6;
-    color: white;
-    padding: 1rem;
-    text-align: center;
-    font-size: 1.8rem;
+    position: fixed;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    border-radius: 50px;
+    padding: 0.5rem 2rem;
+    font-size: 1.4rem;
     font-weight: bold;
+    text-align: center;
+    z-index: 1000;
   }
+
   main {
+    padding: 120px 20px 20px 20px;
     max-width: 800px;
-    margin: 2rem auto;
-    padding: 0 1rem;
+    margin: auto;
   }
+
   .search-container {
     display: flex;
     gap: 0.5rem;
-    margin-bottom: 1rem;
+    margin-bottom: 1.5rem;
   }
+
   input[type="text"] {
     flex: 1;
-    padding: 0.5rem;
-    font-size: 1rem;
-    border-radius: 6px;
-    border: 1px solid #ccc;
-  }
-  button {
-    padding: 0.5rem 1rem;
-    font-size: 1rem;
+    padding: 0.6rem 1rem;
+    border-radius: 25px;
     border: none;
-    border-radius: 6px;
-    background: #5b21b6;
+    outline: none;
+    font-size: 1rem;
+  }
+
+  button {
+    padding: 0.6rem 1rem;
+    border-radius: 25px;
+    border: none;
+    background: #ff6ec7;
     color: white;
+    font-weight: bold;
     cursor: pointer;
-    transition: background 0.3s;
+    transition: 0.3s;
   }
+
   button:hover {
-    background: #4c1d95;
+    background: #ff3ec7;
   }
+
   .spinner {
     display: none;
     margin: 1rem auto;
-    border: 4px solid #ccc;
-    border-top: 4px solid #5b21b6;
+    border: 4px solid rgba(255, 255, 255, 0.3);
+    border-top: 4px solid #ff6ec7;
     border-radius: 50%;
     width: 30px;
     height: 30px;
     animation: spin 1s linear infinite;
   }
-  @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-  .cards {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    gap: 1rem;
+
+  @keyframes spin { 
+    0% { transform: rotate(0deg); } 
+    100% { transform: rotate(360deg); } 
   }
+
   .card {
-    background: white;
+    background: rgba(255, 255, 255, 0.1);
     padding: 1rem;
-    border-radius: 8px;
-    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    margin-bottom: 1rem;
+    border-radius: 15px;
+    backdrop-filter: blur(5px);
+    transition: transform 0.2s;
   }
+
+  .card:hover {
+    transform: scale(1.02);
+  }
+
   .card h3 {
     margin: 0 0 0.5rem 0;
+    font-size: 1.1rem;
   }
+
   .card p {
-    margin: 0.25rem 0;
+    margin: 0.2rem 0;
+    font-size: 0.95rem;
+  }
+
+  .no-results {
+    text-align: center;
+    font-style: italic;
+    opacity: 0.7;
   }
 </style>
 </head>
 <body>
 
-<header>Euphoria App</header>
+<header>Euphoria Dashboard</header>
+
 <main>
   <div class="search-container">
     <input type="text" id="query" placeholder="Search by title...">
     <button id="searchBtn">Search</button>
   </div>
   <div class="spinner" id="spinner"></div>
-  <div class="cards" id="cardsContainer"></div>
+  <div id="cardsContainer"></div>
 </main>
 
 <script>
@@ -106,7 +141,7 @@ async function fetchData() {
     const res = await fetch('/api/data');
     const json = await res.json();
 
-    // Wrap single object into array for consistency
+    // Wrap single object into array
     const items = Array.isArray(json.data) ? json.data : [json.data];
 
     const filtered = query
@@ -114,7 +149,7 @@ async function fetchData() {
       : items;
 
     if (filtered.length === 0) {
-      cardsContainer.innerHTML = '<p>No results found.</p>';
+      cardsContainer.innerHTML = '<p class="no-results">No results found.</p>';
     } else {
       filtered.forEach(item => {
         const card = document.createElement('div');
@@ -129,7 +164,7 @@ async function fetchData() {
       });
     }
   } catch (err) {
-    cardsContainer.innerHTML = '<p>Error fetching data.</p>';
+    cardsContainer.innerHTML = '<p class="no-results">Error fetching data.</p>';
     console.error(err);
   } finally {
     spinner.style.display = 'none';
