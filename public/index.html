@@ -1,81 +1,139 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Euphoria Browser</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Euphoria App</title>
   <style>
-    body { margin:0; font-family:sans-serif; background:#f2f2f2; }
-    #topbar { 
-      position:fixed; top:10px; left:50%; transform:translateX(-50%);
-      background:#222; border-radius:50px; padding:10px 20px; display:flex;
-      align-items:center; gap:8px; z-index:1000; 
+    body {
+      font-family: Arial, sans-serif;
+      background: #1e1e1e;
+      color: #f0f0f0;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      min-height: 100vh;
     }
-    #topbar button { background:#444; border:none; color:#fff; padding:8px 12px; border-radius:20px; cursor:pointer; }
-    #topbar input { border-radius:20px; padding:8px 12px; border:none; flex:1; }
-    #iframe { position:absolute; top:60px; left:0; right:0; bottom:0; width:100%; height:calc(100%-60px); border:none; }
+
+    header {
+      width: 100%;
+      padding: 20px;
+      background: #272727;
+      text-align: center;
+      font-size: 2em;
+      font-weight: bold;
+    }
+
+    main {
+      flex: 1;
+      width: 100%;
+      max-width: 600px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .search-container {
+      display: flex;
+      gap: 10px;
+    }
+
+    input[type="text"] {
+      flex: 1;
+      padding: 10px;
+      font-size: 1em;
+      border-radius: 5px;
+      border: none;
+    }
+
+    button {
+      padding: 10px 20px;
+      font-size: 1em;
+      border: none;
+      border-radius: 5px;
+      background: #4caf50;
+      color: white;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+
+    button:hover {
+      background: #45a049;
+    }
+
+    .spinner {
+      display: none;
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #4caf50;
+      border-radius: 50%;
+      width: 30px;
+      height: 30px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg);}
+      100% { transform: rotate(360deg);}
+    }
+
+    .result {
+      background: #333;
+      padding: 15px;
+      border-radius: 5px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
   </style>
 </head>
 <body>
-  <div id="topbar">
-    <button id="back">⟵</button>
-    <button id="forward">⟶</button>
-    <button id="refresh">⟳</button>
-    <button id="home">🏠</button>
-    <input id="urlinput" placeholder="Enter URL or search..." />
-    <button id="fullscreen">⛶</button>
+
+<header>Euphoria App</header>
+
+<main>
+  <div class="search-container">
+    <input type="text" id="query" placeholder="Type something to fetch data...">
+    <button id="searchBtn">Search</button>
   </div>
-  <iframe id="iframe" src="https://www.google.com"></iframe>
+  <div class="spinner" id="spinner"></div>
+  <div class="result" id="result"></div>
+</main>
 
-  <script>
-    const iframe = document.getElementById("iframe");
-    const urlInput = document.getElementById("urlinput");
-    const backBtn = document.getElementById("back");
-    const forwardBtn = document.getElementById("forward");
-    const refreshBtn = document.getElementById("refresh");
-    const homeBtn = document.getElementById("home");
-    const fsBtn = document.getElementById("fullscreen");
+<script>
+  const searchBtn = document.getElementById("searchBtn");
+  const queryInput = document.getElementById("query");
+  const spinner = document.getElementById("spinner");
+  const resultDiv = document.getElementById("result");
 
-    let historyStack = [];
-    let historyIndex = -1;
+  async function fetchData() {
+    const query = queryInput.value.trim();
+    if (!query) return;
 
-    function navigate(url) {
-      if (!url.startsWith("http")) url = "https://www.google.com/search?q=" + encodeURIComponent(url);
-      iframe.src = url;
-      historyStack = historyStack.slice(0, historyIndex + 1);
-      historyStack.push(url);
-      historyIndex++;
-      urlInput.value = url;
+    resultDiv.textContent = "";
+    spinner.style.display = "block";
+
+    try {
+      const res = await fetch("/api/data");
+      const data = await res.json();
+
+      resultDiv.textContent = JSON.stringify(data, null, 2);
+    } catch (err) {
+      resultDiv.textContent = "Error fetching data.";
+      console.error(err);
+    } finally {
+      spinner.style.display = "none";
     }
+  }
 
-    urlInput.addEventListener("keydown", e => {
-      if (e.key === "Enter") navigate(urlInput.value);
-    });
-    backBtn.addEventListener("click", () => {
-      if (historyIndex > 0) { historyIndex--; iframe.src = historyStack[historyIndex]; urlInput.value = historyStack[historyIndex]; }
-    });
-    forwardBtn.addEventListener("click", () => {
-      if (historyIndex < historyStack.length -1) { historyIndex++; iframe.src = historyStack[historyIndex]; urlInput.value = historyStack[historyIndex]; }
-    });
-    refreshBtn.addEventListener("click", () => { iframe.src = iframe.src; });
-    homeBtn.addEventListener("click", () => navigate("https://www.google.com"));
-    fsBtn.addEventListener("click", () => {
-      if (!document.fullscreenElement) document.documentElement.requestFullscreen();
-      else document.exitFullscreen();
-    });
+  searchBtn.addEventListener("click", fetchData);
+  queryInput.addEventListener("keypress", (e) => {
+    if (e.key === "Enter") fetchData();
+  });
+</script>
 
-    // Autofill fetch (example)
-    iframe.addEventListener("load", async () => {
-      try {
-        const response = await fetch("/autofill", {
-          method:"POST",
-          headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({ url:iframe.src })
-        });
-        const data = await response.json();
-        console.log("Autofill fields:", data.fields);
-      } catch(e){ console.error(e); }
-    });
-  </script>
 </body>
 </html>
