@@ -1,138 +1,146 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Euphoria App</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #1e1e1e;
-      color: #f0f0f0;
-      margin: 0;
-      padding: 0;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: flex-start;
-      min-height: 100vh;
-    }
-
-    header {
-      width: 100%;
-      padding: 20px;
-      background: #272727;
-      text-align: center;
-      font-size: 2em;
-      font-weight: bold;
-    }
-
-    main {
-      flex: 1;
-      width: 100%;
-      max-width: 600px;
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-    }
-
-    .search-container {
-      display: flex;
-      gap: 10px;
-    }
-
-    input[type="text"] {
-      flex: 1;
-      padding: 10px;
-      font-size: 1em;
-      border-radius: 5px;
-      border: none;
-    }
-
-    button {
-      padding: 10px 20px;
-      font-size: 1em;
-      border: none;
-      border-radius: 5px;
-      background: #4caf50;
-      color: white;
-      cursor: pointer;
-      transition: background 0.3s;
-    }
-
-    button:hover {
-      background: #45a049;
-    }
-
-    .spinner {
-      display: none;
-      border: 4px solid #f3f3f3;
-      border-top: 4px solid #4caf50;
-      border-radius: 50%;
-      width: 30px;
-      height: 30px;
-      animation: spin 1s linear infinite;
-      margin: 0 auto;
-    }
-
-    @keyframes spin {
-      0% { transform: rotate(0deg);}
-      100% { transform: rotate(360deg);}
-    }
-
-    .result {
-      background: #333;
-      padding: 15px;
-      border-radius: 5px;
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Euphoria App</title>
+<style>
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: #f4f5f7;
+    margin: 0;
+    padding: 0;
+  }
+  header {
+    background: #5b21b6;
+    color: white;
+    padding: 1rem;
+    text-align: center;
+    font-size: 1.8rem;
+    font-weight: bold;
+  }
+  main {
+    max-width: 800px;
+    margin: 2rem auto;
+    padding: 0 1rem;
+  }
+  .search-container {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+  }
+  input[type="text"] {
+    flex: 1;
+    padding: 0.5rem;
+    font-size: 1rem;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+  }
+  button {
+    padding: 0.5rem 1rem;
+    font-size: 1rem;
+    border: none;
+    border-radius: 6px;
+    background: #5b21b6;
+    color: white;
+    cursor: pointer;
+    transition: background 0.3s;
+  }
+  button:hover {
+    background: #4c1d95;
+  }
+  .spinner {
+    display: none;
+    margin: 1rem auto;
+    border: 4px solid #ccc;
+    border-top: 4px solid #5b21b6;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    animation: spin 1s linear infinite;
+  }
+  @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 1rem;
+  }
+  .card {
+    background: white;
+    padding: 1rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  }
+  .card h3 {
+    margin: 0 0 0.5rem 0;
+  }
+  .card p {
+    margin: 0.25rem 0;
+  }
+</style>
 </head>
 <body>
 
 <header>Euphoria App</header>
-
 <main>
   <div class="search-container">
-    <input type="text" id="query" placeholder="Type something to fetch data...">
+    <input type="text" id="query" placeholder="Search by title...">
     <button id="searchBtn">Search</button>
   </div>
   <div class="spinner" id="spinner"></div>
-  <div class="result" id="result"></div>
+  <div class="cards" id="cardsContainer"></div>
 </main>
 
 <script>
-  const searchBtn = document.getElementById("searchBtn");
-  const queryInput = document.getElementById("query");
-  const spinner = document.getElementById("spinner");
-  const resultDiv = document.getElementById("result");
+const searchBtn = document.getElementById('searchBtn');
+const queryInput = document.getElementById('query');
+const spinner = document.getElementById('spinner');
+const cardsContainer = document.getElementById('cardsContainer');
 
-  async function fetchData() {
-    const query = queryInput.value.trim();
-    if (!query) return;
+async function fetchData() {
+  const query = queryInput.value.trim().toLowerCase();
+  cardsContainer.innerHTML = '';
+  spinner.style.display = 'block';
 
-    resultDiv.textContent = "";
-    spinner.style.display = "block";
+  try {
+    const res = await fetch('/api/data');
+    const json = await res.json();
 
-    try {
-      const res = await fetch("/api/data");
-      const data = await res.json();
+    // Wrap single object into array for consistency
+    const items = Array.isArray(json.data) ? json.data : [json.data];
 
-      resultDiv.textContent = JSON.stringify(data, null, 2);
-    } catch (err) {
-      resultDiv.textContent = "Error fetching data.";
-      console.error(err);
-    } finally {
-      spinner.style.display = "none";
+    const filtered = query
+      ? items.filter(item => item.title.toLowerCase().includes(query))
+      : items;
+
+    if (filtered.length === 0) {
+      cardsContainer.innerHTML = '<p>No results found.</p>';
+    } else {
+      filtered.forEach(item => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = `
+          <h3>${item.title}</h3>
+          <p><strong>User ID:</strong> ${item.userId}</p>
+          <p><strong>ID:</strong> ${item.id}</p>
+          <p><strong>Completed:</strong> ${item.completed}</p>
+        `;
+        cardsContainer.appendChild(card);
+      });
     }
+  } catch (err) {
+    cardsContainer.innerHTML = '<p>Error fetching data.</p>';
+    console.error(err);
+  } finally {
+    spinner.style.display = 'none';
   }
+}
 
-  searchBtn.addEventListener("click", fetchData);
-  queryInput.addEventListener("keypress", (e) => {
-    if (e.key === "Enter") fetchData();
-  });
+searchBtn.addEventListener('click', fetchData);
+queryInput.addEventListener('keypress', e => { if(e.key === 'Enter') fetchData(); });
+
+// Initial load
+fetchData();
 </script>
 
 </body>
