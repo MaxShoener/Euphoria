@@ -1,19 +1,20 @@
 {
-  "name": "euphoria-proxy",
+  "name": "euphoria",
   "version": "1.0.0",
-  "description": "Modern web proxy with navigation top bar, autofill, caching, and fullscreen support.",
+  "description": "Euphoria server",
   "type": "module",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "express": "^4.19.2",
-    "axios": "^1.7.4",
-    "cookie-parser": "^1.4.7",
-    "lru-cache": "^10.2.2",
-    "scramjet": "^4.36.6",
-    "node-fetch": "^3.4.2",
-    "morgan": "^1.10.0"
+    "express": "^4.18.2",
+    "cookie-parser": "^1.4.6",
+    "lru-cache": "^9.1.1",
+    "node-fetch": "^3.3.2",
+    "scramjet": "^6.1.0"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }
