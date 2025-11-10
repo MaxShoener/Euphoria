@@ -5,214 +5,143 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>Euphoria</title>
 <style>
-  :root{
-    --bg:#06060a;
-    --oval: rgba(12,14,18,0.82);
-    --btn: rgba(255,255,255,0.06);
-    --accent:#5ee0ff;
-    --text:#e9f0f6;
-    --muted: rgba(255,255,255,0.45);
+  :root {
+    --bg:#0b0b0b; --top:#111; --muted:#999; --accent:#2e7d32;
   }
-  html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;}
-  #topbar{
-    position:fixed;left:50%;top:18px;transform:translateX(-50%);width:84%;max-width:1200px;display:flex;align-items:center;gap:10px;padding:12px 16px;background:var(--oval);border-radius:36px;box-shadow:0 12px 30px rgba(0,0,0,0.6);z-index:2147483647;backdrop-filter: blur(10px) saturate(120%);
+  html,body{height:100%;margin:0;background:var(--bg);color:#fff;font-family:system-ui,Segoe UI,Arial;}
+  /* floating oval top bar */
+  #topbar {
+    position:fixed; top:12px; left:50%; transform:translateX(-50%);
+    width:88%; max-width:1200px; background:var(--top); border-radius:28px;
+    padding:10px 12px; display:flex; gap:8px; align-items:center; z-index:2147483647;
+    box-shadow:0 8px 28px rgba(0,0,0,0.6);
   }
-  .nav-btn{width:46px;height:46px;border-radius:12px;border:0;background:var(--btn);color:var(--text);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px}
-  .nav-btn:hover{ background: rgba(255,255,255,0.12); transform:translateY(-1px); transition:all .12s ease;}
-  #address{flex:1;height:46px;border-radius:14px;border:0;padding:10px 14px;background:rgba(255,255,255,0.02);color:var(--text);font-size:15px;outline:none}
-  #address::placeholder{color:var(--muted)}
-  #go{min-width:68px;background:linear-gradient(90deg,var(--accent), #3fb5ff);box-shadow:0 6px 18px rgba(60,200,255,0.08)}
-  #spinner{position:fixed;top:86px;left:50%;transform:translateX(-50%);display:none;z-index:2147483646}
-  .spinner-dot{width:44px;height:44px;border-radius:50%;border:5px solid rgba(255,255,255,0.06);border-top-color:var(--accent);animation:spin 1s linear infinite}
-  @keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
-  #content{position:absolute;top:0;left:0;right:0;bottom:0;padding-top:86px;overflow:auto;background:transparent}
-  #content > *{width:100%;min-height:100vh}
-  .msg{padding:40px;text-align:center;color:var(--muted);font-size:16px}
-  @media (max-width:720px){
-    #topbar{width:94%;padding:10px 12px;border-radius:20px}
-    .nav-btn{width:40px;height:40px}
-    #address{font-size:14px}
+  .btn {
+    background:#1e1e1e; border:0; color:#fff; padding:8px 12px; border-radius:12px;
+    min-width:44px; cursor:pointer; font-size:15px;
   }
+  .btn.positive { background:var(--accent); }
+  #address { flex:1; background:#141414; border-radius:12px; border:0; padding:9px 12px; color:#fff; }
+  #address::placeholder { color:#777; }
+  /* content area */
+  #content { position:absolute; left:0; right:0; top:64px; bottom:0; overflow:auto; padding:18px; box-sizing:border-box; }
+  .spinnerWrap { position:fixed; top:64px; left:0; right:0; bottom:0; display:none; align-items:center; justify-content:center; z-index:999; pointer-events:none; }
+  .spinner { width:42px;height:42px;border-radius:50%;border:6px solid #222;border-top-color:var(--accent); animation:spin 1s linear infinite; }
+  @keyframes spin { from { transform:rotate(0) } to { transform:rotate(360deg) } }
+  /* proxied content should appear on light background to resemble real page */
+  .pageWrap { background:#fff;color:#111;border-radius:10px;padding:12px; min-height:600px; box-shadow:0 10px 30px rgba(0,0,0,0.5); }
 </style>
 </head>
 <body>
-  <div id="topbar" role="navigation" aria-label="Euphoria topbar">
-    <button id="back" class="nav-btn" title="Back">◀</button>
-    <button id="forward" class="nav-btn" title="Forward">▶</button>
-    <button id="refresh" class="nav-btn" title="Refresh">⟳</button>
-    <button id="home" class="nav-btn" title="Home (Google)">🏠</button>
-    <input id="address" placeholder="Enter URL or search..." list="hist" aria-label="Address" />
-    <datalist id="hist"></datalist>
-    <button id="go" class="nav-btn" title="Go">Go</button>
-    <button id="fullscreen" class="nav-btn" title="Fullscreen">⛶</button>
+  <div id="topbar" role="navigation" aria-label="Euphoria top bar">
+    <button class="btn" id="back">◀</button>
+    <button class="btn" id="forward">▶</button>
+    <button class="btn" id="refresh">⟳</button>
+    <button class="btn" id="home">🏠</button>
+    <input id="address" placeholder="Enter URL or search (press Enter)" aria-label="Address or search"/>
+    <button class="btn positive" id="go">Go</button>
+    <button class="btn" id="fullscreen">⛶</button>
   </div>
 
-  <div id="spinner"><div class="spinner-dot"></div></div>
+  <div class="spinnerWrap" id="spinnerWrap"><div class="spinner"></div></div>
 
-  <main id="content" role="main" aria-live="polite">
-    <div class="msg">Welcome to Euphoria — loading Google...</div>
+  <main id="content">
+    <!-- proxied HTML will be injected into pageWrap -->
+    <div id="pageWrap" class="pageWrap">Welcome to Euphoria — enter a URL or search above.</div>
   </main>
 
 <script>
-(async function(){
-  const content = document.getElementById('content');
+(function(){
   const address = document.getElementById('address');
-  const histList = document.getElementById('hist');
-  const spinner = document.getElementById('spinner');
+  const go = document.getElementById('go');
   const back = document.getElementById('back');
   const forward = document.getElementById('forward');
   const refresh = document.getElementById('refresh');
   const home = document.getElementById('home');
-  const go = document.getElementById('go');
   const full = document.getElementById('fullscreen');
+  const spinnerWrap = document.getElementById('spinnerWrap');
+  const pageWrap = document.getElementById('pageWrap');
 
-  let stack = [], idx = -1;
-  let suggestions = JSON.parse(localStorage.getItem('euphoria_suggestions') || '[]');
+  // client-side simple session & history
+  let historyStack = [];
+  let historyIndex = -1;
 
-  function saveSuggestions(){ localStorage.setItem('euphoria_suggestions', JSON.stringify(suggestions.slice(0,200))); renderSuggestions(); }
-  function renderSuggestions(){ histList.innerHTML = suggestions.map(u=>`<option value="${u}">`).join(''); }
-  renderSuggestions();
-
-  function isLikelySearch(val){
-    if(!val) return true;
-    if(val.includes(' ')) return true;
-    if(/^https?:\\/\\//i.test(val)) return false;
-    if(!val.includes('.')) return true;
-    return false;
+  function showSpinner(on=true){ spinnerWrap.style.display = on ? 'flex' : 'none'; }
+  function normalizeInput(v){
+    v = (v||'').trim();
+    if(!v) return 'https://www.google.com';
+    if(v.includes(' ') || (!v.includes('.') && !v.startsWith('http'))) return 'https://www.google.com/search?q=' + encodeURIComponent(v);
+    if(!/^https?:\/\//i.test(v)) v = 'https://' + v;
+    return v;
   }
-  function normalize(val){
-    val = (val||'').trim();
-    if(!val) return 'https://www.google.com';
-    if(/^https?:\\/\\//i.test(val)) return val;
-    if(isLikelySearch(val)) return 'https://www.google.com/search?q=' + encodeURIComponent(val);
-    return 'https://' + val;
-  }
-  function showSpinner(){ spinner.style.display = 'block'; }
-  function hideSpinner(){ spinner.style.display = 'none'; }
 
-  async function loadUrl(raw, push=true){
-    const url = normalize(raw);
-    showSpinner();
+  async function loadURL(url, pushHistory=true){
+    showSpinner(true);
     try {
-      // save suggestion
-      if(url && !suggestions.includes(url)){
-        suggestions.unshift(url);
-        if(suggestions.length>200) suggestions.pop();
-        saveSuggestions();
+      // fetch proxied HTML
+      const res = await fetch('/proxy?url=' + encodeURIComponent(url), { credentials: 'include' });
+      if (!res.ok) throw new Error('Load failed: ' + res.status + ' ' + res.statusText);
+      const html = await res.text();
+      // Put markup into pageWrap safely
+      pageWrap.innerHTML = html;
+      // Update address (store the canonical url)
+      const canonical = url;
+      address.value = canonical;
+      if (pushHistory) {
+        historyStack = historyStack.slice(0, historyIndex + 1);
+        historyStack.push(canonical);
+        historyIndex++;
       }
-      const r = await fetch('/proxy?url=' + encodeURIComponent(url));
-      if(!r.ok) throw new Error('Load failed: ' + r.status);
-      const html = await r.text();
-      content.innerHTML = html;
-
-      // containment: rewrite anchors/forms and execute inline scripts where necessary
-      contain(content, url);
-
-      if(push){
-        stack = stack.slice(0, idx+1);
-        stack.push(url);
-        idx = stack.length - 1;
-      }
-      address.value = url;
+      // Small delay then re-enable rewriting by injected containment script (injected by server)
+      setTimeout(()=>{ try { /* nothing - server-side injection rewrites anchors/assets */ } catch(e) {} }, 200);
     } catch (err) {
+      pageWrap.innerHTML = `<div style="padding:2rem;color:#900;background:#fff;border-radius:8px;">Error loading page:<br>${String(err)}</div>`;
       console.error(err);
-      content.innerHTML = '<div class="msg">Error loading page: ' + (err.message || err) + '</div>';
     } finally {
-      hideSpinner();
+      showSpinner(false);
     }
   }
 
-  // containment: keep navigation within /proxy by rewriting anchors/forms dynamically and executing inline scripts
-  function contain(root, baseUrl){
-    try{
-      const toAbs = (h)=>{ try { return new URL(h, baseUrl).href; } catch(e){ return h; } };
+  // navigation buttons
+  back.onclick = () => { if (historyIndex > 0) { historyIndex--; loadURL(historyStack[historyIndex], false); } };
+  forward.onclick = () => { if (historyIndex < historyStack.length - 1) { historyIndex++; loadURL(historyStack[historyIndex], false); } };
+  refresh.onclick = () => { if (historyIndex >= 0) loadURL(historyStack[historyIndex], false); };
+  home.onclick = () => { loadURL('https://www.google.com'); };
+  full.onclick = () => { if (!document.fullscreenElement) document.documentElement.requestFullscreen(); else document.exitFullscreen(); };
 
-      function rewriteAnchor(a){
-        try{
-          const h = a.getAttribute('href');
-          if(!h) return;
-          if(/^(javascript:|mailto:|tel:|#)/i.test(h)) return;
-          const abs = toAbs(h);
-          a.setAttribute('href','/proxy?url=' + encodeURIComponent(abs));
-          a.removeAttribute('target');
-          a.onclick = (ev)=>{ ev.preventDefault(); loadUrl(abs); };
-        }catch(e){}
-      }
-      root.querySelectorAll && root.querySelectorAll('a[href]').forEach(rewriteAnchor);
-
-      root.querySelectorAll && root.querySelectorAll('form[action]').forEach(f=>{
-        try{
-          const a = f.getAttribute('action') || '';
-          if(/^(javascript:|#)/i.test(a)) return;
-          const abs = toAbs(a || baseUrl);
-          f.setAttribute('action', '/proxy?url=' + encodeURIComponent(abs));
-          f.onsubmit = (ev)=>{
-            ev.preventDefault();
-            const fd = new FormData(f);
-            const params = new URLSearchParams();
-            for(const [k,v] of fd.entries()) params.append(k,v);
-            const dest = abs + (params.toString() ? (abs.includes('?') ? '&' : '?') + params.toString() : '');
-            loadUrl(dest);
-          };
-        }catch(e){}
-      });
-
-      // execute scripts: external scripts fetched via /asset and evaluated, inline scripts executed
-      const scripts = Array.from(root.querySelectorAll('script'));
-      for(const s of scripts){
-        try{
-          if(s.src){
-            const src = s.getAttribute('src');
-            const fetchUrl = src.startsWith('/asset?url=') ? src : '/asset?url=' + encodeURIComponent(toAbs(src));
-            fetch(fetchUrl).then(r=>r.text()).then(code=>{
-              try { const el = document.createElement('script'); el.textContent = code; document.body.appendChild(el); el.remove(); } catch(e){}
-            }).catch(()=>{});
-          } else {
-            const el = document.createElement('script');
-            el.textContent = s.textContent || '';
-            document.body.appendChild(el);
-            el.remove();
-          }
-          s.remove();
-        } catch(e){}
-      }
-
-      // observe new nodes
-      const mo = new MutationObserver(muts=>{
-        for(const m of muts){
-          if(m.type === 'childList' && m.addedNodes.length){
-            m.addedNodes.forEach(n=>{
-              if(n.nodeType !== 1) return;
-              n.querySelectorAll && n.querySelectorAll('a[href]').forEach(a=>{
-                const h = a.getAttribute('href');
-                if(!h) return;
-                if(/^(javascript:|mailto:|tel:|#)/i.test(h)) return;
-                const abs = toAbs(h);
-                a.setAttribute('href','/proxy?url=' + encodeURIComponent(abs));
-                a.removeAttribute('target');
-                a.onclick = (ev)=>{ ev.preventDefault(); loadUrl(abs); };
-              });
-            });
-          }
-        }
-      });
-      try{ mo.observe(root, { childList:true, subtree:true }); } catch(e){}
-    } catch(e){ console.error('contain error', e); }
+  function doGo(){
+    const v = normalizeInput(address.value);
+    loadURL(v);
   }
+  go.onclick = doGo;
+  address.addEventListener('keydown', (e)=> { if (e.key === 'Enter') doGo(); });
 
-  back.onclick = ()=>{ if(idx>0){ idx--; loadUrl(stack[idx], false); } };
-  forward.onclick = ()=>{ if(idx < stack.length-1){ idx++; loadUrl(stack[idx], false); } };
-  refresh.onclick = ()=>{ if(idx>=0) loadUrl(stack[idx], false); else loadUrl(address.value || 'https://www.google.com', false); };
-  home.onclick = ()=> loadUrl('https://www.google.com');
-  go.onclick = ()=> loadUrl(address.value);
-  address.onkeydown = (e)=>{ if(e.key === 'Enter') go.onclick(); };
-  full.onclick = ()=>{ if(!document.fullscreenElement) document.documentElement.requestFullscreen(); else document.exitFullscreen(); };
+  // Autofill (basic, calls /autocomplete which server can provide)
+  let afTimer = 0;
+  address.addEventListener('input', (e)=>{
+    clearTimeout(afTimer);
+    afTimer = setTimeout(async ()=>{
+      const q = address.value.trim();
+      if (!q) return;
+      try {
+        const r = await fetch('/autocomplete?q=' + encodeURIComponent(q));
+        if (!r.ok) return;
+        const suggestions = await r.json();
+        // Show tiny suggestion dropdown (simple)
+        let dd = document.getElementById('eph-sugg');
+        if (!dd) { dd = document.createElement('div'); dd.id='eph-sugg'; dd.style.position='absolute'; dd.style.background='#111'; dd.style.color='#fff'; dd.style.border='1px solid #222'; dd.style.zIndex=999999; dd.style.padding='6px'; dd.style.borderRadius='8px'; dd.style.marginTop='6px'; dd.style.left = (address.getBoundingClientRect().left) + 'px'; document.body.appendChild(dd); }
+        dd.innerHTML = suggestions.slice(0,6).map(s=>`<div style="padding:6px;cursor:pointer" data-val="${s}">${s}</div>`).join('');
+        dd.querySelectorAll('div').forEach(el=>el.onclick = ()=> { address.value = el.dataset.val; dd.remove(); doGo(); });
+        setTimeout(()=>{ try{ dd.remove(); } catch(e){} }, 8000);
+      } catch(e){}
+    }, 250);
+  });
 
   // initial load
-  const last = localStorage.getItem('euphoria_last');
-  if(last) loadUrl(last); else loadUrl('https://www.google.com');
+  loadURL('https://www.google.com');
 
-  window.addEventListener('beforeunload', ()=>{ if(stack[idx]) localStorage.setItem('euphoria_last', stack[idx]); });
+  // make topbar usable when spinner is on (spinner pointer-events none used)
+  spinnerWrap.style.pointerEvents = 'none';
 })();
 </script>
 </body>
