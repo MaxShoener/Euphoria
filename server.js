@@ -16,10 +16,9 @@ const PORT = process.env.PORT || 8080;
 // --- Middleware ---
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
-
 const cache = new NodeCache({ stdTTL: 300, checkperiod: 60 });
 
-// JS snippet to rewrite remote URLs
+// JS snippet to rewrite fetch/XHR/WebSocket calls
 const jsRewriteSnippet = `
 <script>
 (function(){
@@ -51,7 +50,7 @@ async function minifyContent(body, contentType){
     }catch(err){ console.error(err); return body; }
 }
 
-// Rewrite relative URLs
+// Rewrite relative URLs in HTML/CSS
 function rewriteAssets(body, baseUrl){
     return body
         .replace(/(href|src)=["'](?!\/)([^"']+)["']/g,(m,attr,link)=>{
@@ -72,7 +71,7 @@ app.get('/proxy', async (req,res)=>{
     try{
         const cached = cache.get(url);
         const headers = cached?.etag ? { 'If-None-Match': cached.etag } : {};
-        const response = await fetch(url, { headers:{...headers, 'X-Euphoria':'true'} });
+        const response = await fetch(url, { headers:{...headers, 'User-Agent':'Mozilla/5.0', 'X-Euphoria':'true'} });
 
         if(response.status===304 && cached){
             res.set('Content-Type', cached.contentType);
@@ -82,6 +81,7 @@ app.get('/proxy', async (req,res)=>{
         const contentType = response.headers.get('content-type') || '';
         const etag = response.headers.get('etag') || null;
 
+        // --- Text content ---
         if(contentType.includes('text') || contentType.includes('javascript') || contentType.includes('css')){
             let body = await response.text();
             if(contentType.includes('text/html')){
@@ -93,14 +93,15 @@ app.get('/proxy', async (req,res)=>{
             body = await minifyContent(body,contentType);
             cache.set(url,{body,contentType,etag});
             res.set('Content-Type',contentType);
-            res.send(body);
-        } else {
-            const buffer = await response.arrayBuffer();
-            const data = Buffer.from(buffer);
-            cache.set(url,{body:data,contentType,etag});
-            res.set('Content-Type',contentType);
-            res.send(data);
+            return res.send(body);
         }
+
+        // --- Binary content ---
+        const buffer = await response.arrayBuffer();
+        const data = Buffer.from(buffer);
+        cache.set(url,{body:data,contentType,etag});
+        res.set('Content-Type',contentType);
+        res.send(data);
 
     } catch(err){
         res.status(500).send(`Proxy error: ${err.message}`);
@@ -108,9 +109,7 @@ app.get('/proxy', async (req,res)=>{
 });
 
 // --- SPA fallback ---
-app.get('*', (req,res)=>{
-    res.sendFile(path.resolve(__dirname,'public','index.html'));
-});
+app.get('*', (req,res)=> res.sendFile(path.resolve(__dirname,'public','index.html')));
 
 // --- WebSocket ---
 const server = app.listen(PORT,()=>console.log(`Euphoria running on port ${PORT}`));
