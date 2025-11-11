@@ -5,13 +5,17 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Euphoria Web Proxy</title>
 <style>
+/* --- Base --- */
 body {
-    font-family: Arial;
     margin: 0;
     padding: 0;
+    font-family: Arial, sans-serif;
     background: #121212;
     color: #f0f0f0;
 }
+a { color:#1e90ff; word-break: break-word; }
+
+/* --- Top Bar --- */
 .top-bar {
     display: flex;
     align-items: center;
@@ -22,6 +26,11 @@ body {
     position: sticky;
     top: 0;
     z-index: 1000;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+}
+.nav-buttons {
+    display: flex;
+    align-items: center;
 }
 button {
     margin: 0 5px;
@@ -34,26 +43,43 @@ button {
     font-size: 14px;
 }
 button:hover { background: #3e3e3e; }
+
 #urlInput {
     flex: 1;
     margin: 0 10px;
     padding: 8px;
     border-radius: 12px;
     border: none;
-}
-#status {
     font-size: 14px;
-    color: #aaa;
-    margin-left: 10px;
 }
-#content { margin: 20px; text-align: left; }
-a { color:#1e90ff; word-break:break-word; }
+#status { font-size: 14px; color: #aaa; margin-left: 10px; }
+
+/* --- Progress Bar --- */
+#progress-bar-container {
+    position: sticky;
+    top: 50px;
+    width: 100%;
+    height: 4px;
+    background: #2e2e2e;
+}
+#progress-bar {
+    width: 0%;
+    height: 100%;
+    background: #1e90ff;
+    transition: width 0.2s ease;
+}
+
+/* --- Content --- */
+#content {
+    margin: 20px;
+    text-align: left;
+}
 </style>
 </head>
 <body>
 
 <div class="top-bar">
-    <div>
+    <div class="nav-buttons">
         <button id="backBtn">◀ Back</button>
         <button id="forwardBtn">▶ Forward</button>
         <button id="reloadBtn">⟳ Reload</button>
@@ -64,21 +90,29 @@ a { color:#1e90ff; word-break:break-word; }
     <span id="status">Idle</span>
 </div>
 
+<div id="progress-bar-container"><div id="progress-bar"></div></div>
+
 <div id="content">Proxied page content will appear here.</div>
 
 <script>
 const content = document.getElementById('content');
 const urlInput = document.getElementById('urlInput');
 const status = document.getElementById('status');
+const progressBar = document.getElementById('progress-bar');
 
 const historyStack = [];
 let currentIndex = -1;
+
+// Update progress bar
+function setProgress(percent) { progressBar.style.width = percent + '%'; }
 
 // Load a URL through the proxy
 async function loadUrl(url, addToHistory = true) {
     try {
         status.textContent = 'Loading...';
+        setProgress(20);
         const res = await fetch(`/proxy?url=${encodeURIComponent(url)}`);
+        setProgress(50);
         const html = await res.text();
         content.innerHTML = html;
 
@@ -93,14 +127,12 @@ async function loadUrl(url, addToHistory = true) {
             const href = a.getAttribute('href');
             if (href && !href.startsWith('/proxy')) {
                 a.setAttribute('href', `/proxy?url=${encodeURIComponent(new URL(href, url).href)}`);
-                a.addEventListener('click', e => {
-                    e.preventDefault();
-                    loadUrl(new URL(href, url).href);
-                });
+                a.addEventListener('click', e => { e.preventDefault(); loadUrl(new URL(href, url).href); });
             }
         });
 
         urlInput.value = url;
+        setProgress(100);
         status.textContent = 'Loaded';
 
         if (addToHistory) {
@@ -108,38 +140,33 @@ async function loadUrl(url, addToHistory = true) {
             historyStack.push(url);
             currentIndex++;
         }
+
+        setTimeout(() => setProgress(0), 500); // Reset progress bar
     } catch(err) {
         content.innerHTML = `Error loading page: ${err.message}`;
         status.textContent = 'Error';
+        setProgress(0);
     }
 }
 
 // Navigation buttons
 document.getElementById('backBtn').addEventListener('click', () => {
-    if (currentIndex > 0) {
-        currentIndex--;
-        loadUrl(historyStack[currentIndex], false);
-    }
+    if (currentIndex > 0) { currentIndex--; loadUrl(historyStack[currentIndex], false); }
 });
 document.getElementById('forwardBtn').addEventListener('click', () => {
-    if (currentIndex < historyStack.length - 1) {
-        currentIndex++;
-        loadUrl(historyStack[currentIndex], false);
-    }
+    if (currentIndex < historyStack.length - 1) { currentIndex++; loadUrl(historyStack[currentIndex], false); }
 });
 document.getElementById('reloadBtn').addEventListener('click', () => {
     if (currentIndex >= 0) loadUrl(historyStack[currentIndex], false);
 });
-document.getElementById('homeBtn').addEventListener('click', () => {
-    loadUrl('/', true);
-});
+document.getElementById('homeBtn').addEventListener('click', () => loadUrl('/', true));
 document.getElementById('goBtn').addEventListener('click', () => {
     const url = urlInput.value;
     if (url) loadUrl(url, true);
 });
 
 // Optional WebSocket Example
-const ws = new WebSocket(`wss://useful-karil-maxshoener-6cb890d9.koyeb.app/`);
+const ws = new WebSocket(`wss://${location.host}`);
 ws.onmessage = e => console.log('WS:', e.data);
 
 // Load home page on startup
