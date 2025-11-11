@@ -8,7 +8,7 @@ import NodeCache from 'node-cache';
 import { WebSocketServer } from 'ws';
 import { minify as minifyHtml } from 'html-minifier-terser';
 import CleanCSS from 'clean-css';
-import * as Terser from 'terser'; // <-- FIXED import
+import * as Terser from 'terser'; // Correct ESM import
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,89 +21,66 @@ app.use(cors());
 app.use(compression());
 app.use(express.json());
 
+// Serve all static assets from public/
+app.use(express.static(path.join(__dirname, 'public')));
+
 // --- Cache ---
 const cache = new NodeCache({ stdTTL: 300, checkperiod: 60 });
 
-// --- JS rewriting snippet ---
+// --- JS rewrite snippet ---
 const jsRewriteSnippet = `
 <script>
 (function(){
     const proxy = '/proxy?url=';
     function rewriteUrl(url, base) {
-        try {
-            if (!url) return url;
-            const u = new URL(url, base);
-            return '/proxy?url=' + encodeURIComponent(u.href);
-        } catch(e) { return url; }
+        try { if (!url) return url; const u = new URL(url, base); return '/proxy?url=' + encodeURIComponent(u.href); } 
+        catch(e) { return url; }
     }
     const originalFetch = window.fetch;
-    window.fetch = function(input, init){
-        if (typeof input === 'string') input = rewriteUrl(input, location.href);
-        else input.url = rewriteUrl(input.url, location.href);
-        return originalFetch(input, init);
-    };
+    window.fetch = function(input, init){ if (typeof input === 'string') input = rewriteUrl(input, location.href); else input.url = rewriteUrl(input.url, location.href); return originalFetch(input, init); };
     const originalXhrOpen = XMLHttpRequest.prototype.open;
-    XMLHttpRequest.prototype.open = function(method, url, async, user, pass){
-        url = rewriteUrl(url, location.href);
-        return originalXhrOpen.call(this, method, url, async, user, pass);
-    };
+    XMLHttpRequest.prototype.open = function(method, url, async, user, pass){ url = rewriteUrl(url, location.href); return originalXhrOpen.call(this, method, url, async, user, pass); };
     const OriginalWS = window.WebSocket;
-    window.WebSocket = function(url, protocols){
-        url = rewriteUrl(url, location.href);
-        return new OriginalWS(url, protocols);
-    };
+    window.WebSocket = function(url, protocols){ url = rewriteUrl(url, location.href); return new OriginalWS(url, protocols); };
 })();
 </script>
 `;
 
-// --- Helper: rewrite HTML/CSS assets ---
+// --- Rewrite assets in HTML/CSS ---
 function rewriteAssets(body, baseUrl) {
     body = body.replace(/(href|src)=["'](?!http)([^"']+)["']/g, (m, attr, link) => {
         const fullUrl = new URL(link, baseUrl).href;
         return `${attr}="/proxy?url=${encodeURIComponent(fullUrl)}"`;
     });
-
     body = body.replace(/url\(["']?(?!http)([^"')]+)["']?\)/g, (m, link) => {
         const fullUrl = new URL(link, baseUrl).href;
         return `url("/proxy?url=${encodeURIComponent(fullUrl)}")`;
     });
-
     return body;
 }
 
-// --- Minify HTML, JS, CSS ---
+// --- Minification ---
 async function minifyContent(body, contentType) {
     try {
-        if (contentType.includes('text/html')) {
-            return await minifyHtml(body, {
-                collapseWhitespace: true,
-                removeComments: true,
-                minifyJS: true,
-                minifyCSS: true
-            });
-        } else if (contentType.includes('text/css')) {
-            return new CleanCSS().minify(body).styles;
-        } else if (contentType.includes('javascript') || contentType.includes('application/x-javascript')) {
+        if (contentType.includes('text/html')) return await minifyHtml(body, { collapseWhitespace:true, removeComments:true, minifyJS:true, minifyCSS:true });
+        if (contentType.includes('text/css')) return new CleanCSS().minify(body).styles;
+        if (contentType.includes('javascript') || contentType.includes('application/x-javascript')) {
             const result = await Terser.minify(body);
             return result.code || body;
         }
         return body;
-    } catch (err) {
-        console.error('Minification error:', err);
-        return body;
-    }
+    } catch(err){ console.error('Minify error:', err); return body; }
 }
 
-// --- Proxy Route ---
+// --- Proxy route ---
 app.get('/proxy', async (req, res) => {
     const url = req.query.url;
-    if (!url) return res.status(400).send('Missing URL parameter');
+    if (!url) return res.status(400).send('Missing URL');
 
     const cached = cache.get(url);
     const headers = cached?.etag ? { 'If-None-Match': cached.etag } : {};
     try {
         const response = await fetch(url, { headers: { ...headers, 'X-Euphoria': 'true' } });
-
         if (response.status === 304 && cached) {
             res.set('Content-Type', cached.contentType);
             return res.send(cached.body);
@@ -127,17 +104,17 @@ app.get('/proxy', async (req, res) => {
         res.set('Content-Type', contentType);
         res.send(body);
 
-    } catch (err) {
+    } catch(err) {
         res.status(500).send(`Proxy error: ${err.message}`);
     }
 });
 
-// --- SPA / static fallback ---
+// --- SPA fallback ---
 app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
+    res.sendFile(path.resolve(__dirname, 'public', 'index.html'));
 });
 
 // --- WebSocket Server ---
 const server = app.listen(PORT, () => console.log(`Euphoria running on port ${PORT}`));
 const wss = new WebSocketServer({ server });
-wss.on('connection', ws => ws.send(JSON.stringify({ message: 'Welcome to Euphoria WebSocket!' })));
+wss.on('connection', ws => ws.send(JSON.stringify({ message:'Welcome to Euphoria WebSocket!' })));
