@@ -5,17 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Euphoria Web Proxy</title>
 <style>
-/* --- Base --- */
 body {
     margin: 0;
-    padding: 0;
     font-family: Arial, sans-serif;
     background: #121212;
     color: #f0f0f0;
 }
 a { color:#1e90ff; word-break: break-word; }
 
-/* --- Top Bar --- */
+/* --- Top bar --- */
 .top-bar {
     display: flex;
     align-items: center;
@@ -28,11 +26,12 @@ a { color:#1e90ff; word-break: break-word; }
     z-index: 1000;
     box-shadow: 0 2px 6px rgba(0,0,0,0.5);
 }
-.nav-buttons {
-    display: flex;
-    align-items: center;
+.nav-left { display: flex; align-items: center; }
+#logo {
+    width: 36px; height: 36px; border-radius: 50%; object-fit: cover;
+    margin-right: 10px; box-shadow: 0 0 5px rgba(0,0,0,0.5);
 }
-button {
+.nav-buttons button, #goBtn {
     margin: 0 5px;
     padding: 8px 16px;
     border: none;
@@ -42,48 +41,46 @@ button {
     cursor: pointer;
     font-size: 14px;
 }
-button:hover { background: #3e3e3e; }
-
+button:hover, #goBtn:hover { background: #3e3e3e; }
 #urlInput {
-    flex: 1;
-    margin: 0 10px;
-    padding: 8px;
-    border-radius: 12px;
-    border: none;
-    font-size: 14px;
+    flex: 1; margin: 0 10px; padding: 8px; border-radius: 12px; border: none; font-size: 14px;
 }
 #status { font-size: 14px; color: #aaa; margin-left: 10px; }
 
-/* --- Progress Bar --- */
-#progress-bar-container {
-    position: sticky;
-    top: 50px;
-    width: 100%;
-    height: 4px;
-    background: #2e2e2e;
+/* --- Progress bar --- */
+#progress-bar-container { position: sticky; top: 62px; width: 100%; height: 4px; background: #2e2e2e; z-index:999; }
+#progress-bar { width:0%; height:100%; background:#1e90ff; transition: width 0.2s ease; }
+
+/* --- Loading spinner --- */
+#spinner {
+    display: none;
+    position: fixed;
+    top: 50%; left: 50%;
+    width: 50px; height: 50px;
+    margin: -25px 0 0 -25px;
+    border: 5px solid #2e2e2e;
+    border-top: 5px solid #1e90ff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    z-index: 1001;
 }
-#progress-bar {
-    width: 0%;
-    height: 100%;
-    background: #1e90ff;
-    transition: width 0.2s ease;
-}
+@keyframes spin { 0% { transform: rotate(0deg);} 100% { transform: rotate(360deg);} }
 
 /* --- Content --- */
-#content {
-    margin: 20px;
-    text-align: left;
-}
+#content { margin: 20px; text-align: left; min-height: 80vh; background:#121212; color:#f0f0f0; }
 </style>
 </head>
 <body>
 
 <div class="top-bar">
-    <div class="nav-buttons">
-        <button id="backBtn">◀ Back</button>
-        <button id="forwardBtn">▶ Forward</button>
-        <button id="reloadBtn">⟳ Reload</button>
-        <button id="homeBtn">🏠 Home</button>
+    <div class="nav-left">
+        <img src="logo.png" alt="Euphoria Logo" id="logo">
+        <div class="nav-buttons">
+            <button id="backBtn">◀ Back</button>
+            <button id="forwardBtn">▶ Forward</button>
+            <button id="reloadBtn">⟳ Reload</button>
+            <button id="homeBtn">🏠 Home</button>
+        </div>
     </div>
     <input type="text" id="urlInput" placeholder="Enter URL">
     <button id="goBtn">Go</button>
@@ -91,7 +88,7 @@ button:hover { background: #3e3e3e; }
 </div>
 
 <div id="progress-bar-container"><div id="progress-bar"></div></div>
-
+<div id="spinner"></div>
 <div id="content">Proxied page content will appear here.</div>
 
 <script>
@@ -99,78 +96,74 @@ const content = document.getElementById('content');
 const urlInput = document.getElementById('urlInput');
 const status = document.getElementById('status');
 const progressBar = document.getElementById('progress-bar');
+const spinner = document.getElementById('spinner');
 
 const historyStack = [];
 let currentIndex = -1;
 
-// Update progress bar
-function setProgress(percent) { progressBar.style.width = percent + '%'; }
+function setProgress(percent){ progressBar.style.width = percent+'%'; }
+function showSpinner(show){ spinner.style.display = show?'block':'none'; }
 
-// Load a URL through the proxy
-async function loadUrl(url, addToHistory = true) {
+async function loadUrl(url, addToHistory = true){
     try {
         status.textContent = 'Loading...';
-        setProgress(20);
+        setProgress(10);
+        showSpinner(true);
+
         const res = await fetch(`/proxy?url=${encodeURIComponent(url)}`);
         setProgress(50);
         const html = await res.text();
+
+        // Inject the remote site HTML into content
         content.innerHTML = html;
 
-        // Update page title dynamically if available
+        // Update dynamic title
         const parser = new DOMParser();
-        const doc = parser.parseFromString(html, 'text/html');
-        if (doc.title) document.title = `Euphoria - ${doc.title}`;
-        else document.title = `Euphoria`;
+        const doc = parser.parseFromString(html,'text/html');
+        document.title = doc.title ? `Euphoria - ${doc.title}` : 'Euphoria';
 
-        // Rewrite links in content to go through proxy
-        content.querySelectorAll('a').forEach(a => {
+        // Rewrite links to go through proxy
+        content.querySelectorAll('a').forEach(a=>{
             const href = a.getAttribute('href');
-            if (href && !href.startsWith('/proxy')) {
-                a.setAttribute('href', `/proxy?url=${encodeURIComponent(new URL(href, url).href)}`);
-                a.addEventListener('click', e => { e.preventDefault(); loadUrl(new URL(href, url).href); });
+            if(href && !href.startsWith('/proxy')){
+                a.setAttribute('href', `/proxy?url=${encodeURIComponent(new URL(href,url).href)}`);
+                a.addEventListener('click', e=>{ e.preventDefault(); loadUrl(new URL(href,url).href); });
             }
         });
 
         urlInput.value = url;
         setProgress(100);
         status.textContent = 'Loaded';
+        showSpinner(false);
 
-        if (addToHistory) {
-            historyStack.splice(currentIndex + 1);
+        if(addToHistory){
+            historyStack.splice(currentIndex+1);
             historyStack.push(url);
             currentIndex++;
         }
 
-        setTimeout(() => setProgress(0), 500); // Reset progress bar
-    } catch(err) {
+        setTimeout(()=>setProgress(0),500);
+    } catch(err){
         content.innerHTML = `Error loading page: ${err.message}`;
         status.textContent = 'Error';
         setProgress(0);
+        showSpinner(false);
     }
 }
 
 // Navigation buttons
-document.getElementById('backBtn').addEventListener('click', () => {
-    if (currentIndex > 0) { currentIndex--; loadUrl(historyStack[currentIndex], false); }
-});
-document.getElementById('forwardBtn').addEventListener('click', () => {
-    if (currentIndex < historyStack.length - 1) { currentIndex++; loadUrl(historyStack[currentIndex], false); }
-});
-document.getElementById('reloadBtn').addEventListener('click', () => {
-    if (currentIndex >= 0) loadUrl(historyStack[currentIndex], false);
-});
-document.getElementById('homeBtn').addEventListener('click', () => loadUrl('/', true));
-document.getElementById('goBtn').addEventListener('click', () => {
-    const url = urlInput.value;
-    if (url) loadUrl(url, true);
-});
+document.getElementById('backBtn').addEventListener('click', ()=>{ if(currentIndex>0){ currentIndex--; loadUrl(historyStack[currentIndex],false); }});
+document.getElementById('forwardBtn').addEventListener('click', ()=>{ if(currentIndex<historyStack.length-1){ currentIndex++; loadUrl(historyStack[currentIndex],false); }});
+document.getElementById('reloadBtn').addEventListener('click', ()=>{ if(currentIndex>=0) loadUrl(historyStack[currentIndex],false); });
+document.getElementById('homeBtn').addEventListener('click', ()=> loadUrl('https://www.google.com',true));
+document.getElementById('goBtn').addEventListener('click', ()=>{ const url=urlInput.value; if(url) loadUrl(url,true); });
 
-// Optional WebSocket Example
+// Optional WebSocket
 const ws = new WebSocket(`wss://${location.host}`);
-ws.onmessage = e => console.log('WS:', e.data);
+ws.onmessage = e=>console.log('WS:', e.data);
 
-// Load home page on startup
-loadUrl('/', true);
+// Load Google as initial home page
+loadUrl('https://www.google.com',true);
 </script>
 
 </body>
