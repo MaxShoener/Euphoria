@@ -6,16 +6,14 @@
 <title>Euphoria — Lightweight Proxy</title>
 <style>
 :root {
-  --bg: #0f1112;
-  --topbar-bg: rgba(17,17,17,0.85); /* translucent */
-  --control-bg: #222;
+  --bg: #f5f5f5;
+  --topbar-bg: rgba(255,255,255,0.85);
+  --control-bg: #eee;
   --accent: #2e7d32;
-  --muted: #bfc3c7;
+  --muted: #555;
 }
-html,body { height:100%; margin:0; font-family:Inter,system-ui,Segoe UI,Roboto,Arial; background:var(--bg); color:#fff; }
-
-/* Floating oval top bar */
-#topbar {
+html,body{margin:0;height:100%;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;background:var(--bg);color:#000;}
+#topbar{
   position: fixed;
   top: 12px;
   left: 50%;
@@ -24,197 +22,171 @@ html,body { height:100%; margin:0; font-family:Inter,system-ui,Segoe UI,Roboto,A
   background: var(--topbar-bg);
   border-radius: 28px;
   padding: 8px 12px;
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  z-index: 2147483647;
-  box-shadow: 0 8px 28px rgba(0,0,0,0.6);
+  display:flex;
+  gap:8px;
+  align-items:center;
+  z-index:2147483647;
+  box-shadow:0 6px 24px rgba(0,0,0,0.2);
   backdrop-filter: blur(6px);
-  position: relative;
 }
-
-/* Loading bar */
-#loading-bar {
-  position: absolute;
-  top: 0;
-  left: 0;
-  height: 3px;
-  width: 0%;
-  background: var(--accent);
-  border-top-left-radius: 3px;
-  border-top-right-radius: 3px;
-  transition: width 0.2s ease;
-}
-
-.tb-btn {
+.tb-btn{
   min-width:44px;
   height:40px;
   padding:8px;
   border-radius:10px;
-  border: none;
+  border:none;
   background: var(--control-bg);
-  color: white;
+  color:#000;
   font-size:16px;
   cursor:pointer;
   display:inline-grid;
   place-items:center;
 }
-.tb-btn:active { transform: translateY(1px); }
-
-#address {
+.tb-btn:active{transform: translateY(1px);}
+#address{
   flex:1;
   height:40px;
   padding:8px 12px;
-  border-radius: 12px;
-  border: none;
-  background:#121316;
-  color:#fff;
+  border-radius:12px;
+  border:none;
+  background:#fff;
+  color:#000;
   outline: 2px solid transparent;
   font-size:14px;
 }
-#address::placeholder { color: var(--muted); }
-#goBtn { background: var(--accent); color:#fff; min-width:48px; }
-
-/* Content */
-#content {
+#address::placeholder{color:var(--muted);}
+#goBtn{background:var(--accent);color:#fff;min-width:48px;}
+#content{
   position: fixed;
-  top: 72px;
-  left: 12px;
-  right: 12px;
-  bottom: 12px;
-  border-radius: 12px;
-  overflow: auto;
-  background: #fff;
-  color: #000;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+  top:72px;
+  left:12px;
+  right:12px;
+  bottom:12px;
+  border-radius:12px;
+  overflow:auto;
+  background:#fff;
+  box-shadow:0 6px 18px rgba(0,0,0,0.2);
 }
-
-/* Loading overlay */
-#overlay {
-  position: absolute;
-  inset: 0;
-  display: none;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0,0,0,0.45);
-  z-index: 100;
+#overlay{
+  position:absolute;
+  inset:0;
+  display:none;
+  align-items:center;
+  justify-content:center;
+  background:rgba(0,0,0,0.25);
+  z-index:100;
 }
-.spinner {
-  width:44px; height:44px;
+.spinner{
+  width:44px;height:44px;
   border-radius:50%;
-  border:6px solid rgba(255,255,255,0.2);
-  border-top-color: #4caf50;
+  border:6px solid rgba(0,0,0,0.1);
+  border-top-color:#4caf50;
   animation: spin 900ms linear infinite;
 }
-@keyframes spin { to { transform: rotate(360deg);} }
-
-/* small message bar */
-#msg { position: absolute; left: 12px; bottom: 12px; color:#eee; background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:8px; font-size:13px; }
+@keyframes spin{to{transform:rotate(360deg);}}
+#msg{
+  position:absolute;
+  left:12px;
+  bottom:12px;
+  color:#000;
+  background:rgba(255,255,255,0.7);
+  padding:6px 10px;
+  border-radius:8px;
+  font-size:13px;
+  display:none;
+}
+#loadingBar{
+  position: fixed;
+  top:0;
+  left:0;
+  width:0%;
+  height:4px;
+  background: #2e7d32;
+  z-index:2147483648;
+  transition: width 0.2s ease;
+}
 </style>
 </head>
 <body>
 
-<div id="topbar" role="navigation" aria-label="Euphoria controls">
-  <div id="loading-bar"></div>
-  <button id="back" class="tb-btn" title="Back">◀</button>
-  <button id="forward" class="tb-btn" title="Forward">▶</button>
-  <button id="refresh" class="tb-btn" title="Refresh">⟳</button>
-  <button id="home" class="tb-btn" title="Home">🏠</button>
-  <input id="address" placeholder="Type a URL (example.com) or search (anything with spaces)" />
-  <button id="goBtn" class="tb-btn" title="Go">Go</button>
-  <button id="fullscreen" class="tb-btn" title="Fullscreen">⛶</button>
+<div id="topbar">
+  <button id="back" class="tb-btn">◀</button>
+  <button id="forward" class="tb-btn">▶</button>
+  <button id="refresh" class="tb-btn">⟳</button>
+  <button id="home" class="tb-btn">🏠</button>
+  <input id="address" placeholder="Type a URL or search" />
+  <button id="goBtn" class="tb-btn">Go</button>
+  <button id="fullscreen" class="tb-btn">⛶</button>
 </div>
 
+<div id="loadingBar"></div>
 <div id="content" aria-live="polite">
   <div style="padding:24px;color:#444;font-family:system-ui;">
-    <h2 style="margin-top:0">Euphoria</h2>
-    <p>Enter a site or search above. This client talks to the backend proxy — no iframe, full HTML transform via streams.</p>
+    <h2>Euphoria</h2>
+    <p>Enter a site above. No iframe, full HTML transform via streams.</p>
     <p>Example: <code>google.com</code> or <code>https://xbox.com</code></p>
   </div>
 </div>
 
-<div id="overlay"><div class="spinner" aria-hidden="true"></div></div>
-<div id="msg" style="display:none"></div>
+<div id="overlay"><div class="spinner"></div></div>
+<div id="msg"></div>
 
 <script>
 (function(){
-  const content = document.getElementById('content');
-  const overlay = document.getElementById('overlay');
-  const address = document.getElementById('address');
-  const goBtn = document.getElementById('goBtn');
-  const msg = document.getElementById('msg');
-  const loadingBar = document.getElementById('loading-bar');
+  const content=document.getElementById('content');
+  const overlay=document.getElementById('overlay');
+  const address=document.getElementById('address');
+  const goBtn=document.getElementById('goBtn');
+  const msg=document.getElementById('msg');
+  const loadingBar=document.getElementById('loadingBar');
 
-  let historyStack = [];
-  let historyIndex = -1;
+  let historyStack=[], historyIndex=-1;
 
-  function showSpinner(v=true){ overlay.style.display = v ? 'flex' : 'none'; }
-  function showMsg(t, ms=3000){ msg.textContent = t; msg.style.display = 'block'; setTimeout(()=>msg.style.display='none', ms); }
-  function setLoadingProgress(p){ loadingBar.style.width = (p*100)+'%'; }
+  function showSpinner(v=true){ overlay.style.display=v?'flex':'none'; }
+  function showMsg(t,ms=3000){ msg.textContent=t; msg.style.display='block'; setTimeout(()=>msg.style.display='none',ms); }
+  function setProgress(p){ loadingBar.style.width=Math.min(100,Math.max(0,p))+'%'; }
 
-  function isLikelySearch(v){
-    if(!v) return true;
-    if(v.includes(' ')) return true;
-    if(/^https?:\/\//i.test(v)) return false;
-    if(/\./.test(v)) return false;
-    return true;
-  }
   function normalizeInput(v){
-    v = (v||'').trim();
+    v=(v||'').trim();
     if(!v) return 'https://www.google.com';
-    if(isLikelySearch(v)) return 'https://www.google.com/search?q=' + encodeURIComponent(v);
+    if(v.includes(' ') || !/\./.test(v)) return 'https://www.google.com/search?q='+encodeURIComponent(v);
     if(/^https?:\/\//i.test(v)) return v;
-    return 'https://' + v;
+    return 'https://'+v;
   }
 
   async function load(url, push=true){
-    showSpinner(true);
-    setLoadingProgress(0);
+    showSpinner(true); setProgress(10);
     try{
-      setLoadingProgress(0.1);
-      const res = await fetch('/proxy?url=' + encodeURIComponent(url), { headers: { 'accept': 'text/html' } });
-      setLoadingProgress(0.4);
-      if(!res.ok){
-        const text = await res.text().catch(()=>res.statusText);
-        throw new Error(res.status + ' — ' + (text || res.statusText));
-      }
-      const html = await res.text();
-      setLoadingProgress(0.7);
-      content.innerHTML = html;
-      address.value = url;
-      if(push){
-        historyStack = historyStack.slice(0, historyIndex + 1);
-        historyStack.push(url);
-        historyIndex = historyStack.length - 1;
-      }
-      setTimeout(()=>address.focus(), 200);
-      setLoadingProgress(1);
+      const res=await fetch('/proxy?url='+encodeURIComponent(url),{headers:{accept:'text/html'}});
+      if(!res.ok) throw new Error(res.status+' — '+res.statusText);
+      setProgress(40);
+      const html=await res.text();
+      setProgress(70);
+      content.innerHTML=html;
+      address.value=url;
+      if(push){ historyStack=historyStack.slice(0,historyIndex+1); historyStack.push(url); historyIndex=historyStack.length-1; }
+      setTimeout(()=>{ try{ address.focus(); }catch(e){} },200);
     }catch(err){
-      content.innerHTML = `<div style="padding:30px;color:#900;background:#fee;border-radius:8px"><h3>Error loading page</h3><pre style="white-space:pre-wrap">${err.message}</pre></div>`;
-      console.error('load error', err);
-      showMsg('Load failed: ' + err.message, 5000);
-      setLoadingProgress(0);
-    } finally {
+      content.innerHTML=`<div style="padding:30px;color:#900;background:#fee;border-radius:8px"><h3>Error loading page</h3><pre>${err.message}</pre></div>`;
+      console.error('load error',err);
+      showMsg('Load failed: '+err.message,5000);
+    } finally{
       showSpinner(false);
-      setTimeout(()=>setLoadingProgress(0), 300);
+      setProgress(100);
+      setTimeout(()=>setProgress(0),200);
     }
   }
 
-  // Controls
-  document.getElementById('back').addEventListener('click', ()=>{ if(historyIndex>0) load(historyStack[--historyIndex], false); });
-  document.getElementById('forward').addEventListener('click', ()=>{ if(historyIndex<historyStack.length-1) load(historyStack[++historyIndex], false); });
-  document.getElementById('refresh').addEventListener('click', ()=>{ if(historyIndex>=0) load(historyStack[historyIndex], false); });
-  document.getElementById('home').addEventListener('click', ()=> load('https://www.google.com'));
-  document.getElementById('fullscreen').addEventListener('click', ()=>{
-    if(!document.fullscreenElement) document.documentElement.requestFullscreen().catch(()=>{});
-    else document.exitFullscreen();
-  });
+  document.getElementById('back').addEventListener('click',()=>{if(historyIndex>0)load(historyStack[--historyIndex],false);});
+  document.getElementById('forward').addEventListener('click',()=>{if(historyIndex<historyStack.length-1)load(historyStack[++historyIndex],false);});
+  document.getElementById('refresh').addEventListener('click',()=>{if(historyIndex>=0)load(historyStack[historyIndex],false);});
+  document.getElementById('home').addEventListener('click',()=>load('https://www.google.com'));
+  document.getElementById('fullscreen').addEventListener('click',()=>{if(!document.fullscreenElement)document.documentElement.requestFullscreen();else document.exitFullscreen();});
+  goBtn.addEventListener('click',()=>load(normalizeInput(address.value)));
+  address.addEventListener('keydown',e=>{if(e.key==='Enter')goBtn.click();});
 
-  goBtn.addEventListener('click', ()=> { load(normalizeInput(address.value)); });
-  address.addEventListener('keydown', (e)=>{ if(e.key==='Enter') goBtn.click(); });
+  load('https://www.google.com',true);
 
-  // initial load
-  load('https://www.google.com', true);
 })();
 </script>
 </body>
