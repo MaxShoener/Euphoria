@@ -5,18 +5,21 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Euphoria Web Proxy</title>
 <style>
-body { margin:0; font-family: 'Segoe UI', sans-serif; background:#121212; color:#f0f0f0; }
-a { color:#1e90ff; word-break: break-word; transition: color 0.2s; }
+body { margin:0; font-family:'Segoe UI',sans-serif; background:#121212; color:#f0f0f0; }
+a { color:#1e90ff; word-break:break-word; transition: color 0.2s; }
 a:hover { color:#63b3ed; }
 
-/* Top bar */
+/* Top bar translucent */
 .top-bar {
     display:flex; align-items:center; justify-content:space-between;
-    background:#1f1f1f; height:42px; padding:4px 10px;
-    border-radius:20px 20px 0 0; box-shadow:0 2px 4px rgba(0,0,0,0.5);
+    background: rgba(31,31,31,0.8);
+    backdrop-filter: blur(8px);
+    height:42px; padding:4px 10px;
+    border-radius:20px 20px 0 0;
+    box-shadow:0 2px 4px rgba(0,0,0,0.5);
 }
 .nav-left { display:flex; align-items:center; }
-#logo { width:32px; height:32px; border-radius:50%; margin-right:8px; box-shadow:0 0 4px rgba(0,0,0,0.5); transition: transform 0.2s; }
+#logo { width:32px; height:32px; border-radius:50%; margin-right:8px; box-shadow:0 0 4px rgba(0,0,0,0.5); transition:transform 0.2s; }
 #logo:hover { transform:scale(1.1); }
 .nav-buttons button, #goBtn {
     margin:0 3px; padding:4px 8px; font-size:12px;
