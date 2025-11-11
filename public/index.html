@@ -1,38 +1,225 @@
-<!DOCTYPE html>
-<html>
+<!doctype html>
+<html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Wisp Proxy Client</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Euphoria — lightweight Wisp client</title>
 <style>
-  body { background: #111; color: white; font-family: monospace; text-align: center; padding: 40px; }
-  input { width: 60%; padding: 10px; border-radius: 10px; border: none; font-size: 16px; }
-  button { padding: 10px 20px; margin-left: 10px; border: none; border-radius: 10px; background: #4a90e2; color: #fff; cursor: pointer; }
-  iframe { margin-top: 30px; width: 90%; height: 80vh; border: none; background: white; }
+  :root {
+    --bg:#0b0b0b; --panel:#111; --muted:#999; --accent:#2e7d32;
+  }
+  html,body{height:100%;margin:0;background:var(--bg);color:#fff;font-family:Inter,system-ui,Arial;}
+  #topbar {
+    position:fixed; top:12px; left:50%; transform:translateX(-50%);
+    width:86%; max-width:1200px; background:rgba(9,9,9,0.95); border-radius:28px;
+    padding:8px 12px; display:flex; align-items:center; gap:8px; z-index:9999; box-shadow:0 8px 30px rgba(0,0,0,0.6);
+  }
+  #topbar button { min-width:44px; padding:8px; border-radius:12px; border:0; background:#222; color:#fff; cursor:pointer; }
+  #topbar button:hover { background:#333; }
+  #urlInput { flex:1; padding:8px 12px; border-radius:12px; border:0; background:#222; color:#fff; outline:none; font-size:14px; }
+  #goBtn { min-width:64px; padding:8px 12px; border-radius:12px; border:0; background:var(--accent); color:#fff; cursor:pointer; }
+  #spinner { width:36px; height:36px; border-radius:50%; border:5px solid rgba(255,255,255,0.08); border-top-color:var(--accent); animation:spin 1s linear infinite; display:none; }
+  @keyframes spin{0%{transform:rotate(0)}100%{transform:rotate(360deg)}}
+  #content { position:fixed; top:64px; bottom:12px; left:12px; right:12px; background:#fff; color:#000; border-radius:8px; overflow:auto; box-shadow:0 8px 30px rgba(0,0,0,0.6); }
+  /* inserted proxied page will be inside #proxiedContent */
+  #proxiedContent { min-height:100%; background:transparent; color:initial; }
+  /* small helper for error pages */
+  .err{ padding:24px; color:#fff; background:#111; font-family:system-ui; }
+  a { color: #0645AD; }
 </style>
 </head>
 <body>
-  <h1>Euphoria WISP Client</h1>
-  <input id="url" placeholder="Enter a site URL (https://example.com)">
-  <button id="go">Go</button>
-  <iframe id="frame"></iframe>
 
-  <script>
-  const ws = new WebSocket("wss://your-server-url/wisp/");
-  const go = document.getElementById("go");
-  const frame = document.getElementById("frame");
-  const urlInput = document.getElementById("url");
+<div id="topbar" role="toolbar" aria-label="Euphoria">
+  <button id="backBtn">◀</button>
+  <button id="forwardBtn">▶</button>
+  <button id="refreshBtn">⟳</button>
+  <button id="homeBtn">🏠</button>
+  <input id="urlInput" placeholder="Enter URL or search (e.g. xbox.com or 'how to tie a tie')" />
+  <button id="goBtn">Go</button>
+  <div id="spinner"></div>
+  <button id="fullBtn" title="Fullscreen">⛶</button>
+</div>
 
-  go.onclick = () => {
-    const url = urlInput.value.trim();
-    if (!url) return;
-    ws.send(JSON.stringify({ url }));
-  };
+<div id="content">
+  <div id="proxiedContent" style="padding:20px;">Welcome to <strong>Euphoria</strong>. Enter a URL above and click Go. This client uses a WebSocket WISP connection to your Euphoria server.</div>
+</div>
 
-  ws.onmessage = (event) => {
-    const data = JSON.parse(event.data);
-    if (data.body) frame.srcdoc = data.body;
-    else if (data.error) frame.srcdoc = `<h3 style="color:red">${data.error}</h3>`;
-  };
-  </script>
+<script>
+/*
+  Euphoria client:
+  - Connect to WSS_URL (change to deployed server)
+  - Send requests over WS: { id, url, method, headers, body }
+  - Receive responses with same id: { id, status, headers, body, isBase64 }
+  - Insert HTML responses into #proxiedContent.innerHTML (no iframe)
+  - Assets in HTML point to /asset?url=... on server, so they load via normal HTTP requests to server
+*/
+
+const WS_URL = (function(){
+  // default: connect to same host on /wisp via ws or wss depending on page origin
+  if(location.protocol === "file:") {
+    // if used as file://, set this to your deployed server:
+    return "wss://YOUR_DEPLOYMENT_HOST/wisp"; // <-- CHANGE THIS to your deployed domain
+  }
+  const proto = location.protocol === "https:" ? "wss:" : "ws:";
+  return proto + "//" + location.host + "/wisp";
+})();
+
+let ws;
+let pending = new Map();
+
+function makeId(){ return Math.random().toString(36).slice(2) + Date.now().toString(36); }
+const spinner = document.getElementById("spinner");
+const urlInput = document.getElementById("urlInput");
+const proxiedContent = document.getElementById("proxiedContent");
+
+function showSpinner(){ spinner.style.display = "inline-block"; }
+function hideSpinner(){ spinner.style.display = "none"; }
+
+function connectWS(){
+  ws = new WebSocket(WS_URL);
+  ws.addEventListener("open", ()=> {
+    console.log("WISP connected", WS_URL);
+  });
+  ws.addEventListener("message", (ev) => {
+    let msg;
+    try { msg = JSON.parse(ev.data); } catch(e){ console.error("invalid msg", e); return; }
+    if(!msg.id) {
+      console.warn("msg missing id", msg);
+      return;
+    }
+    const cb = pending.get(msg.id);
+    if(cb) {
+      pending.delete(msg.id);
+      cb(msg);
+    }
+  });
+  ws.addEventListener("close", ()=> {
+    console.warn("WISP closed — reconnecting in 1s");
+    setTimeout(connectWS, 1000);
+  });
+  ws.addEventListener("error", (e)=> {
+    console.error("WISP error", e);
+  });
+}
+connectWS();
+
+function sendWispRequest(req){
+  return new Promise((resolve, reject) => {
+    if(!ws || ws.readyState !== WebSocket.OPEN) {
+      return reject(new Error("WebSocket not connected"));
+    }
+    const id = req.id || makeId();
+    pending.set(id, (msg) => resolve(msg));
+    ws.send(JSON.stringify(Object.assign({}, req, { id })));
+  });
+}
+
+function normalizeInput(input){
+  input = (input||"").trim();
+  if(!input) return "https://www.google.com";
+  if(!/^https?:\/\//i.test(input)){
+    if(input.includes(" ")) return "https://www.google.com/search?q=" + encodeURIComponent(input);
+    return "https://" + input;
+  }
+  return input;
+}
+
+async function loadUrl(raw){
+  const url = normalizeInput(raw);
+  urlInput.value = url;
+  proxiedContent.innerHTML = ""; showSpinner();
+  try {
+    const req = { url, method: "GET" };
+    const res = await sendWispRequest(req);
+    if(res.error) {
+      proxiedContent.innerHTML = `<div class="err">Proxy error: ${escapeHtml(res.error)}</div>`;
+      return;
+    }
+    if(res.isBase64) {
+      // binary: render as data URL if image
+      const ct = (res.headers && res.headers["content-type"]) || "application/octet-stream";
+      const data = res.body;
+      if(ct.startsWith("image/")) {
+        proxiedContent.innerHTML = `<img src="data:${ct};base64,${data}" style="max-width:100%;">`;
+      } else {
+        proxiedContent.innerHTML = `<div class="err">Binary content (type: ${ct}) — not displayable inline.</div>`;
+      }
+      return;
+    }
+    // HTML path
+    const html = res.body || "<div class='err'>empty</div>";
+    // Insert HTML
+    proxiedContent.innerHTML = html;
+    // Expose a small bridge so injected containment script can call sendRequest via window.__EUPHORIA_WISP
+    window.__EUPHORIA_WISP = {
+      sendRequest: (r) => {
+        // allow r: { url, method, headers, body }
+        loadUrl(r.url);
+      }
+    };
+    // small fix: ensure topbar buttons in injected content call client functions
+    wireInjectedTopbar();
+  } catch(err){
+    console.error("loadUrl error", err);
+    proxiedContent.innerHTML = `<div class="err">Load failed: ${escapeHtml(err.message||String(err))}</div>`;
+  } finally {
+    hideSpinner();
+  }
+}
+
+function wireInjectedTopbar(){
+  // if proxied page injected included euphoria topbar, wire its buttons to client actions
+  try{
+    const back = document.getElementById("eph-back");
+    const forward = document.getElementById("eph-forward");
+    const refresh = document.getElementById("eph-refresh");
+    const home = document.getElementById("eph-home");
+    const inp = document.getElementById("eph-input");
+    const go = document.getElementById("eph-go");
+    const full = document.getElementById("eph-full");
+    if(back) back.onclick = () => history.back();
+    if(forward) forward.onclick = () => history.forward();
+    if(refresh) refresh.onclick = () => location.reload();
+    if(home) home.onclick = () => loadUrl("https://www.google.com");
+    if(inp) inp.value = urlInput.value;
+    if(go) go.onclick = () => { const v = inp && inp.value ? inp.value : urlInput.value; loadUrl(v); };
+    if(inp) inp.addEventListener("keydown", e => { if(e.key === "Enter") { go && go.click(); } });
+    if(full) full.onclick = () => { if(!document.fullscreenElement) document.documentElement.requestFullscreen(); else document.exitFullscreen(); };
+    // rewrite native anchors inside proxied content to use client (for safety)
+    proxiedContent.querySelectorAll && proxiedContent.querySelectorAll('a[href]').forEach(a=>{
+      const href = a.getAttribute('href') || '';
+      if(/^javascript:|mailto:|tel:|#/.test(href)) return;
+      // intercept
+      a.addEventListener('click', (ev) => {
+        ev.preventDefault();
+        const abs = href;
+        loadUrl(abs);
+      });
+    });
+  }catch(e){}
+}
+
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, (m)=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;" })[m]); }
+
+/* topbar handlers (client UI) */
+document.getElementById("goBtn").onclick = () => loadUrl(urlInput.value);
+urlInput.addEventListener("keydown", (e) => { if (e.key === "Enter") document.getElementById("goBtn").click(); });
+document.getElementById("homeBtn").onclick = () => loadUrl("https://www.google.com");
+document.getElementById("refreshBtn").onclick = () => {
+  // reload currently shown url (try input first)
+  loadUrl(urlInput.value || "");
+};
+document.getElementById("backBtn").onclick = () => history.back();
+document.getElementById("forwardBtn").onclick = () => history.forward();
+document.getElementById("fullBtn").onclick = () => {
+  if(!document.fullscreenElement) document.documentElement.requestFullscreen();
+  else document.exitFullscreen();
+};
+
+// Initialize with google
+loadUrl("https://www.google.com");
+</script>
+
 </body>
 </html>
