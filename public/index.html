@@ -1,193 +1,147 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Euphoria — Lightweight Proxy</title>
-<style>
-:root {
-  --bg: #f5f5f5;
-  --topbar-bg: rgba(255,255,255,0.85);
-  --control-bg: #eee;
-  --accent: #2e7d32;
-  --muted: #555;
-}
-html,body{margin:0;height:100%;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;background:var(--bg);color:#000;}
-#topbar{
-  position: fixed;
-  top: 12px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: min(1100px, 86%);
-  background: var(--topbar-bg);
-  border-radius: 28px;
-  padding: 8px 12px;
-  display:flex;
-  gap:8px;
-  align-items:center;
-  z-index:2147483647;
-  box-shadow:0 6px 24px rgba(0,0,0,0.2);
-  backdrop-filter: blur(6px);
-}
-.tb-btn{
-  min-width:44px;
-  height:40px;
-  padding:8px;
-  border-radius:10px;
-  border:none;
-  background: var(--control-bg);
-  color:#000;
-  font-size:16px;
-  cursor:pointer;
-  display:inline-grid;
-  place-items:center;
-}
-.tb-btn:active{transform: translateY(1px);}
-#address{
-  flex:1;
-  height:40px;
-  padding:8px 12px;
-  border-radius:12px;
-  border:none;
-  background:#fff;
-  color:#000;
-  outline: 2px solid transparent;
-  font-size:14px;
-}
-#address::placeholder{color:var(--muted);}
-#goBtn{background:var(--accent);color:#fff;min-width:48px;}
-#content{
-  position: fixed;
-  top:72px;
-  left:12px;
-  right:12px;
-  bottom:12px;
-  border-radius:12px;
-  overflow:auto;
-  background:#fff;
-  box-shadow:0 6px 18px rgba(0,0,0,0.2);
-}
-#overlay{
-  position:absolute;
-  inset:0;
-  display:none;
-  align-items:center;
-  justify-content:center;
-  background:rgba(0,0,0,0.25);
-  z-index:100;
-}
-.spinner{
-  width:44px;height:44px;
-  border-radius:50%;
-  border:6px solid rgba(0,0,0,0.1);
-  border-top-color:#4caf50;
-  animation: spin 900ms linear infinite;
-}
-@keyframes spin{to{transform:rotate(360deg);}}
-#msg{
-  position:absolute;
-  left:12px;
-  bottom:12px;
-  color:#000;
-  background:rgba(255,255,255,0.7);
-  padding:6px 10px;
-  border-radius:8px;
-  font-size:13px;
-  display:none;
-}
-#loadingBar{
-  position: fixed;
-  top:0;
-  left:0;
-  width:0%;
-  height:4px;
-  background: #2e7d32;
-  z-index:2147483648;
-  transition: width 0.2s ease;
-}
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Euphoria Proxy</title>
+  <link rel="icon" href="/favicon.ico">
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      width: 100%;
+      font-family: system-ui, sans-serif;
+      background: #111;
+      color: #fff;
+      overflow-x: hidden;
+    }
+    #euphoria-topbar {
+      position: fixed;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(1100px, 86%);
+      background: rgba(17,17,17,0.85);
+      border-radius: 28px;
+      padding: 8px 10px;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      z-index: 2147483647;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.6);
+      backdrop-filter: blur(6px);
+    }
+    #euphoria-topbar button {
+      min-width: 44px;
+      padding: 8px;
+      border-radius: 12px;
+      border: 0;
+      background: #222;
+      color: #fff;
+      cursor: pointer;
+      font-size: 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    #euphoria-topbar button#eph-go {
+      background: #2e7d32;
+    }
+    #euphoria-topbar input {
+      flex: 1;
+      padding: 8px 12px;
+      border-radius: 12px;
+      border: 0;
+      background: #222;
+      color: #fff;
+      outline: none;
+      font-size: 1rem;
+    }
+    #euphoria-loading {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 0%;
+      height: 3px;
+      background: #2e7d32;
+      transition: width 0.3s;
+      z-index: 2147483647;
+    }
+    iframe#euphoria-frame {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border: none;
+      margin: 0;
+      padding: 0;
+      z-index: 1;
+    }
+  </style>
 </head>
 <body>
-
-<div id="topbar">
-  <button id="back" class="tb-btn">◀</button>
-  <button id="forward" class="tb-btn">▶</button>
-  <button id="refresh" class="tb-btn">⟳</button>
-  <button id="home" class="tb-btn">🏠</button>
-  <input id="address" placeholder="Type a URL or search" />
-  <button id="goBtn" class="tb-btn">Go</button>
-  <button id="fullscreen" class="tb-btn">⛶</button>
-</div>
-
-<div id="loadingBar"></div>
-<div id="content" aria-live="polite">
-  <div style="padding:24px;color:#444;font-family:system-ui;">
-    <h2>Euphoria</h2>
-    <p>Enter a site above. No iframe, full HTML transform via streams.</p>
-    <p>Example: <code>google.com</code> or <code>https://xbox.com</code></p>
+  <div id="euphoria-topbar">
+    <button id="eph-back">◀</button>
+    <button id="eph-forward">▶</button>
+    <button id="eph-refresh">⟳</button>
+    <button id="eph-home">🏠</button>
+    <input id="eph-input" placeholder="Enter URL or search..." />
+    <button id="eph-go">Go</button>
+    <button id="eph-full">⛶</button>
   </div>
-</div>
+  <div id="euphoria-loading"></div>
+  <iframe id="euphoria-frame" src=""></iframe>
 
-<div id="overlay"><div class="spinner"></div></div>
-<div id="msg"></div>
+  <script>
+    const input = document.getElementById('eph-input');
+    const go = document.getElementById('eph-go');
+    const back = document.getElementById('eph-back');
+    const forward = document.getElementById('eph-forward');
+    const refresh = document.getElementById('eph-refresh');
+    const home = document.getElementById('eph-home');
+    const full = document.getElementById('eph-full');
+    const loading = document.getElementById('euphoria-loading');
+    const frame = document.getElementById('euphoria-frame');
 
-<script>
-(function(){
-  const content=document.getElementById('content');
-  const overlay=document.getElementById('overlay');
-  const address=document.getElementById('address');
-  const goBtn=document.getElementById('goBtn');
-  const msg=document.getElementById('msg');
-  const loadingBar=document.getElementById('loadingBar');
+    const defaultHome = '/proxy?url=https://www.google.com';
 
-  let historyStack=[], historyIndex=-1;
-
-  function showSpinner(v=true){ overlay.style.display=v?'flex':'none'; }
-  function showMsg(t,ms=3000){ msg.textContent=t; msg.style.display='block'; setTimeout(()=>msg.style.display='none',ms); }
-  function setProgress(p){ loadingBar.style.width=Math.min(100,Math.max(0,p))+'%'; }
-
-  function normalizeInput(v){
-    v=(v||'').trim();
-    if(!v) return 'https://www.google.com';
-    if(v.includes(' ') || !/\./.test(v)) return 'https://www.google.com/search?q='+encodeURIComponent(v);
-    if(/^https?:\/\//i.test(v)) return v;
-    return 'https://'+v;
-  }
-
-  async function load(url, push=true){
-    showSpinner(true); setProgress(10);
-    try{
-      const res=await fetch('/proxy?url='+encodeURIComponent(url),{headers:{accept:'text/html'}});
-      if(!res.ok) throw new Error(res.status+' — '+res.statusText);
-      setProgress(40);
-      const html=await res.text();
-      setProgress(70);
-      content.innerHTML=html;
-      address.value=url;
-      if(push){ historyStack=historyStack.slice(0,historyIndex+1); historyStack.push(url); historyIndex=historyStack.length-1; }
-      setTimeout(()=>{ try{ address.focus(); }catch(e){} },200);
-    }catch(err){
-      content.innerHTML=`<div style="padding:30px;color:#900;background:#fee;border-radius:8px"><h3>Error loading page</h3><pre>${err.message}</pre></div>`;
-      console.error('load error',err);
-      showMsg('Load failed: '+err.message,5000);
-    } finally{
-      showSpinner(false);
-      setProgress(100);
-      setTimeout(()=>setProgress(0),200);
+    function setFrameSrc(url) {
+      loading.style.width = '20%';
+      frame.src = url;
     }
-  }
 
-  document.getElementById('back').addEventListener('click',()=>{if(historyIndex>0)load(historyStack[--historyIndex],false);});
-  document.getElementById('forward').addEventListener('click',()=>{if(historyIndex<historyStack.length-1)load(historyStack[++historyIndex],false);});
-  document.getElementById('refresh').addEventListener('click',()=>{if(historyIndex>=0)load(historyStack[historyIndex],false);});
-  document.getElementById('home').addEventListener('click',()=>load('https://www.google.com'));
-  document.getElementById('fullscreen').addEventListener('click',()=>{if(!document.fullscreenElement)document.documentElement.requestFullscreen();else document.exitFullscreen();});
-  goBtn.addEventListener('click',()=>load(normalizeInput(address.value)));
-  address.addEventListener('keydown',e=>{if(e.key==='Enter')goBtn.click();});
+    go.onclick = () => {
+      const val = input.value.trim();
+      if(!val) return;
+      let url;
+      try {
+        url = new URL(val);
+      } catch(e) {
+        url = new URL('https://www.google.com/search?q=' + encodeURIComponent(val));
+      }
+      setFrameSrc('/proxy?url=' + encodeURIComponent(url.href));
+    };
 
-  load('https://www.google.com',true);
+    input.addEventListener('keydown', e => { if(e.key === 'Enter') go.onclick(); });
+    back.onclick = () => frame.contentWindow.history.back();
+    forward.onclick = () => frame.contentWindow.history.forward();
+    refresh.onclick = () => frame.contentWindow.location.reload();
+    home.onclick = () => setFrameSrc(defaultHome);
+    full.onclick = () => {
+      if(!document.fullscreenElement) document.documentElement.requestFullscreen();
+      else document.exitFullscreen();
+    };
 
-})();
-</script>
+    frame.addEventListener('load', () => {
+      loading.style.width = '100%';
+      setTimeout(()=>loading.style.width='0%', 300);
+      try { input.value = frame.contentWindow.location.href; } catch(e){}
+    });
+
+    // Initial load
+    setFrameSrc(defaultHome);
+  </script>
 </body>
 </html>
