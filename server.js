@@ -8,7 +8,7 @@ import NodeCache from 'node-cache';
 import { WebSocketServer } from 'ws';
 import { minify as minifyHtml } from 'html-minifier-terser';
 import CleanCSS from 'clean-css';
-import * as Terser from 'terser'; // Correct ESM import
+import * as Terser from 'terser';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,7 +21,7 @@ app.use(cors());
 app.use(compression());
 app.use(express.json());
 
-// Serve all static assets from public/
+// --- Serve local UI assets first ---
 app.use(express.static(path.join(__dirname, 'public')));
 
 // --- Cache ---
@@ -46,20 +46,20 @@ const jsRewriteSnippet = `
 </script>
 `;
 
-// --- Rewrite assets in HTML/CSS ---
+// --- Rewrite only remote assets ---
 function rewriteAssets(body, baseUrl) {
-    body = body.replace(/(href|src)=["'](?!http)([^"']+)["']/g, (m, attr, link) => {
-        const fullUrl = new URL(link, baseUrl).href;
-        return `${attr}="/proxy?url=${encodeURIComponent(fullUrl)}"`;
-    });
-    body = body.replace(/url\(["']?(?!http)([^"')]+)["']?\)/g, (m, link) => {
-        const fullUrl = new URL(link, baseUrl).href;
-        return `url("/proxy?url=${encodeURIComponent(fullUrl)}")`;
-    });
-    return body;
+    return body
+        .replace(/(href|src)=["'](?!\/)([^"']+)["']/g, (m, attr, link) => {
+            const fullUrl = new URL(link, baseUrl).href;
+            return `${attr}="/proxy?url=${encodeURIComponent(fullUrl)}"`;
+        })
+        .replace(/url\(["']?(?!\/)([^"')]+)["']?\)/g, (m, link) => {
+            const fullUrl = new URL(link, baseUrl).href;
+            return `url("/proxy?url=${encodeURIComponent(fullUrl)}")`;
+        });
 }
 
-// --- Minification ---
+// --- Minify HTML, CSS, JS ---
 async function minifyContent(body, contentType) {
     try {
         if (contentType.includes('text/html')) return await minifyHtml(body, { collapseWhitespace:true, removeComments:true, minifyJS:true, minifyCSS:true });
@@ -114,7 +114,7 @@ app.get('*', (req, res) => {
     res.sendFile(path.resolve(__dirname, 'public', 'index.html'));
 });
 
-// --- WebSocket Server ---
+// --- WebSocket server ---
 const server = app.listen(PORT, () => console.log(`Euphoria running on port ${PORT}`));
 const wss = new WebSocketServer({ server });
 wss.on('connection', ws => ws.send(JSON.stringify({ message:'Welcome to Euphoria WebSocket!' })));
