@@ -1,63 +1,46 @@
-// server.js
 import express from "express";
-import cookieParser from "cookie-parser";
-import pkg from "scramjet";
-const { DataStream } = pkg;
-import { LRUCache } from "lru-cache";
 import fetch from "node-fetch";
+import cookieParser from "cookie-parser";
+import { DataStream } from "scramjet";
+import LRU from "lru-cache";
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const port = process.env.PORT || 3000;
 
-// Middleware
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(express.static("public"));
 
-// Simple LRU cache
-const cache = new LRUCache({
-  max: 500, // max 500 items
-  ttl: 1000 * 60 * 5 // 5 minutes TTL
-});
+const cache = new LRU({ max: 50, ttl: 1000 * 60 * 5 }); // cache 5 mins
 
-// Example route with caching
-app.get("/api/data", async (req, res) => {
-  const cacheKey = "data";
+app.get("/proxy", async (req, res) => {
+  const url = req.query.url;
+  if (!url) return res.status(400).send("Missing url parameter");
 
-  if (cache.has(cacheKey)) {
-    return res.json({ source: "cache", data: cache.get(cacheKey) });
+  if (cache.has(url)) {
+    return res.send(cache.get(url));
   }
 
   try {
-    // Example fetch, replace with your actual data source
-    const response = await fetch("https://jsonplaceholder.typicode.com/todos/1");
-    const data = await response.json();
+    const response = await fetch(url);
+    const html = await response.text();
 
-    cache.set(cacheKey, data);
-    res.json({ source: "fetch", data });
+    // Stream and rewrite links to pass through proxy
+    const processed = await new DataStream(html)
+      .map(line =>
+        line
+          .replace(/href="\/?/g, 'href="/proxy?url=' + encodeURIComponent(url) + '/')
+          .replace(/src="\/?/g, 'src="/proxy?url=' + encodeURIComponent(url) + '/')
+      )
+      .reduce("", (acc, val) => acc + val);
+
+    cache.set(url, processed);
+    res.send(processed);
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Failed to fetch data" });
+    res.status(500).send("Failed to fetch site");
   }
 });
 
-// Example DataStream usage
-app.get("/api/stream", async (req, res) => {
-  const items = [1, 2, 3, 4, 5];
-
-  DataStream.from(items)
-    .map(x => x * 2)
-    .reduce((acc, val) => acc + val, 0)
-    .then(result => res.json({ result }))
-    .catch(err => res.status(500).json({ error: err.message }));
-});
-
-// Default route
-app.get("/", (req, res) => {
-  res.sendFile(`${process.cwd()}/public/index.html`);
-});
-
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+app.listen(port, () => {
+  console.log(`Proxy running at http://localhost:${port}`);
 });
