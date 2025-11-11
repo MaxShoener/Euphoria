@@ -1,103 +1,38 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Euphoria Proxy</title>
+<title>Wisp Proxy Client</title>
 <style>
-  body {
-    margin: 0;
-    font-family: sans-serif;
-    background: #f0f0f0;
-  }
-  .top-bar {
-    position: fixed;
-    top: 10px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 80%;
-    height: 60px;
-    background: rgba(255, 255, 255, 0.8);
-    border-radius: 30px;
-    display: flex;
-    align-items: center;
-    padding: 0 20px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    z-index: 1000;
-  }
-  #urlInput {
-    flex: 1;
-    padding: 10px 15px;
-    border-radius: 20px;
-    border: 1px solid #ccc;
-    font-size: 16px;
-  }
-  #goBtn {
-    margin-left: 10px;
-    padding: 10px 20px;
-    border-radius: 20px;
-    border: none;
-    background: #4a90e2;
-    color: #fff;
-    cursor: pointer;
-  }
-  #spinner {
-    display: none;
-    margin-left: 10px;
-    width: 24px;
-    height: 24px;
-    border: 3px solid #ccc;
-    border-top: 3px solid #4a90e2;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-  }
-  @keyframes spin { 100% { transform: rotate(360deg); } }
-  iframe, #content {
-    margin-top: 90px;
-    width: 100%;
-    min-height: 80vh;
-    border: none;
-  }
-  #content {
-    background: #fff;
-    padding: 20px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-  }
+  body { background: #111; color: white; font-family: monospace; text-align: center; padding: 40px; }
+  input { width: 60%; padding: 10px; border-radius: 10px; border: none; font-size: 16px; }
+  button { padding: 10px 20px; margin-left: 10px; border: none; border-radius: 10px; background: #4a90e2; color: #fff; cursor: pointer; }
+  iframe { margin-top: 30px; width: 90%; height: 80vh; border: none; background: white; }
 </style>
 </head>
 <body>
-<div class="top-bar">
-  <input type="text" id="urlInput" placeholder="Enter URL (https://example.com)">
-  <button id="goBtn">Go</button>
-  <div id="spinner"></div>
-</div>
+  <h1>Euphoria WISP Client</h1>
+  <input id="url" placeholder="Enter a site URL (https://example.com)">
+  <button id="go">Go</button>
+  <iframe id="frame"></iframe>
 
-<div id="content"></div>
+  <script>
+  const ws = new WebSocket("wss://your-server-url/wisp/");
+  const go = document.getElementById("go");
+  const frame = document.getElementById("frame");
+  const urlInput = document.getElementById("url");
 
-<script>
-  const goBtn = document.getElementById("goBtn");
-  const urlInput = document.getElementById("urlInput");
-  const spinner = document.getElementById("spinner");
-  const content = document.getElementById("content");
-
-  async function loadSite() {
+  go.onclick = () => {
     const url = urlInput.value.trim();
     if (!url) return;
-    spinner.style.display = "inline-block";
-    content.innerHTML = "";
-    try {
-      const res = await fetch(`/proxy?url=${encodeURIComponent(url)}`);
-      const html = await res.text();
-      content.innerHTML = html;
-    } catch (err) {
-      content.innerHTML = `<p style="color:red;">Failed to load: ${err.message}</p>`;
-    } finally {
-      spinner.style.display = "none";
-    }
-  }
+    ws.send(JSON.stringify({ url }));
+  };
 
-  goBtn.addEventListener("click", loadSite);
-  urlInput.addEventListener("keyup", e => { if(e.key === "Enter") loadSite(); });
-</script>
+  ws.onmessage = (event) => {
+    const data = JSON.parse(event.data);
+    if (data.body) frame.srcdoc = data.body;
+    else if (data.error) frame.srcdoc = `<h3 style="color:red">${data.error}</h3>`;
+  };
+  </script>
 </body>
 </html>
