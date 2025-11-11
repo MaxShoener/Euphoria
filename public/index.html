@@ -3,211 +3,233 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Euphoria</title>
+<title>Euphoria — Lightweight Proxy</title>
 <style>
   :root {
-    --bg: #0b0c0d;
-    --topbar-bg: rgba(16,18,20,0.95);
-    --muted: #9aa0a6;
+    --bg: #0f1112;
+    --topbar-bg: rgba(17,17,17,0.95);
+    --control-bg: #222;
     --accent: #2e7d32;
+    --muted: #bfc3c7;
   }
-  html,body{height:100%;margin:0;background:linear-gradient(180deg,#070809 0%, #0f1113 100%);font-family:system-ui,Arial,sans-serif;color:#fff;overflow:hidden}
+  html,body { height:100%; margin:0; font-family:Inter,system-ui,Segoe UI,Roboto,Arial; background:var(--bg); color:#fff; }
   /* Floating oval top bar */
   #topbar {
-    position:fixed;
-    top:12px;
-    left:50%;
-    transform:translateX(-50%);
-    width:88%;
-    max-width:1200px;
+    position: fixed;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(1100px, 86%);
     background: var(--topbar-bg);
-    border-radius:999px;
-    padding:10px 14px;
-    display:flex;
-    align-items:center;
-    gap:10px;
-    z-index:9999;
-    box-shadow:0 10px 30px rgba(0,0,0,0.6);
+    border-radius: 28px;
+    padding: 8px 12px;
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    z-index: 2147483647;
+    box-shadow: 0 8px 28px rgba(0,0,0,0.6);
     backdrop-filter: blur(6px);
   }
-  #topbar button {
-    min-width:46px;
+  .tb-btn {
+    min-width:44px;
+    height:40px;
     padding:8px;
-    border-radius:12px;
-    border:0;
-    background:#141617;
-    color:#fff;
+    border-radius:10px;
+    border: none;
+    background: var(--control-bg);
+    color: white;
+    font-size:16px;
     cursor:pointer;
-    font-size:14px;
+    display:inline-grid;
+    place-items:center;
   }
+  .tb-btn:active { transform: translateY(1px); }
   #address {
     flex:1;
-    padding:10px 14px;
-    border-radius:18px;
-    border:0;
-    background:#0c0d0e;
+    height:40px;
+    padding:8px 12px;
+    border-radius: 12px;
+    border: none;
+    background:#121316;
     color:#fff;
+    outline: 2px solid transparent;
     font-size:14px;
-    outline:none;
   }
-  #go {
-    background:var(--accent);
-  }
-  /* main content area - we will inject content here */
+  #address::placeholder { color: var(--muted); }
+  #goBtn { background: var(--accent); color:#fff; min-width:48px; }
+  /* Content */
   #content {
-    position:absolute;
-    top:72px;
-    bottom:12px;
-    left:12px;
-    right:12px;
-    border-radius:12px;
-    overflow:auto;
-    background: #f6f7f8; /* server-injected pages will override backgrounds, we set neutral */
-    box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+    position: fixed;
+    top: 72px;
+    left: 12px;
+    right: 12px;
+    bottom: 12px;
+    border-radius: 12px;
+    overflow: auto;
+    background: #fff;
+    color: #000;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.6);
   }
-  /* spinner overlay */
-  #spinner {
-    position:fixed;
-    top:72px;
-    left:12px;
-    right:12px;
-    bottom:12px;
-    display:none;
-    align-items:center;
-    justify-content:center;
-    z-index:9998;
-    background: rgba(0,0,0,0.4);
-    border-radius:12px;
-    pointer-events:none;
+  /* Loading overlay */
+  #overlay {
+    position: absolute;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0,0,0,0.45);
+    z-index: 100;
   }
-  .spinner-anim {
-    width:46px;height:46px;border-radius:50%;border:6px solid rgba(255,255,255,0.12);border-top-color:var(--accent);animation:spin 900ms linear infinite;
+  .spinner {
+    width:44px; height:44px;
+    border-radius:50%;
+    border:6px solid rgba(255,255,255,0.2);
+    border-top-color: #4caf50;
+    animation: spin 900ms linear infinite;
   }
-  @keyframes spin{0%{transform:rotate(0)}100%{transform:rotate(360deg)}}
-  /* message box for errors */
-  .msg {
-    padding:20px;color:#fff;background:rgba(0,0,0,0.6);border-radius:12px;display:inline-block;
-  }
+  @keyframes spin { to { transform: rotate(360deg);} }
+  /* small message bar */
+  #msg { position: absolute; left: 12px; bottom: 12px; color:#eee; background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:8px; font-size:13px; }
 </style>
 </head>
 <body>
 
-<div id="topbar" role="toolbar" aria-label="Euphoria top bar">
-  <button id="back">◀</button>
-  <button id="forward">▶</button>
-  <button id="refresh">⟳</button>
-  <button id="home">🏠</button>
-  <input id="address" placeholder="Enter URL or search (eg. google.com or xbox.com or 'how to play baseball')" />
-  <button id="go">Go</button>
-  <button id="fullscreen">⛶</button>
+<div id="topbar" role="navigation" aria-label="Euphoria controls">
+  <button id="back" class="tb-btn" title="Back">◀</button>
+  <button id="forward" class="tb-btn" title="Forward">▶</button>
+  <button id="refresh" class="tb-btn" title="Refresh">⟳</button>
+  <button id="home" class="tb-btn" title="Home">🏠</button>
+  <input id="address" placeholder="Type a URL (example.com) or search (anything with spaces)" />
+  <button id="goBtn" class="tb-btn" title="Go">Go</button>
+  <button id="fullscreen" class="tb-btn" title="Fullscreen">⛶</button>
 </div>
 
-<div id="spinner"><div class="spinner-anim" role="status" aria-hidden="true"></div></div>
-
-<!-- content will be the proxied HTML returned by /proxy -->
-<div id="content">
-  <!-- initial content -->
-  <div style="padding:36px;text-align:center;color:#222">
-    <h2 style="margin:0 0 12px 0">Welcome to Euphoria</h2>
-    <p style="margin:0 0 18px 0;color:#444">Type an address in the top bar and hit Go or Enter. Navigation stays inside Euphoria.</p>
-    <p style="color:#888">Example: <code>google.com</code>, <code>xbox.com</code>, or <code>how to bake sourdough</code></p>
+<div id="content" aria-live="polite">
+  <!-- Proxied HTML will be injected here -->
+  <div style="padding:24px;color:#444;font-family:system-ui;">
+    <h2 style="margin-top:0">Euphoria</h2>
+    <p>Enter a site or search above. This client talks to the backend proxy — no iframe, full HTML transform via streams.</p>
+    <p>Example: <code>google.com</code> or <code>https://xbox.com</code></p>
   </div>
 </div>
 
+<div id="overlay"><div class="spinner" aria-hidden="true"></div></div>
+<div id="msg" style="display:none"></div>
+
 <script>
-(() => {
-  const address = document.getElementById('address');
-  const go = document.getElementById('go');
-  const back = document.getElementById('back');
-  const forward = document.getElementById('forward');
-  const refresh = document.getElementById('refresh');
-  const home = document.getElementById('home');
-  const fullscreen = document.getElementById('fullscreen');
-  const spinner = document.getElementById('spinner');
+(function(){
   const content = document.getElementById('content');
+  const overlay = document.getElementById('overlay');
+  const address = document.getElementById('address');
+  const goBtn = document.getElementById('goBtn');
+  const msg = document.getElementById('msg');
 
-  function showSpinner() { spinner.style.display = 'flex'; }
-  function hideSpinner() { spinner.style.display = 'none'; }
+  let historyStack = [];
+  let historyIndex = -1;
 
-  function isLikelySearch(v) {
-    if (!v) return true;
-    if (v.includes(' ')) return true;
-    if (/^https?:\/\//i.test(v)) return false;
-    if (/\./.test(v)) return false;
+  function showSpinner(v=true){ overlay.style.display = v ? 'flex' : 'none'; }
+  function showMsg(t, ms=3000){ msg.textContent = t; msg.style.display = 'block'; setTimeout(()=>msg.style.display='none', ms); }
+
+  function isLikelySearch(v){
+    if(!v) return true;
+    if(v.includes(' ')) return true;
+    if(/^https?:\/\//i.test(v)) return false;
+    if(/\./.test(v)) return false;
     return true;
   }
-
-  function normalizeInput(v) {
-    v = (v || '').trim();
-    if (!v) return 'https://www.google.com';
-    if (isLikelySearch(v)) return 'https://www.google.com/search?q=' + encodeURIComponent(v);
-    if (/^https?:\/\//i.test(v)) return v;
+  function normalizeInput(v){
+    v = (v||'').trim();
+    if(!v) return 'https://www.google.com';
+    if(isLikelySearch(v)) return 'https://www.google.com/search?q=' + encodeURIComponent(v);
+    if(/^https?:\/\//i.test(v)) return v;
     return 'https://' + v;
   }
 
-  // Load via /proxy?url=... — server will return rewritten HTML with injected topbar and containment
-  async function loadUrl(raw) {
-    const url = normalizeInput(raw);
-    const prox = '/proxy?url=' + encodeURIComponent(url);
-    showSpinner();
-    try {
-      const res = await fetch(prox, { credentials: 'same-origin' });
-      if (!res.ok) {
+  async function load(url, push=true){
+    showSpinner(true);
+    try{
+      // call proxy endpoint, get HTML
+      const res = await fetch('/proxy?url=' + encodeURIComponent(url), { headers: { 'accept': 'text/html' } });
+      if(!res.ok){
         const text = await res.text().catch(()=>res.statusText);
-        content.innerHTML = '<div class="msg">Error loading page: ' + res.status + ' — ' + (text || res.statusText) + '</div>';
-        hideSpinner();
-        return;
+        throw new Error(res.status + ' — ' + (text || res.statusText));
       }
-      // response is complete HTML; replace content area with it
       const html = await res.text();
-      // Replace content's innerHTML with proxied HTML body — server injected topbar ensures nav, but we still strip html/head tags
-      // We'll attempt to extract <body> content
-      const bodyMatch = html.match(/<body[^>]*>([\\s\\S]*?)<\\/body>/i);
-      if (bodyMatch) {
-        content.innerHTML = bodyMatch[1];
-      } else {
-        content.innerHTML = html;
+      // render inside content container
+      content.innerHTML = html;
+      // update address input (show final url)
+      address.value = url;
+      if(push){
+        historyStack = historyStack.slice(0, historyIndex + 1);
+        historyStack.push(url);
+        historyIndex = historyStack.length - 1;
       }
-
-      // After injecting remote content into #content, run a small pass to remove any scripts that might break our page (best-effort)
-      // But we rely on server-side rewriting for links/assets; here we just ensure inputs triggered in topbar work
-      hideSpinner();
-
-    } catch (err) {
-      content.innerHTML = '<div class="msg">Network / proxy error: ' + (err && err.message ? err.message : err) + '</div>';
-      hideSpinner();
+      // small delay to let injected scripts run in transformed DOM
+      setTimeout(()=> {
+        // attempt to focus the address bar to be convenient
+        try { address.focus(); } catch(e){}
+      }, 200);
+    }catch(err){
+      content.innerHTML = `<div style="padding:30px;color:#900;background:#fee;border-radius:8px"><h3>Error loading page</h3><pre style="white-space:pre-wrap">${err.message}</pre></div>`;
+      console.error('load error', err);
+      showMsg('Load failed: ' + err.message, 5000);
+    } finally {
+      showSpinner(false);
     }
   }
 
-  // Wiring topbar
-  go.addEventListener('click', () => loadUrl(address.value));
-  address.addEventListener('keydown', (e) => { if (e.key === 'Enter') loadUrl(address.value); });
-  back.addEventListener('click', () => history.back());
-  forward.addEventListener('click', () => history.forward());
-  refresh.addEventListener('click', () => location.reload());
-  home.addEventListener('click', () => { address.value = 'https://www.google.com'; loadUrl(address.value); });
-  fullscreen.addEventListener('click', () => {
-    if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(()=>{});
-    else document.exitFullscreen().catch(()=>{});
+  // Controls
+  document.getElementById('back').addEventListener('click', ()=> {
+    if(historyIndex > 0) load(historyStack[--historyIndex], false);
+  });
+  document.getElementById('forward').addEventListener('click', ()=> {
+    if(historyIndex < historyStack.length - 1) load(historyStack[++historyIndex], false);
+  });
+  document.getElementById('refresh').addEventListener('click', ()=> {
+    if(historyIndex >= 0) load(historyStack[historyIndex], false);
+  });
+  document.getElementById('home').addEventListener('click', ()=> load('https://www.google.com'));
+  document.getElementById('fullscreen').addEventListener('click', ()=> {
+    if(!document.fullscreenElement) document.documentElement.requestFullscreen().catch(()=>{});
+    else document.exitFullscreen();
   });
 
-  // If URL param given: /?proxy=... or /?url=..., auto-load
-  (function loadFromQuery(){
-    try {
-      const sp = new URLSearchParams(location.search);
-      const u = sp.get('url') || sp.get('proxy') || sp.get('q') || '';
-      if (u) {
-        address.value = decodeURIComponent(u);
-        loadUrl(address.value);
-      }
-    } catch(e){}
-  })();
+  goBtn.addEventListener('click', ()=> {
+    const v = address.value;
+    const url = normalizeInput(v);
+    load(url);
+  });
+  address.addEventListener('keydown', (e)=> { if(e.key === 'Enter') goBtn.click(); });
 
-  // Make topbar usable while spinner visible — spinner is pointer-events:none in CSS.
-  // Provide a small ping endpoint to warm server
-  fetch('/healthz').catch(()=>{});
+  // auto-fill suggestions (very lightweight local suggestions)
+  address.addEventListener('input', (e)=>{
+    // show simple autofill from history
+    const v = address.value.toLowerCase();
+    if(!v) return;
+    const match = historyStack.slice().reverse().find(u => u.toLowerCase().includes(v));
+    if(match) address.value = match;
+  });
+
+  // initial load: Google
+  load('https://www.google.com', true);
+
+  // WebSocket for telemetry/stream (optional)
+  (function(){
+    try {
+      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const ws = new WebSocket(proto + '//' + location.host + '/_euph_ws');
+      ws.addEventListener('open', ()=> console.log('Euphoria WS connected'));
+      ws.addEventListener('message', (m)=> {
+        // messages could be status updates; we display briefly
+        try {
+          const d = JSON.parse(m.data);
+          if(d.msg) showMsg(d.msg, 2500);
+        } catch(e){}
+      });
+      window.__EUPH_WS = ws;
+    } catch(e){ console.warn('ws init failed', e); }
+  })();
 })();
 </script>
-
 </body>
 </html>
