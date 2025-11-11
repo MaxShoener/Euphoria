@@ -8,7 +8,7 @@ import NodeCache from 'node-cache';
 import { WebSocketServer } from 'ws';
 import { minify as minifyHtml } from 'html-minifier-terser';
 import CleanCSS from 'clean-css';
-import Terser from 'terser';
+import * as Terser from 'terser'; // <-- FIXED import
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -58,13 +58,11 @@ const jsRewriteSnippet = `
 
 // --- Helper: rewrite HTML/CSS assets ---
 function rewriteAssets(body, baseUrl) {
-    // Rewrite HTML links and resources
     body = body.replace(/(href|src)=["'](?!http)([^"']+)["']/g, (m, attr, link) => {
         const fullUrl = new URL(link, baseUrl).href;
         return `${attr}="/proxy?url=${encodeURIComponent(fullUrl)}"`;
     });
 
-    // Rewrite CSS url() references
     body = body.replace(/url\(["']?(?!http)([^"')]+)["']?\)/g, (m, link) => {
         const fullUrl = new URL(link, baseUrl).href;
         return `url("/proxy?url=${encodeURIComponent(fullUrl)}")`;
@@ -92,11 +90,11 @@ async function minifyContent(body, contentType) {
         return body;
     } catch (err) {
         console.error('Minification error:', err);
-        return body; // fallback
+        return body;
     }
 }
 
-// --- Proxy Route with smart caching and minification ---
+// --- Proxy Route ---
 app.get('/proxy', async (req, res) => {
     const url = req.query.url;
     if (!url) return res.status(400).send('Missing URL parameter');
@@ -106,7 +104,6 @@ app.get('/proxy', async (req, res) => {
     try {
         const response = await fetch(url, { headers: { ...headers, 'X-Euphoria': 'true' } });
 
-        // 304 Not Modified: serve cache
         if (response.status === 304 && cached) {
             res.set('Content-Type', cached.contentType);
             return res.send(cached.body);
@@ -116,7 +113,6 @@ app.get('/proxy', async (req, res) => {
         const contentType = response.headers.get('content-type') || '';
         const etag = response.headers.get('etag') || null;
 
-        // Rewrite assets and inject JS snippet
         if (contentType.includes('text/html')) {
             body = rewriteAssets(body, url);
             body = body.replace('</body>', `${jsRewriteSnippet}</body>`);
@@ -124,10 +120,8 @@ app.get('/proxy', async (req, res) => {
             body = rewriteAssets(body, url);
         }
 
-        // Minify
         body = await minifyContent(body, contentType);
 
-        // Cache with ETag
         cache.set(url, { body, contentType, etag });
 
         res.set('Content-Type', contentType);
