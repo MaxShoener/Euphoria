@@ -1,235 +1,133 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Euphoria — Lightweight Proxy</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Euphoria Web Proxy</title>
 <style>
-  :root {
-    --bg: #0f1112;
-    --topbar-bg: rgba(17,17,17,0.95);
-    --control-bg: #222;
-    --accent: #2e7d32;
-    --muted: #bfc3c7;
-  }
-  html,body { height:100%; margin:0; font-family:Inter,system-ui,Segoe UI,Roboto,Arial; background:var(--bg); color:#fff; }
-  /* Floating oval top bar */
-  #topbar {
-    position: fixed;
-    top: 12px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: min(1100px, 86%);
-    background: var(--topbar-bg);
-    border-radius: 28px;
-    padding: 8px 12px;
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background: #121212;
+    color: #f0f0f0;
+}
+.top-bar {
     display: flex;
-    gap: 8px;
-    align-items: center;
-    z-index: 2147483647;
-    box-shadow: 0 8px 28px rgba(0,0,0,0.6);
-    backdrop-filter: blur(6px);
-  }
-  .tb-btn {
-    min-width:44px;
-    height:40px;
-    padding:8px;
-    border-radius:10px;
-    border: none;
-    background: var(--control-bg);
-    color: white;
-    font-size:16px;
-    cursor:pointer;
-    display:inline-grid;
-    place-items:center;
-  }
-  .tb-btn:active { transform: translateY(1px); }
-  #address {
-    flex:1;
-    height:40px;
-    padding:8px 12px;
-    border-radius: 12px;
-    border: none;
-    background:#121316;
-    color:#fff;
-    outline: 2px solid transparent;
-    font-size:14px;
-  }
-  #address::placeholder { color: var(--muted); }
-  #goBtn { background: var(--accent); color:#fff; min-width:48px; }
-  /* Content */
-  #content {
-    position: fixed;
-    top: 72px;
-    left: 12px;
-    right: 12px;
-    bottom: 12px;
-    border-radius: 12px;
-    overflow: auto;
-    background: #fff;
-    color: #000;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.6);
-  }
-  /* Loading overlay */
-  #overlay {
-    position: absolute;
-    inset: 0;
-    display: none;
     align-items: center;
     justify-content: center;
-    background: rgba(0,0,0,0.45);
-    z-index: 100;
-  }
-  .spinner {
-    width:44px; height:44px;
-    border-radius:50%;
-    border:6px solid rgba(255,255,255,0.2);
-    border-top-color: #4caf50;
-    animation: spin 900ms linear infinite;
-  }
-  @keyframes spin { to { transform: rotate(360deg);} }
-  /* small message bar */
-  #msg { position: absolute; left: 12px; bottom: 12px; color:#eee; background:rgba(0,0,0,0.4); padding:6px 10px; border-radius:8px; font-size:13px; }
+    background: #1e1e1e;
+    border-radius: 25px 25px 0 0;
+    padding: 10px 0;
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+}
+button {
+    margin: 0 5px;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 12px;
+    background: #2e2e2e;
+    color: #fff;
+    cursor: pointer;
+    font-size: 14px;
+}
+button:hover {
+    background: #3e3e3e;
+}
+#urlInput {
+    width: 300px;
+    padding: 8px;
+    border-radius: 12px;
+    border: none;
+    margin-left: 10px;
+}
+#content {
+    margin: 20px;
+    text-align: left;
+}
+a { color:#1e90ff; word-break:break-word; }
 </style>
 </head>
 <body>
 
-<div id="topbar" role="navigation" aria-label="Euphoria controls">
-  <button id="back" class="tb-btn" title="Back">◀</button>
-  <button id="forward" class="tb-btn" title="Forward">▶</button>
-  <button id="refresh" class="tb-btn" title="Refresh">⟳</button>
-  <button id="home" class="tb-btn" title="Home">🏠</button>
-  <input id="address" placeholder="Type a URL (example.com) or search (anything with spaces)" />
-  <button id="goBtn" class="tb-btn" title="Go">Go</button>
-  <button id="fullscreen" class="tb-btn" title="Fullscreen">⛶</button>
+<div class="top-bar">
+    <button id="backBtn">◀ Back</button>
+    <button id="forwardBtn">▶ Forward</button>
+    <button id="reloadBtn">⟳ Reload</button>
+    <button id="homeBtn">🏠 Home</button>
+    <input type="text" id="urlInput" placeholder="Enter URL">
+    <button id="goBtn">Go</button>
 </div>
 
-<div id="content" aria-live="polite">
-  <!-- Proxied HTML will be injected here -->
-  <div style="padding:24px;color:#444;font-family:system-ui;">
-    <h2 style="margin-top:0">Euphoria</h2>
-    <p>Enter a site or search above. This client talks to the backend proxy — no iframe, full HTML transform via streams.</p>
-    <p>Example: <code>google.com</code> or <code>https://xbox.com</code></p>
-  </div>
-</div>
-
-<div id="overlay"><div class="spinner" aria-hidden="true"></div></div>
-<div id="msg" style="display:none"></div>
+<div id="content">Proxied page content will appear here.</div>
 
 <script>
-(function(){
-  const content = document.getElementById('content');
-  const overlay = document.getElementById('overlay');
-  const address = document.getElementById('address');
-  const goBtn = document.getElementById('goBtn');
-  const msg = document.getElementById('msg');
+const content = document.getElementById('content');
+const urlInput = document.getElementById('urlInput');
 
-  let historyStack = [];
-  let historyIndex = -1;
+const historyStack = [];
+let currentIndex = -1;
 
-  function showSpinner(v=true){ overlay.style.display = v ? 'flex' : 'none'; }
-  function showMsg(t, ms=3000){ msg.textContent = t; msg.style.display = 'block'; setTimeout(()=>msg.style.display='none', ms); }
-
-  function isLikelySearch(v){
-    if(!v) return true;
-    if(v.includes(' ')) return true;
-    if(/^https?:\/\//i.test(v)) return false;
-    if(/\./.test(v)) return false;
-    return true;
-  }
-  function normalizeInput(v){
-    v = (v||'').trim();
-    if(!v) return 'https://www.google.com';
-    if(isLikelySearch(v)) return 'https://www.google.com/search?q=' + encodeURIComponent(v);
-    if(/^https?:\/\//i.test(v)) return v;
-    return 'https://' + v;
-  }
-
-  async function load(url, push=true){
-    showSpinner(true);
-    try{
-      // call proxy endpoint, get HTML
-      const res = await fetch('/proxy?url=' + encodeURIComponent(url), { headers: { 'accept': 'text/html' } });
-      if(!res.ok){
-        const text = await res.text().catch(()=>res.statusText);
-        throw new Error(res.status + ' — ' + (text || res.statusText));
-      }
-      const html = await res.text();
-      // render inside content container
-      content.innerHTML = html;
-      // update address input (show final url)
-      address.value = url;
-      if(push){
-        historyStack = historyStack.slice(0, historyIndex + 1);
-        historyStack.push(url);
-        historyIndex = historyStack.length - 1;
-      }
-      // small delay to let injected scripts run in transformed DOM
-      setTimeout(()=> {
-        // attempt to focus the address bar to be convenient
-        try { address.focus(); } catch(e){}
-      }, 200);
-    }catch(err){
-      content.innerHTML = `<div style="padding:30px;color:#900;background:#fee;border-radius:8px"><h3>Error loading page</h3><pre style="white-space:pre-wrap">${err.message}</pre></div>`;
-      console.error('load error', err);
-      showMsg('Load failed: ' + err.message, 5000);
-    } finally {
-      showSpinner(false);
-    }
-  }
-
-  // Controls
-  document.getElementById('back').addEventListener('click', ()=> {
-    if(historyIndex > 0) load(historyStack[--historyIndex], false);
-  });
-  document.getElementById('forward').addEventListener('click', ()=> {
-    if(historyIndex < historyStack.length - 1) load(historyStack[++historyIndex], false);
-  });
-  document.getElementById('refresh').addEventListener('click', ()=> {
-    if(historyIndex >= 0) load(historyStack[historyIndex], false);
-  });
-  document.getElementById('home').addEventListener('click', ()=> load('https://www.google.com'));
-  document.getElementById('fullscreen').addEventListener('click', ()=> {
-    if(!document.fullscreenElement) document.documentElement.requestFullscreen().catch(()=>{});
-    else document.exitFullscreen();
-  });
-
-  goBtn.addEventListener('click', ()=> {
-    const v = address.value;
-    const url = normalizeInput(v);
-    load(url);
-  });
-  address.addEventListener('keydown', (e)=> { if(e.key === 'Enter') goBtn.click(); });
-
-  // auto-fill suggestions (very lightweight local suggestions)
-  address.addEventListener('input', (e)=>{
-    // show simple autofill from history
-    const v = address.value.toLowerCase();
-    if(!v) return;
-    const match = historyStack.slice().reverse().find(u => u.toLowerCase().includes(v));
-    if(match) address.value = match;
-  });
-
-  // initial load: Google
-  load('https://www.google.com', true);
-
-  // WebSocket for telemetry/stream (optional)
-  (function(){
+async function loadUrl(url, addToHistory = true) {
     try {
-      const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const ws = new WebSocket(proto + '//' + location.host + '/_euph_ws');
-      ws.addEventListener('open', ()=> console.log('Euphoria WS connected'));
-      ws.addEventListener('message', (m)=> {
-        // messages could be status updates; we display briefly
-        try {
-          const d = JSON.parse(m.data);
-          if(d.msg) showMsg(d.msg, 2500);
-        } catch(e){}
-      });
-      window.__EUPH_WS = ws;
-    } catch(e){ console.warn('ws init failed', e); }
-  })();
-})();
+        const res = await fetch(`/proxy?url=${encodeURIComponent(url)}`);
+        const html = await res.text();
+        content.innerHTML = html;
+
+        // Rewrite links in content to go through proxy
+        content.querySelectorAll('a').forEach(a => {
+            const href = a.getAttribute('href');
+            if (href && !href.startsWith('/proxy')) {
+                a.setAttribute('href', `/proxy?url=${encodeURIComponent(new URL(href, url).href)}`);
+                a.addEventListener('click', e => {
+                    e.preventDefault();
+                    loadUrl(new URL(href, url).href);
+                });
+            }
+        });
+
+        urlInput.value = url;
+
+        if (addToHistory) {
+            historyStack.splice(currentIndex + 1);
+            historyStack.push(url);
+            currentIndex++;
+        }
+    } catch(err) {
+        content.innerHTML = `Error loading page: ${err.message}`;
+    }
+}
+
+// Navigation buttons
+document.getElementById('backBtn').addEventListener('click', () => {
+    if (currentIndex > 0) {
+        currentIndex--;
+        loadUrl(historyStack[currentIndex], false);
+    }
+});
+document.getElementById('forwardBtn').addEventListener('click', () => {
+    if (currentIndex < historyStack.length - 1) {
+        currentIndex++;
+        loadUrl(historyStack[currentIndex], false);
+    }
+});
+document.getElementById('reloadBtn').addEventListener('click', () => {
+    if (currentIndex >= 0) loadUrl(historyStack[currentIndex], false);
+});
+document.getElementById('homeBtn').addEventListener('click', () => {
+    loadUrl('/', true);
+});
+document.getElementById('goBtn').addEventListener('click', () => {
+    const url = urlInput.value;
+    if (url) loadUrl(url, true);
+});
+
+// Optional WebSocket Example
+const ws = new WebSocket(`ws://${location.host}`);
+ws.onmessage = e => console.log('WS:', e.data);
 </script>
+
 </body>
 </html>
