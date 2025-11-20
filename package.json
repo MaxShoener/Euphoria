@@ -1,19 +1,22 @@
 {
-  "name": "euphoria-v2",
+  "name": "euphoria-v2-proxy",
   "version": "2.0.0",
-  "description": "EUPHORIA v2 — Express + Scramjet hybrid web proxy",
-  "main": "server.js",
+  "description": "EUPHORIA v2 web proxy — full HTML/JS/CSS/images streaming with cookie support",
   "type": "module",
+  "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
     "express": "^4.18.2",
     "node-fetch": "^3.3.2",
-    "scramjet": "^4.3.7",
+    "scramjet": "^4.10.3",
     "compression": "^1.7.4",
     "morgan": "^1.10.0",
     "cors": "^2.8.5",
-    "ws": "^8.13.0"
+    "ws": "^8.15.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
   }
 }
