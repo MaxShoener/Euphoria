@@ -2,78 +2,47 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
 <title>EUPHORIA v2 Proxy</title>
+<link rel="stylesheet" href="style.css">
 <style>
-body{margin:0;font-family:sans-serif;background:#f0f2f5;color:#333;}
-header{background:#20232a;color:#61dafb;padding:1rem;text-align:center;}
-header h1{margin:0;font-size:2rem;}
-main{padding:2rem;}
-form{margin-bottom:1rem;text-align:center;}
-input[type=text]{width:60%;padding:0.5rem;margin-right:0.5rem;border-radius:4px;border:1px solid #ccc;}
-button{padding:0.5rem 1rem;border:none;border-radius:4px;background:#61dafb;color:#20232a;font-weight:bold;cursor:pointer;}
-button:hover{background:#21a1f1;}
-#history{margin-top:2rem;}
-#history h2{margin-bottom:0.5rem;}
-#history ul{list-style:none;padding:0;}
-#history li{padding:0.25rem 0; cursor:pointer;}
-#history li:hover{background:#e0e0e0;}
-footer{margin-top:3rem;text-align:center;color:#888;}
+body{margin:0;font-family:sans-serif;background:#f0f0f0;color:#222;}
+header{background:#0b72ef;color:#fff;padding:10px 20px;display:flex;align-items:center;justify-content:space-between;}
+h1{margin:0;font-size:1.5rem;}
+input[type=text]{width:60%;padding:8px;margin-right:5px;border-radius:4px;border:1px solid #ccc;}
+button{padding:8px 12px;border:none;background:#0b72ef;color:white;border-radius:4px;cursor:pointer;}
+button:hover{background:#0959b8;}
+iframe{width:100%;height:calc(100vh - 60px);border:none;}
+footer{padding:10px;text-align:center;font-size:0.85rem;color:#555;}
+a{color:#0b72ef;text-decoration:none;}
+a:hover{text-decoration:underline;}
 </style>
 </head>
 <body>
 <header>
-  <h1>EUPHORIA v2 Proxy</h1>
+<h1>EUPHORIA v2 Proxy</h1>
+<div>
+<form id="searchForm" onsubmit="goProxy(event)">
+<input type="text" id="searchInput" placeholder="Enter URL or search term">
+<button type="submit">Go</button>
+</form>
+</div>
 </header>
-<main>
-  <form id="searchForm">
-    <input id="searchInput" type="text" placeholder="Enter URL or search term"/>
-    <button type="submit">Go</button>
-  </form>
-  <div id="history">
-    <h2>Recent Searches</h2>
-    <ul id="historyList"></ul>
-  </div>
-</main>
+<iframe id="proxyFrame" src=""></iframe>
 <footer>
-  &copy; 2025 EUPHORIA Proxy — All Rights Reserved
+<p>&copy; 2025 Max Shoener — EUPHORIA v2 Proxy Demo</p>
+<p>Supports Google, YouTube, Chess.com, Xbox, and other sites via proxy streaming.</p>
+<p>Remember: assets load through proxy, cookies persist, JS rewrites are injected.</p>
 </footer>
-
 <script>
-const storageKey='euphoria_recent';
-function saveHistory(term){
-  let arr=JSON.parse(localStorage.getItem(storageKey)||'[]');
-  arr.unshift(term);
-  arr=[...new Set(arr)].slice(0,10);
-  localStorage.setItem(storageKey,JSON.stringify(arr));
-  renderHistory();
-}
-function renderHistory(){
-  const arr=JSON.parse(localStorage.getItem(storageKey)||'[]');
-  const ul=document.getElementById('historyList');
-  ul.innerHTML='';
-  arr.forEach(item=>{
-    const li=document.createElement('li');
-    li.textContent=item;
-    li.addEventListener('click',()=>{ goToUrl(item); });
-    ul.appendChild(li);
-  });
-}
-function goToUrl(input){
-  let target=input.trim();
-  if(!target) target="https://www.google.com";
-  if(!/^https?:\/\//i.test(target)) target="https://"+target;
-  saveHistory(target);
-  const proxyUrl=window.location.origin+"/proxy?url="+encodeURIComponent(target);
-  window.location.href=proxyUrl;
-}
-document.getElementById("searchForm").addEventListener("submit",e=>{
+function goProxy(e){
   e.preventDefault();
-  goToUrl(document.getElementById("searchInput").value);
-});
-document.addEventListener("keydown",e=>{
-  if(e.altKey && e.key==='h'){ document.getElementById('searchInput').focus(); }
-});
-renderHistory();
+  const val=document.getElementById("searchInput").value.trim();
+  if(!val) return;
+  let url=val;
+  if(!/^https?:\/\//i.test(val)) url="https://"+val;
+  document.getElementById("proxyFrame").src="/proxy?url="+encodeURIComponent(url);
+}
 </script>
 </body>
 </html>
