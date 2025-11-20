@@ -1,20 +1,20 @@
 # Use official Node.js LTS image
-FROM node:20-bullseye-slim
+FROM node:20-alpine
 
 # Set working directory
 WORKDIR /app
 
-# Copy package files first (for caching)
-COPY package.json package-lock.json* ./
+# Copy package.json and package-lock.json
+COPY package*.json ./
 
 # Install dependencies
-RUN npm install --production
+RUN npm install --omit=dev
 
-# Copy rest of the app
+# Copy source files
 COPY . .
 
 # Expose port
 EXPOSE 3000
 
-# Run the server
+# Start server
 CMD ["node", "server.js"]
