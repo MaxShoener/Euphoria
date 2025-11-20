@@ -1,147 +1,79 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Euphoria Proxy</title>
-  <link rel="icon" href="/favicon.ico">
-  <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      height: 100%;
-      width: 100%;
-      font-family: system-ui, sans-serif;
-      background: #111;
-      color: #fff;
-      overflow-x: hidden;
-    }
-    #euphoria-topbar {
-      position: fixed;
-      top: 12px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: min(1100px, 86%);
-      background: rgba(17,17,17,0.85);
-      border-radius: 28px;
-      padding: 8px 10px;
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      z-index: 2147483647;
-      box-shadow: 0 6px 20px rgba(0,0,0,0.6);
-      backdrop-filter: blur(6px);
-    }
-    #euphoria-topbar button {
-      min-width: 44px;
-      padding: 8px;
-      border-radius: 12px;
-      border: 0;
-      background: #222;
-      color: #fff;
-      cursor: pointer;
-      font-size: 1rem;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    #euphoria-topbar button#eph-go {
-      background: #2e7d32;
-    }
-    #euphoria-topbar input {
-      flex: 1;
-      padding: 8px 12px;
-      border-radius: 12px;
-      border: 0;
-      background: #222;
-      color: #fff;
-      outline: none;
-      font-size: 1rem;
-    }
-    #euphoria-loading {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 0%;
-      height: 3px;
-      background: #2e7d32;
-      transition: width 0.3s;
-      z-index: 2147483647;
-    }
-    iframe#euphoria-frame {
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      border: none;
-      margin: 0;
-      padding: 0;
-      z-index: 1;
-    }
-  </style>
+<meta charset="UTF-8">
+<title>EUPHORIA v2 Proxy</title>
+<style>
+body{margin:0;font-family:sans-serif;background:#f0f2f5;color:#333;}
+header{background:#20232a;color:#61dafb;padding:1rem;text-align:center;}
+header h1{margin:0;font-size:2rem;}
+main{padding:2rem;}
+form{margin-bottom:1rem;text-align:center;}
+input[type=text]{width:60%;padding:0.5rem;margin-right:0.5rem;border-radius:4px;border:1px solid #ccc;}
+button{padding:0.5rem 1rem;border:none;border-radius:4px;background:#61dafb;color:#20232a;font-weight:bold;cursor:pointer;}
+button:hover{background:#21a1f1;}
+#history{margin-top:2rem;}
+#history h2{margin-bottom:0.5rem;}
+#history ul{list-style:none;padding:0;}
+#history li{padding:0.25rem 0; cursor:pointer;}
+#history li:hover{background:#e0e0e0;}
+footer{margin-top:3rem;text-align:center;color:#888;}
+</style>
 </head>
 <body>
-  <div id="euphoria-topbar">
-    <button id="eph-back">◀</button>
-    <button id="eph-forward">▶</button>
-    <button id="eph-refresh">⟳</button>
-    <button id="eph-home">🏠</button>
-    <input id="eph-input" placeholder="Enter URL or search..." />
-    <button id="eph-go">Go</button>
-    <button id="eph-full">⛶</button>
+<header>
+  <h1>EUPHORIA v2 Proxy</h1>
+</header>
+<main>
+  <form id="searchForm">
+    <input id="searchInput" type="text" placeholder="Enter URL or search term"/>
+    <button type="submit">Go</button>
+  </form>
+  <div id="history">
+    <h2>Recent Searches</h2>
+    <ul id="historyList"></ul>
   </div>
-  <div id="euphoria-loading"></div>
-  <iframe id="euphoria-frame" src=""></iframe>
+</main>
+<footer>
+  &copy; 2025 EUPHORIA Proxy — All Rights Reserved
+</footer>
 
-  <script>
-    const input = document.getElementById('eph-input');
-    const go = document.getElementById('eph-go');
-    const back = document.getElementById('eph-back');
-    const forward = document.getElementById('eph-forward');
-    const refresh = document.getElementById('eph-refresh');
-    const home = document.getElementById('eph-home');
-    const full = document.getElementById('eph-full');
-    const loading = document.getElementById('euphoria-loading');
-    const frame = document.getElementById('euphoria-frame');
-
-    const defaultHome = '/proxy?url=https://www.google.com';
-
-    function setFrameSrc(url) {
-      loading.style.width = '20%';
-      frame.src = url;
-    }
-
-    go.onclick = () => {
-      const val = input.value.trim();
-      if(!val) return;
-      let url;
-      try {
-        url = new URL(val);
-      } catch(e) {
-        url = new URL('https://www.google.com/search?q=' + encodeURIComponent(val));
-      }
-      setFrameSrc('/proxy?url=' + encodeURIComponent(url.href));
-    };
-
-    input.addEventListener('keydown', e => { if(e.key === 'Enter') go.onclick(); });
-    back.onclick = () => frame.contentWindow.history.back();
-    forward.onclick = () => frame.contentWindow.history.forward();
-    refresh.onclick = () => frame.contentWindow.location.reload();
-    home.onclick = () => setFrameSrc(defaultHome);
-    full.onclick = () => {
-      if(!document.fullscreenElement) document.documentElement.requestFullscreen();
-      else document.exitFullscreen();
-    };
-
-    frame.addEventListener('load', () => {
-      loading.style.width = '100%';
-      setTimeout(()=>loading.style.width='0%', 300);
-      try { input.value = frame.contentWindow.location.href; } catch(e){}
-    });
-
-    // Initial load
-    setFrameSrc(defaultHome);
-  </script>
+<script>
+const storageKey='euphoria_recent';
+function saveHistory(term){
+  let arr=JSON.parse(localStorage.getItem(storageKey)||'[]');
+  arr.unshift(term);
+  arr=[...new Set(arr)].slice(0,10);
+  localStorage.setItem(storageKey,JSON.stringify(arr));
+  renderHistory();
+}
+function renderHistory(){
+  const arr=JSON.parse(localStorage.getItem(storageKey)||'[]');
+  const ul=document.getElementById('historyList');
+  ul.innerHTML='';
+  arr.forEach(item=>{
+    const li=document.createElement('li');
+    li.textContent=item;
+    li.addEventListener('click',()=>{ goToUrl(item); });
+    ul.appendChild(li);
+  });
+}
+function goToUrl(input){
+  let target=input.trim();
+  if(!target) target="https://www.google.com";
+  if(!/^https?:\/\//i.test(target)) target="https://"+target;
+  saveHistory(target);
+  const proxyUrl=window.location.origin+"/proxy?url="+encodeURIComponent(target);
+  window.location.href=proxyUrl;
+}
+document.getElementById("searchForm").addEventListener("submit",e=>{
+  e.preventDefault();
+  goToUrl(document.getElementById("searchInput").value);
+});
+document.addEventListener("keydown",e=>{
+  if(e.altKey && e.key==='h'){ document.getElementById('searchInput').focus(); }
+});
+renderHistory();
+</script>
 </body>
 </html>
