@@ -1,19 +1,16 @@
-# Use a full Debian-based Node image for compatibility with jsdom dependencies
 FROM node:20-slim
 
 WORKDIR /app
 
-# copy package info and install dependencies first (cache layer)
-COPY package.json package-lock.json* ./
-RUN npm ci --omit=dev
+# Copy only package.json first for caching
+COPY package.json ./
 
-# copy application files
+# Use npm install instead of npm ci (because you have no package-lock.json)
+RUN npm install --omit=dev
+
+# Copy all code
 COPY . .
 
-# Create a cache dir used by server (optional)
-RUN mkdir -p /app/cache
+EXPOSE 8080
 
-EXPOSE 3000
-
-# start the app
 CMD ["node", "server.js"]
