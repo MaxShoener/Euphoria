@@ -1,16 +1,18 @@
+# Use node 20 slim (compatible with jsdom runtime)
 FROM node:20-slim
 
 WORKDIR /app
 
-# Copy only package.json first for caching
+# copy package json and install deps (no package-lock required)
 COPY package.json ./
-
-# Use npm install instead of npm ci (because you have no package-lock.json)
 RUN npm install --omit=dev
 
-# Copy all code
+# copy rest of the app
 COPY . .
 
-EXPOSE 8080
+# create cache dir used by server
+RUN mkdir -p /app/cache
+
+EXPOSE 3000
 
 CMD ["node", "server.js"]
