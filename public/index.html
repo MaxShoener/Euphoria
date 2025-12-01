@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
@@ -6,58 +6,53 @@
 <title>Euphoria v2 — No-iframe Proxy</title>
 <style>
   :root{
-    --bg:#0b0d0f; --panel:#0f1315; --muted:#aeb4b8; --accent:#2e7d32;
+    --bg:#0b0f11; --panel:rgba(20,22,24,0.6); --muted:#aeb4b8; --accent:#2e7d32;
   }
-  html,body{height:100%;margin:0;font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,Arial; background:var(--bg); color:#fff;}
+  html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial; background:var(--bg); color:#fff;}
   /* Floating oval topbar */
   #topbar{
     position:fixed; top:12px; left:50%; transform:translateX(-50%);
-    width:min(1100px,90%); background:rgba(18,20,22,0.55);
+    width:min(1100px,90%); background:var(--panel);
     border-radius:30px; padding:8px 12px; display:flex; gap:8px; align-items:center;
     z-index:2147483647; box-shadow:0 10px 40px rgba(0,0,0,0.6); backdrop-filter: blur(8px);
   }
-  .tb-btn{min-width:44px;height:40px;padding:6px;border-radius:10px;border:none;background:#121416;color:#fff;font-size:16px;cursor:pointer;display:inline-grid;place-items:center}
+  .tb-btn{min-width:44px;height:40px;padding:6px;border-radius:10px;border:none;background:#0e1112;color:#fff;font-size:16px;cursor:pointer;display:inline-grid;place-items:center}
   .tb-btn:active{transform:translateY(1px)}
   #address{flex:1;height:40px;padding:8px 12px;border-radius:12px;border:0;background:#0c0d0f;color:#fff;font-size:14px;outline:2px solid transparent}
   #address::placeholder{color:var(--muted)}
   #goBtn{background:var(--accent);min-width:56px}
-  #progressWrap{position:absolute;left:0;right:0;top:100%;height:4px;overflow:hidden;border-radius:4px}
-  #progress{height:4px;width:0%;background:linear-gradient(90deg,#4caf50,#2e7d32);transition:width 160ms linear}
-  /* Content area */
-  #viewWrap{position:fixed;top:72px;left:12px;right:12px;bottom:12px;border-radius:12px;overflow:auto;background:#fff;color:#000;box-shadow:0 8px 24px rgba(0,0,0,0.6)}
-  #viewInner{min-height:100%; padding:20px}
-  /* Spinner */
-  #overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.32);z-index:1500}
-  .spinner{width:48px;height:48px;border-radius:50%;border:6px solid rgba(255,255,255,0.18);border-top-color:#4caf50;animation:spin 900ms linear infinite}
+  #progressBar{position:fixed;left:12px;right:12px;top:76px;height:4px;border-radius:4px;overflow:hidden;pointer-events:none}
+  #progress{height:100%;width:0;background:linear-gradient(90deg,#4caf50,#2e7d32);transition:width 120ms linear}
+  /* view */
+  #viewWrap{position:fixed;top:92px;left:12px;right:12px;bottom:12px;border-radius:12px;overflow:auto;background:#fff;color:#000;box-shadow:0 8px 24px rgba(0,0,0,0.6)}
+  #overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.28);z-index:2000}
+  .spinner{width:44px;height:44px;border-radius:50%;border:6px solid rgba(255,255,255,0.18);border-top-color:#4caf50;animation:spin 900ms linear infinite}
   @keyframes spin{to{transform:rotate(360deg)}}
-  /* small message */
-  #msg{position:fixed;left:14px;bottom:14px;color:#fff;background:rgba(0,0,0,0.45);padding:8px 10px;border-radius:8px;font-size:13px;z-index:2000}
+  #msg{position:fixed;left:16px;bottom:16px;color:#fff;background:rgba(0,0,0,0.45);padding:8px 12px;border-radius:8px;font-size:13px;display:none;z-index:2100}
   pre{white-space:pre-wrap;word-break:break-word}
 </style>
 </head>
 <body>
-
-<div id="topbar" role="navigation" aria-label="Euphoria controls">
-  <button id="back" class="tb-btn" title="Back">◀</button>
-  <button id="forward" class="tb-btn" title="Forward">▶</button>
-  <button id="refresh" class="tb-btn" title="Refresh">⟳</button>
-  <button id="home" class="tb-btn" title="Home">🏠</button>
-  <input id="address" placeholder="Type a URL (example.com) or search" />
-  <button id="goBtn" class="tb-btn" title="Go">Go</button>
-  <button id="devtools" class="tb-btn" title="Open Devtools">⚙</button>
-</div>
-<div id="progressWrap" style="top:64px;"><div id="progress"></div></div>
-
-<div id="viewWrap" role="main" aria-live="polite">
-  <div id="overlay"><div class="spinner" aria-hidden="true"></div></div>
-  <div id="viewInner">
-    <h2 style="margin-top:0">Euphoria v2</h2>
-    <p style="color:#333">Enter a site in the bar above. This viewer loads proxied HTML and executes scripts — no iframe.</p>
-    <p style="color:#333">Examples: <code>google.com</code>, <code>https://xbox.com</code></p>
+  <div id="topbar" role="navigation" aria-label="Euphoria controls">
+    <button id="back" class="tb-btn" title="Back">◀</button>
+    <button id="forward" class="tb-btn" title="Forward">▶</button>
+    <button id="refresh" class="tb-btn" title="Refresh">⟳</button>
+    <button id="home" class="tb-btn" title="Home">🏠</button>
+    <input id="address" placeholder="Type a URL (example.com) or search (anything with spaces)" />
+    <button id="goBtn" class="tb-btn" title="Go">Go</button>
   </div>
-</div>
+  <div id="progressBar" aria-hidden="true"><div id="progress"></div></div>
 
-<div id="msg" style="display:none"></div>
+  <div id="viewWrap" role="main" aria-live="polite">
+    <div id="overlay"><div class="spinner" aria-hidden="true"></div></div>
+    <div id="viewInner" style="min-height:100%;padding:20px;">
+      <h2 style="margin-top:0">Euphoria v2</h2>
+      <p style="color:#444">Enter a site above. This client loads proxied HTML and executes scripts — no iframe.</p>
+      <p style="color:#444">Example: <code>google.com</code> or <code>https://xbox.com</code></p>
+    </div>
+  </div>
+
+  <div id="msg"></div>
 
 <script>
 (() => {
@@ -71,16 +66,12 @@
   let historyStack = [];
   let historyIndex = -1;
 
-  function showMsg(t, ms=3000){ msg.textContent = t; msg.style.display='block'; setTimeout(()=>msg.style.display='none', ms); }
+  function showMsg(t, ms=3000){ msg.textContent=t; msg.style.display='block'; setTimeout(()=>msg.style.display='none', ms); }
   function showOverlay(v=true){ overlay.style.display = v ? 'flex' : 'none'; }
   function setProgress(p){ progress.style.width = Math.max(0, Math.min(100, p)) + '%'; }
 
   function isLikelySearch(v){
-    if(!v) return true;
-    if(v.includes(' ')) return true;
-    if(/^https?:\/\//i.test(v)) return false;
-    if(/\./.test(v)) return false;
-    return true;
+    if(!v) return true; if(v.includes(' ')) return true; if(/^https?:\/\//i.test(v)) return false; if(/\./.test(v)) return false; return true;
   }
   function normalizeInput(v){
     v=(v||'').trim();
@@ -90,89 +81,77 @@
     return 'https://' + v;
   }
 
-  async function fetchProxy(url, onProgress){
-    // request the server /proxy?url=
+  async function fetchProxy(url){
     const proxyUrl = '/proxy?url=' + encodeURIComponent(url);
     const resp = await fetch(proxyUrl, { headers: { 'Accept': 'text/html', 'X-Euphoria-Client': 'v2' } });
     if(!resp.ok) throw new Error('Proxy fetch failed: ' + resp.status + ' ' + resp.statusText);
-    const contentType = resp.headers.get('content-type') || '';
-    // read whole body as text (we need DOM)
-    const txt = await resp.text();
-    return { text: txt, contentType };
+    const text = await resp.text();
+    return text;
   }
 
-  // Inject DOM nodes and execute scripts in order (no iframe)
-  function injectAndExecute(htmlText){
+  function sanitizeAndExecute(htmlText){
     // parse
     const parser = new DOMParser();
     const doc = parser.parseFromString(htmlText, 'text/html');
 
-    // Remove any topbar injection that might duplicate our UI
-    const myMarker = 'EUPHORIA_TOPBAR';
-    const injectedTopbar = doc.querySelector(`#${myMarker}`);
-    if(injectedTopbar) injectedTopbar.remove();
+    // Remove any duplicate topbar that the proxied page might have injected
+    const marker = 'EUPHORIA_REWRITE_MARKER';
+    const injected = doc.getElementById(marker);
+    if(injected) injected.remove();
 
-    // Clear view but keep scroll position + styles of page
-    viewInner.innerHTML = '';
-
-    // Move stylesheets & inline styles to head (so they take effect)
-    // But we don't replace our topbar; append to document.head
-    const headNodes = Array.from(doc.head ? doc.head.children : []);
-    headNodes.forEach(node => {
+    // Move style/link tags to document head (so styles apply)
+    const headNodes = doc.head ? Array.from(doc.head.children) : [];
+    headNodes.forEach(node=>{
       try {
-        if(node.tagName === 'BASE') return; // skip base to avoid breaking our app
-        if(node.tagName === 'SCRIPT') return; // scripts handled below
+        if(node.tagName === 'SCRIPT') return;
+        if(node.tagName === 'BASE') return;
         document.head.appendChild(document.importNode(node, true));
       } catch(e){}
     });
 
-    // Append body nodes into viewInner (structure)
-    const bodyNodes = Array.from(doc.body ? doc.body.childNodes : []);
+    // Clear view and append body content
+    viewInner.innerHTML = '';
+    const bodyNodes = doc.body ? Array.from(doc.body.childNodes) : [];
     bodyNodes.forEach(n => {
       try { viewInner.appendChild(document.importNode(n, true)); } catch(e){}
     });
 
-    // Find scripts in the inserted DOM and execute them in order
-    // We must copy scripts to new nodes to force execution
+    // Collect all scripts inside viewInner and run sequentially
     const scripts = Array.from(viewInner.querySelectorAll('script'));
-    const runScript = (oldScript) => {
-      return new Promise((resolve) => {
-        try {
-          const script = document.createElement('script');
-          // preserve attributes (type, async, defer)
-          for (let i = 0; i < oldScript.attributes.length; i++){
-            const att = oldScript.attributes[i];
-            if(att.name === 'src'){ script.src = att.value; continue; }
-            script.setAttribute(att.name, att.value);
-          }
-          if(!script.src){
-            script.textContent = oldScript.textContent;
-            viewInner.appendChild(script);
-            resolve();
-          } else {
-            // load external script via normal browser fetch (appends to head)
-            script.onload = () => resolve();
-            script.onerror = () => resolve();
-            document.head.appendChild(script);
-          }
-        } catch(e){ resolve(); }
-      });
-    };
+    const runScript = (old) => new Promise(resolve => {
+      try {
+        const s = document.createElement('script');
+        for(let i=0;i<old.attributes.length;i++){
+          const a = old.attributes[i];
+          if(a.name === 'src'){ s.src = a.value; continue; }
+          s.setAttribute(a.name, a.value);
+        }
+        if(!s.src){
+          s.textContent = old.textContent;
+          viewInner.appendChild(s);
+          resolve();
+        } else {
+          s.onload = () => resolve();
+          s.onerror = () => resolve();
+          document.head.appendChild(s);
+        }
+      } catch(e){ resolve(); }
+    });
 
-    // sequential execution to preserve order (important for many sites)
-    return scripts.reduce((p, s) => p.then(() => runScript(s).then(()=>{ try{s.remove(); }catch(e){} })), Promise.resolve());
+    // sequential execution to preserve order
+    return scripts.reduce((p, s) => p.then(()=> runScript(s).then(()=> { try{s.remove();}catch(e){} })), Promise.resolve());
   }
 
   async function load(url, push=true){
-    showOverlay(true);
-    setProgress(8);
+    showOverlay(true); setProgress(5);
     try {
       const normalized = normalizeInput(url);
-      const { text } = await fetchProxy(normalized, (p)=>setProgress(p));
-      setProgress(60);
-      await injectAndExecute(text);
+      setProgress(12);
+      const html = await fetchProxy(normalized);
+      setProgress(50);
+      await sanitizeAndExecute(html);
       setProgress(100);
-      setTimeout(()=>setProgress(0), 250);
+      setTimeout(()=> setProgress(0), 240);
       address.value = normalized;
       if(push){
         historyStack = historyStack.slice(0, historyIndex + 1);
@@ -196,8 +175,8 @@
   goBtn.addEventListener('click', ()=> load(address.value));
   address.addEventListener('keydown', (e)=> { if(e.key === 'Enter') goBtn.click(); });
 
-  // initial load
-  load('https://www.google.com', true);
+  // initial
+  load('https://www.google.com');
 })();
 </script>
 </body>
