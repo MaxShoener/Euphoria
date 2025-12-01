@@ -1,19 +1,18 @@
-// server.js — EUPHORIA v2 (expanded, production-ready)
-// Features:
-//  - No iframe anywhere. Index serves the topbar; proxied HTML is loaded into the page.
-//  - Proxy-all: HTML, JS, CSS, images, fonts, WASM, video, JSON, etc.
-//  - Session cookie persistence (memory store).
-//  - Deployment-aware rewrites (avoids "google.com/proxy" recursion).
-//  - Injects a compact rewrite shim into proxied HTML (no topbar injection).
-//  - Streams binary assets; progressive HTML handling via scramjet StringStream.
-//  - Small in-memory + optional disk caching for assets and HTML.
-//  - WebSocket telemetry endpoint at /_euph_ws.
-//  - Robust header handling (no headers-after-send), increased listeners limit.
+// server.js — EUPHORIA v2 (complete corrected version)
+// - No iframes. Index serves topbar; proxied HTML is injected into page.
+// - Proxy-all (HTML, JS, CSS, images, fonts, WASM, video, JSON, etc.)
+// - Session cookie persistence (memory store).
+// - Deployment-aware rewrites to avoid recursion.
+// - Injects compact rewrite shim into proxied HTML.
+// - Streams binary assets; progressive HTML with scramjet StringStream.
+// - Small in-memory + optional disk caching for assets and HTML.
+// - WebSocket telemetry endpoint at /_euph_ws.
+// - Defensive error handling and safe header handling.
 
 import express from "express";
 import fetch from "node-fetch";
 import scramjetPkg from "scramjet";
-const { StringStream } = scramjetPkg; // scramjet default import contains helpful streams
+const { StringStream } = scramjetPkg;
 import compression from "compression";
 import morgan from "morgan";
 import cors from "cors";
@@ -26,24 +25,26 @@ import { promisify } from "util";
 import { EventEmitter } from "events";
 import { WebSocketServer } from "ws";
 
-EventEmitter.defaultMaxListeners = 200; // avoid MaxListenersExceededWarning
+EventEmitter.defaultMaxListeners = 200;
 const pipe = promisify(pipeline);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// --------------------------- CONFIG ---------------------------
+// -------------------- Config --------------------
 const DEPLOYMENT_ORIGIN = process.env.DEPLOYMENT_ORIGIN || "https://useful-karil-maxshoener-6cb890d9.koyeb.app";
 const PORT = parseInt(process.env.PORT || "3000", 10);
 const CACHE_TTL = 1000 * 60 * 6; // 6 minutes
-const ASSET_CACHE_MAX = 256 * 1024; // 256KB threshold to cache asset body
+const ASSET_CACHE_MAX = 256 * 1024; // 256 KB
 const ENABLE_DISK_CACHE = true;
 const CACHE_DIR = path.join(__dirname, "cache");
-const FETCH_TIMEOUT_MS = 30000; // fetch timeout
+const FETCH_TIMEOUT_MS = 30000;
 
-if (ENABLE_DISK_CACHE) fsPromises.mkdir(CACHE_DIR, { recursive: true }).catch(() => {});
+if (ENABLE_DISK_CACHE) {
+  fsPromises.mkdir(CACHE_DIR, { recursive: true }).catch(() => {});
+}
 
-// Treat these as binary assets
+// asset heuristics
 const ASSET_EXTENSIONS = [
   ".wasm", ".js", ".mjs", ".css", ".png", ".jpg", ".jpeg", ".webp", ".gif",
   ".svg", ".ico", ".ttf", ".otf", ".woff", ".woff2", ".eot", ".json", ".map",
@@ -51,7 +52,7 @@ const ASSET_EXTENSIONS = [
 ];
 const SPECIAL_ASSET_NAMES = ["service-worker.js", "sw.js", "worker.js", "manifest.json"];
 
-// headers to drop from upstream responses (they break injected scripts / embedding)
+// headers that break injection or embedding
 const DROP_HEADERS_LOWER = new Set([
   "content-security-policy",
   "x-frame-options",
@@ -61,7 +62,7 @@ const DROP_HEADERS_LOWER = new Set([
   "permissions-policy"
 ]);
 
-// --------------------------- EXPRESS SETUP ---------------------------
+// -------------------- Express setup --------------------
 const app = express();
 app.use(cors());
 app.use(morgan("tiny"));
@@ -69,10 +70,10 @@ app.use(compression({ threshold: 1024 }));
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 
-// Serve index.html and other static front-end files from public/
+// serve static UI from public/
 app.use(express.static(path.join(__dirname, "public"), { index: false }));
 
-// --------------------------- SESSION / COOKIE STORE ---------------------------
+// -------------------- simple session/cookie store --------------------
 const SESSION_NAME = "euphoria_sid";
 const SESSIONS = new Map();
 
@@ -81,8 +82,8 @@ function createSession() { const sid = makeSid(); const payload = { cookies: new
 
 function parseCookies(cookieHeader = "") {
   const out = {};
-  cookieHeader.split(";").forEach(p => {
-    const [k, v] = (p || "").split("=").map(s => (s || "").trim());
+  cookieHeader.split(";").forEach(pair => {
+    const [k, v] = (pair || "").split("=").map(s => (s || "").trim());
     if (k && v) out[k] = v;
   });
   return out;
@@ -98,7 +99,7 @@ function getSessionFromReq(req) {
 }
 
 function setSessionCookieHeader(res, sid) {
-  const cookieStr = `${SESSION_NAME}=${sid}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${60*60*24}`;
+  const cookieStr = `${SESSION_NAME}=${sid}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${60 * 60 * 24}`;
   const prev = res.getHeader("Set-Cookie");
   if (!prev) res.setHeader("Set-Cookie", cookieStr);
   else if (Array.isArray(prev)) res.setHeader("Set-Cookie", [...prev, cookieStr]);
@@ -112,9 +113,11 @@ function storeSetCookieToSession(setCookies = [], sessionPayload) {
       const idx = kv.indexOf("=");
       if (idx === -1) continue;
       const k = kv.slice(0, idx).trim();
-      const v = kv.slice(idx+1).trim();
+      const v = kv.slice(idx + 1).trim();
       if (k) sessionPayload.cookies.set(k, v);
-    } catch (e) {}
+    } catch (e) {
+      // ignore invalid cookie formats
+    }
   }
 }
 
@@ -122,7 +125,7 @@ function buildCookieHeader(map) {
   return [...map.entries()].map(([k, v]) => `${k}=${v}`).join("; ");
 }
 
-// periodic cleanup of stale sessions (30min inactivity)
+// cleanup stale sessions periodically
 setInterval(() => {
   const cutoff = Date.now() - (1000 * 60 * 30);
   for (const [sid, payload] of SESSIONS.entries()) {
@@ -130,7 +133,7 @@ setInterval(() => {
   }
 }, 1000 * 60 * 5);
 
-// --------------------------- CACHE (memory + disk) ---------------------------
+// -------------------- cache --------------------
 const MEM_CACHE = new Map();
 
 function cacheKey(s) { return Buffer.from(s).toString("base64url"); }
@@ -151,7 +154,9 @@ function cacheGet(key) {
         } else {
           try { fs.unlinkSync(fname); } catch (e) {}
         }
-      } catch (e) {}
+      } catch (e) {
+        // ignore disk parse errors
+      }
     }
   }
   return null;
@@ -161,32 +166,41 @@ function cacheSet(key, val) {
   MEM_CACHE.set(key, { v: val, t: now() });
   if (ENABLE_DISK_CACHE) {
     const fname = path.join(CACHE_DIR, cacheKey(key));
-    fsPromises.writeFile(fname, JSON.stringify({ v: val, t: now() }), "utf8").catch(()=>{});
+    fsPromises.writeFile(fname, JSON.stringify({ v: val, t: now() }), "utf8").catch(() => {});
   }
 }
 
-// --------------------------- UTIL HELPERS ---------------------------
+// -------------------- helpers --------------------
 function toAbsolute(href, base) {
   try { return new URL(href, base).href; } catch (e) { return null; }
 }
+
 function isAlreadyProxiedHref(href) {
   if (!href) return false;
   try {
     if (href.includes("/proxy?url=")) return true;
     const resolved = new URL(href, DEPLOYMENT_ORIGIN);
     if (resolved.origin === (new URL(DEPLOYMENT_ORIGIN)).origin && resolved.pathname.startsWith("/proxy")) return true;
-  } catch (e) {}
+  } catch (e) {
+    // ignore
+  }
   return false;
 }
+
 function proxyizeAbsoluteUrl(absUrl) {
   try {
     const u = new URL(absUrl);
     return `${DEPLOYMENT_ORIGIN}/proxy?url=${encodeURIComponent(u.href)}`;
   } catch (e) {
-    try { const u2 = new URL("https://" + absUrl); return `${DEPLOYMENT_ORIGIN}/proxy?url=${encodeURIComponent(u2.href)}`; }
-    catch (e2) { return absUrl; }
+    try {
+      const u2 = new URL("https://" + absUrl);
+      return `${DEPLOYMENT_ORIGIN}/proxy?url=${encodeURIComponent(u2.href)}`;
+    } catch (e2) {
+      return absUrl;
+    }
   }
 }
+
 function toDeploymentProxyLink(href, base) {
   if (!href) return href;
   if (isAlreadyProxiedHref(href)) {
@@ -218,10 +232,7 @@ function looksLikeAssetPath(urlStr) {
   }
 }
 
-// --------------------------- REWRITE INJECTION (compact, safe) ---------------------------
-// This script rewrites anchors, forms, assets, fetch/xhr to route requests through the deployment proxy.
-// It purposely does NOT inject a visible topbar (topbar is only in our index.html).
-const INJECT_MARKER = "<!--EUPHORIA-REWRITE-INJECTED-->";
+// -------------------- injection script --------------------
 const INJECT_REWRITE_SCRIPT = `
 <script>
 (function(){
@@ -231,7 +242,7 @@ const INJECT_REWRITE_SCRIPT = `
   document.querySelectorAll('a[href]').forEach(a=>{ try{ const h=a.getAttribute('href'); if(!h) return; if(/^(javascript:|mailto:|tel:|#)/i.test(h)) return; if(h.includes('/proxy?url=')) return; a.setAttribute('href', prox(h)); a.removeAttribute('target'); }catch(e){} });
   // forms
   document.querySelectorAll('form[action]').forEach(f=>{ try{ const act = f.getAttribute('action'); if(!act) return; if(act.includes('/proxy?url=')) return; f.setAttribute('action', prox(act)); }catch(e){} });
-  // assets and srcset
+  // assets + srcset
   const attrs = ['src','href','poster','data-src','data-href'];
   ['img','script','link','iframe','source','video','audio'].forEach(tag=>{
     document.querySelectorAll(tag).forEach(el=>{
@@ -292,7 +303,7 @@ const INJECT_REWRITE_SCRIPT = `
 </script>
 `;
 
-// --------------------------- WEBSOCKET TELEMETRY ---------------------------
+// -------------------- WebSocket telemetry --------------------
 const server = app.listen(PORT, () => console.log(`Euphoria v2 running on port ${PORT}`));
 const wss = new WebSocketServer({ server, path: "/_euph_ws" });
 wss.on("connection", ws => {
@@ -301,128 +312,131 @@ wss.on("connection", ws => {
     try {
       const parsed = JSON.parse(raw.toString());
       if (parsed && parsed.cmd === "ping") ws.send(JSON.stringify({ msg: "pong", ts: Date.now() }));
-    } catch (e) {}
+    } catch (e) { /* ignore */ }
   });
 });
 
-// --------------------------- /proxy ENDPOINT ---------------------------
+// -------------------- /proxy handler --------------------
 app.get("/proxy", async (req, res) => {
-  // accept both /proxy?url=... and /proxy/<encoded>
+  // support both /proxy?url=... and /proxy/<encoded>
   let raw = req.query.url || (req.path && req.path.startsWith("/proxy/") ? decodeURIComponent(req.path.replace(/^\/proxy\//, "")) : null);
   if (!raw) return res.status(400).send("Missing url (use /proxy?url=https://example.com)");
 
-  // normalize
+  // normalize shorthand hostnames
   if (!/^https?:\/\//i.test(raw)) raw = "https://" + raw;
 
-  // session and cookie header must be set before streaming begins
+  // get session and set cookie header BEFORE streaming
   const session = getSessionFromReq(req);
   try { setSessionCookieHeader(res, session.sid); } catch (e) {}
 
-  // try small asset cache if not HTML accept
+  // Accept header detection
   const accept = (req.headers.accept || "").toLowerCase();
+
+  // quick asset cache for non-HTML
   const assetKey = raw + "::asset";
   if (!accept.includes("text/html")) {
-    const cachedAsset = cacheGet(assetKey);
-    if (cachedAsset) {
-      if (cachedAsset.headers) Object.entries(cachedAsset.headers).forEach(([k, v]) => res.setHeader(k, v));
-      return res.send(Buffer.from(cachedAsset.body, "base64"));
+    const cached = cacheGet(assetKey);
+    if (cached) {
+      if (cached.headers) Object.entries(cached.headers).forEach(([k, v]) => {
+        try { res.setHeader(k, v); } catch (e) {}
+      });
+      return res.send(Buffer.from(cached.body, "base64"));
     }
   }
 
-  // try HTML cache
+  // HTML cache
   const htmlKey = raw + "::html";
   if (accept.includes("text/html")) {
     const cachedHtml = cacheGet(htmlKey);
     if (cachedHtml) { res.setHeader("Content-Type", "text/html; charset=utf-8"); return res.send(cachedHtml); }
   }
 
-  // build origin request headers
+  // origin headers to pass
   const originHeaders = {
     "User-Agent": req.headers["user-agent"] || "Euphoria/2.0",
     "Accept": req.headers.accept || "*/*",
     "Accept-Language": req.headers["accept-language"] || "en-US,en;q=0.9",
     "Accept-Encoding": "gzip, deflate, br"
   };
-
   const cookieHdr = buildCookieHeader(session.payload.cookies);
   if (cookieHdr) originHeaders["Cookie"] = cookieHdr;
   if (req.headers.referer) originHeaders["Referer"] = req.headers.referer;
 
-  // perform fetch with timeout and retries
+  // fetch from origin with timeout
   let originRes;
   try {
     const controller = new AbortController();
-    const t = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    const to = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     originRes = await fetch(raw, { headers: originHeaders, redirect: "follow", signal: controller.signal });
-    clearTimeout(t);
+    clearTimeout(to);
   } catch (err) {
-    console.error("fetch error", err && err.message ? err.message : err);
+    console.error("fetch error:", err && err.message ? err.message : err);
     return res.status(502).send("Euphoria: failed to fetch target: " + String(err));
   }
 
-  // persist upstream Set-Cookie(s)
+  // store upstream Set-Cookie headers to session
   try {
     const setCookies = originRes.headers.raw ? originRes.headers.raw()["set-cookie"] || [] : [];
     if (setCookies.length) storeSetCookieToSession(setCookies, session.payload);
-  } catch (e) {}
+  } catch (e) { /* ignore */ }
 
-  // examine content-type
   const contentType = (originRes.headers.get("content-type") || "").toLowerCase();
   const isHtml = contentType.includes("text/html");
   const treatAsAsset = looksLikeAssetPath(raw) || !isHtml;
 
-  // If asset, stream binary and cache small ones
+  // Asset path: stream binary (with small caching)
   if (treatAsAsset) {
     // forward safe headers
     originRes.headers.forEach((v, k) => {
-      if (!DROP_HEADERS_LOWER.has(k.toLowerCase())) try { res.setHeader(k, v); } catch(e) {}
+      try { if (!DROP_HEADERS_LOWER.has(k.toLowerCase())) res.setHeader(k, v); } catch (e) {}
     });
-
-    // set session cookie header again (some CDNs require it earlier)
     try { setSessionCookieHeader(res, session.sid); } catch (e) {}
-
     try {
-      // read as arrayBuffer for caching when small
       const arr = await originRes.arrayBuffer();
       const buf = Buffer.from(arr);
-
-      // cache small assets
       if (buf.length < ASSET_CACHE_MAX) {
         try { cacheSet(assetKey, { headers: Object.fromEntries(originRes.headers.entries()), body: buf.toString("base64") }); } catch (e) {}
       }
-
-      // send
       res.setHeader("Content-Type", contentType || "application/octet-stream");
       if (originRes.headers.get("cache-control")) res.setHeader("Cache-Control", originRes.headers.get("cache-control"));
       return res.send(buf);
     } catch (err) {
-      // fallback to streaming
-      try { originRes.body.pipe(res); return; } catch (e) { return res.status(502).send("Euphoria: asset stream failed"); }
+      // fallback streaming
+      try {
+        if (originRes.body && originRes.body.pipe) {
+          originRes.body.pipe(res);
+          return;
+        }
+        return res.status(502).send("Euphoria: asset stream failed");
+      } catch (e) {
+        return res.status(502).send("Euphoria: asset stream failed");
+      }
     }
   }
 
-  // -------------------- HTML transform path --------------------
-  // remove problematic headers from response that would block injected scripts
-  try { originRes.headers.forEach((v, k) => { if (DROP_HEADERS_LOWER.has(k.toLowerCase())) { /* drop */ } else try { res.setHeader(k, v);} catch(e){} }); } catch(e){}
-
-  // set content type for HTML
-  res.setHeader("Content-Type", "text/html; charset=utf-8");
-
-  // stream & transform progressively using scramjet StringStream
+  // HTML path: remove problematic headers and stream transformed HTML
   try {
-    // read as text progressively
+    originRes.headers.forEach((v, k) => {
+      try { if (!DROP_HEADERS_LOWER.has(k.toLowerCase())) res.setHeader(k, v); } catch (e) {}
+    });
+  } catch (e) {}
+
+  // ensure we set content-type
+  try { res.setHeader("Content-Type", "text/html; charset=utf-8"); } catch (e) {}
+
+  // Progressive transform using scramjet StringStream
+  try {
     const s = StringStream.from(originRes.body);
     let injected = false;
-    const parts = [];
-    // Use map to transform chunks; we do simple string-level replacements on chunk boundaries
+    const parts = []; // collect for caching if page small
+
     await s
       .map(chunk => chunk.toString())
       .map(chunk => {
-        // basic sanitization: remove integrity/crossorigin attributes that will break proxied assets
+        // sanitize integrity / crossorigin attributes
         let str = chunk.replace(/\s+integrity=(["'])(.*?)\1/gi, "").replace(/\s+crossorigin=(["'])(.*?)\1/gi, "");
-        // inject base tag near head (helps some relative resources)
+        // attempt to inject base or rewrite script early
         if (!injected) {
-          // attempt to inject base into first head tag or inject rewrite script before </body>
           if (/<head[^>]*>/i.test(str)) {
             const finalUrl = originRes.url || raw;
             str = str.replace(/<head([^>]*)>/i, `<head$1><base href="${finalUrl}">`);
@@ -431,13 +445,11 @@ app.get("/proxy", async (req, res) => {
             str = str.replace(/<\/body>/i, INJECT_REWRITE_SCRIPT + "</body>");
             injected = true;
           } else if (/<\/head>/i.test(str) && !injected) {
-            // insert script into head if body hasn't yet appeared
             str = str.replace(/<\/head>/i, INJECT_REWRITE_SCRIPT + "</head>");
             injected = true;
           }
         }
-        // rewrite some obvious anchors/assets inside chunk-level string to proxy links
-        // This is conservative: only rewrite href/src/action attributes that look relative or absolute
+        // conservative anchor rewrite
         str = str.replace(/(<\s*a\b[^>]*?\bhref=)(["'])([^"']*)\2/gi, function (m, pre, q, val) {
           try {
             if (!val) return m;
@@ -447,7 +459,7 @@ app.get("/proxy", async (req, res) => {
             return `${pre}${q}${proxyizeAbsoluteUrl(abs)}${q}`;
           } catch (e) { return m; }
         });
-        // lightweight rewrite for src/href attributes on common tags
+        // conservative src/href rewrite for common tags
         str = str.replace(/(<\s*(?:img|script|link|source|video|audio|iframe)\b[^>]*?\b(?:src|href)=)(["'])([^"']*)\2/gi, function (m, pre, q, val) {
           try {
             if (!val) return m;
@@ -460,41 +472,40 @@ app.get("/proxy", async (req, res) => {
         return str;
       })
       .each(async transformedChunk => {
-        // write to response incrementally
         try {
           if (!res.headersSent) {
-            // ensure session cookie header is set before sending
             try { setSessionCookieHeader(res, session.sid); } catch (e) {}
           }
-          // store chunks to parts for caching at the end
           parts.push(transformedChunk);
-          // write chunk to response
           res.write(transformedChunk);
         } catch (e) {
-          // ignore write errors — the connection may have closed
+          // If write fails (client disconnected), just ignore and let stream finish
         }
       });
-    // end streaming safely
+
     try { res.end(); } catch (e) {}
-    // cache assembled HTML (but avoid caching very large pages)
+    // cache on success if small
     try {
       const finalHtml = parts.join("");
-      if (finalHtml.length < 512 * 1024) cacheSet(htmlKey, finalHtml);
+      if (finalHtml.length > 0 && finalHtml.length < 512 * 1024) cacheSet(htmlKey, finalHtml);
     } catch (e) {}
     return;
   } catch (err) {
-    console.error("html transform error", err && err.message ? err.message : err);
-    if (!res.headersSent) res.status(500).send("Euphoria: failed to process HTML");
-    else try { res.end(); } catch (e) {}
+    console.error("html transform error:", err && err.message ? err.message : err);
+    if (!res.headersSent) return res.status(500).send("Euphoria: failed to process HTML");
+    try { res.end(); } catch (e) {}
     return;
   }
 });
 
-// --------------------------- fallback root (serve public/index.html) ---------------------------
+// -------------------- root and fallback --------------------
 app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
+  res.sendFile(path.join(__dirname, "public", "index.html"), err => {
+    if (err) res.status(500).send("Failed to serve index.html");
+  });
 });
-// fallback for other GETs that accept HTML — serve index so SPA topbar works
+
+// fallback for HTML accept requests — serve index so SPA topbar works
 app.get("*", (req, res, next) => {
   if (req.method === "GET" && req.headers.accept && req.headers.accept.includes("text/html")) {
     return res.sendFile(path.join(__dirname, "public", "index.html"));
@@ -502,6 +513,6 @@ app.get("*", (req, res, next) => {
   next();
 });
 
-// --------------------------- error handlers ---------------------------
+// -------------------- process handlers --------------------
 process.on("unhandledRejection", err => console.error("unhandledRejection", err));
 process.on("uncaughtException", err => console.error("uncaughtException", err));
