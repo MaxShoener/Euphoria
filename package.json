@@ -1,13 +1,12 @@
 {
   "name": "euphoria-v2",
   "version": "2.0.0",
-  "description": "Euphoria v2 — no-iframe web proxy with HTML rewriting",
+  "description": "Euphoria v2 — no-iframe proxy with HTML rewrite",
   "type": "module",
   "main": "server.js",
   "scripts": { "start": "node server.js" },
   "dependencies": {
     "express": "^4.18.2",
-    "node-fetch": "^3.3.2",
     "jsdom": "^22.1.0",
     "ws": "^8.13.0",
     "compression": "^1.7.4",
