@@ -1,7 +1,7 @@
 {
-  "name": "euphoria-v2-proxy",
+  "name": "euphoria-v2",
   "version": "2.0.0",
-  "description": "EUPHORIA v2 web proxy — full HTML/JS/CSS/images streaming with cookie support",
+  "description": "EUPHORIA v2 — streaming web proxy (no iframe)",
   "type": "module",
   "main": "server.js",
   "scripts": {
@@ -14,9 +14,9 @@
     "compression": "^1.7.4",
     "morgan": "^1.10.0",
     "cors": "^2.8.5",
-    "ws": "^8.15.0"
+    "ws": "^8.13.0"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=18"
   }
 }
