@@ -1,20 +1,17 @@
-# Use official Node.js LTS image
+# Dockerfile — EUPHORIA v2
 FROM node:20-alpine
 
-# Set working directory
 WORKDIR /app
 
-# Copy package.json and package-lock.json
-COPY package*.json ./
+# copy package files first for better layer caching
+COPY package.json package-lock.json* ./
 
-# Install dependencies
+# install production deps
 RUN npm install --omit=dev
 
-# Copy source files
+# copy application code
 COPY . .
 
-# Expose port
 EXPOSE 3000
 
-# Start server
 CMD ["node", "server.js"]
