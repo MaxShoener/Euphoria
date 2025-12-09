@@ -1,18 +1,18 @@
-# Use node 20 slim (compatible with jsdom runtime)
+# Use Node 20 slim for modern global fetch + small footprint
 FROM node:20-slim
 
 WORKDIR /app
 
-# copy package json and install deps (no package-lock required)
-COPY package.json ./
-RUN npm install --omit=dev
+# copy package manifest and install prod deps
+COPY package.json package-lock.json* ./
+RUN npm install --omit=dev --no-audit --no-fund
 
-# copy rest of the app
+# copy app files
 COPY . .
 
-# create cache dir used by server
-RUN mkdir -p /app/cache
+# create cache dir
+RUN mkdir -p /app/cache /app/public
 
 EXPOSE 3000
-
+ENV NODE_ENV=production
 CMD ["node", "server.js"]
