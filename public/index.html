@@ -3,31 +3,32 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Euphoria v2 — Hybrid</title>
+<title>Euphoria v2 — Hybrid (JSDOM)</title>
 <style>
 :root{
-  --bg:#0b0c0e; --panel: rgba(20,20,20,0.48); --muted:#bdbfc3; --accent:#2e7d32;
+  --bg:#0b0c0e;
+  --panel: rgba(18,18,18,0.52);
+  --control: rgba(255,255,255,0.07);
+  --accent:#2e7d32;
+  --muted:#aeb3b7;
 }
-html,body{height:100%;margin:0;background:var(--bg);color:#fff;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;}
-/* SLIM oval top bar */
+html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;background:var(--bg);color:#fff}
 #topbar{
   position:fixed; top:14px; left:50%; transform:translateX(-50%);
-  width:min(1100px,92%); height:52px; border-radius:999px;
+  width:min(1040px,92%); height:52px; border-radius:999px;
   background:var(--panel); display:flex; gap:8px; align-items:center;
-  padding:6px 12px; z-index:2147483647; box-shadow:0 10px 28px rgba(0,0,0,0.5);
+  padding:6px 12px; z-index:2147483647; box-shadow:0 10px 30px rgba(0,0,0,0.5);
   backdrop-filter: blur(8px) saturate(120%);
 }
-.tb-btn{width:40px;height:40px;border-radius:10px;border:0;background:rgba(0,0,0,0.12);color:#fff;font-size:16px;display:grid;place-items:center;cursor:pointer}
+.tb-btn{width:40px;height:40px;border-radius:10px;border:0;background:var(--control);color:#fff;font-size:16px;display:grid;place-items:center;cursor:pointer}
 .tb-btn:active{transform:translateY(1px)}
 #address{height:36px;flex:1;border-radius:10px;border:none;padding:6px 12px;background:rgba(0,0,0,0.22);color:#fff;font-size:14px;outline:2px solid transparent}
 #goBtn{min-width:56px;background:var(--accent)}
-/* progress bar */
 #progressWrap{position:fixed;left:12px;right:12px;top:76px;height:4px;border-radius:4px;overflow:hidden;z-index:2200;pointer-events:none}
 #progress{height:100%;width:0;background:linear-gradient(90deg,#4caf50,#2e7d32);transition:width 140ms linear}
-/* main view */
 #view{position:fixed;top:92px;left:12px;right:12px;bottom:12px;border-radius:12px;overflow:auto;background:#fff;color:#000;box-shadow:0 8px 24px rgba(0,0,0,0.45)}
 #overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.28);z-index:2300}
-.spinner{width:44px;height:44px;border-radius:50%;border:6px solid rgba(255,255,255,0.12);border-top-color:#4caf50;animation:spin 900ms linear infinite}
+.spinner{width:44px;height:44px;border-radius:50%;border:6px solid rgba(255,255,255,0.14);border-top-color:#4caf50;animation:spin 900ms linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 #msg{position:fixed;left:18px;bottom:18px;color:#fff;background:rgba(0,0,0,0.45);padding:8px 12px;border-radius:10px;font-size:13px;display:none;z-index:2400}
 #viewInner{min-height:100%;padding:20px}
@@ -49,9 +50,9 @@ pre{white-space:pre-wrap;word-wrap:break-word}
   <div id="view">
     <div id="overlay"><div class="spinner" aria-hidden="true"></div></div>
     <div id="viewInner" aria-live="polite">
-      <h2 style="margin-top:0">Euphoria v2 — Hybrid</h2>
-      <p style="color:#444">Enter a URL or search above. No iframe — proxied HTML is loaded into this container, rewritten and executed in-place.</p>
-      <p style="color:#444">Examples: <code>google.com</code>, <code>https://xbox.com</code>, or paste a full URL.</p>
+      <h2 style="margin-top:0">Euphoria v2 — Hybrid (JSDOM)</h2>
+      <p style="color:#444">Enter a URL or query above. No iframe — proxied HTML is rewritten and executed in-place.</p>
+      <p style="color:#444">Examples: <code>google.com</code>, <code>https://xbox.com</code></p>
     </div>
   </div>
 
@@ -92,7 +93,7 @@ pre{white-space:pre-wrap;word-wrap:break-word}
     if(push){ historyStack = historyStack.slice(0, historyIndex + 1); historyStack.push(url); historyIndex = historyStack.length - 1; }
     setProgress(6); showOverlay(true);
     try {
-      const res = await fetch('/proxy?url=' + encodeURIComponent(url), { headers: { 'X-Euphoria-Client': 'a3', 'Accept': 'text/html,*/*;q=0.9' }});
+      const res = await fetch('/proxy?url=' + encodeURIComponent(url), { headers: { 'X-Euphoria-Client': 'b1', 'Accept': 'text/html,*/*;q=0.9' }});
       if(!res.ok) throw new Error('Proxy error ' + res.status);
       const ct = (res.headers.get('content-type')||'').toLowerCase();
       if(ct.includes('text/html')){
@@ -123,23 +124,25 @@ pre{white-space:pre-wrap;word-wrap:break-word}
     try{
       const parser = new DOMParser();
       const doc = parser.parseFromString(htmlText, 'text/html');
-      // adopt safe head nodes (styles, links)
+
+      // adopt head (styles & links) but skip inline scripts
       if(doc.head){
         const headChildren = Array.from(doc.head.children);
         headChildren.forEach(node=>{
           try{
-            if(node.tagName && node.tagName.toLowerCase()==='script') return;
-            if(node.tagName && node.tagName.toLowerCase()==='base') return;
+            if(node.tagName && node.tagName.toLowerCase() === 'script') return;
+            if(node.tagName && node.tagName.toLowerCase() === 'base') return;
             document.head.appendChild(document.importNode(node, true));
           } catch(e){}
         });
       }
-      // adopt body into viewInner
+
+      // place proxied body into viewInner
       viewInner.innerHTML = '';
       const bodyChildren = Array.from(doc.body.childNodes);
       bodyChildren.forEach(n=>{ try { viewInner.appendChild(document.importNode(n, true)); } catch(e){} });
 
-      // sequentially execute scripts from injected content (external and inline)
+      // execute scripts sequentially
       const scripts = Array.from(viewInner.querySelectorAll('script'));
       for(const old of scripts){
         await new Promise(resolve=>{
@@ -147,8 +150,7 @@ pre{white-space:pre-wrap;word-wrap:break-word}
             const s = document.createElement('script');
             for(let i=0;i<old.attributes.length;i++){
               const a = old.attributes[i];
-              if(a.name==='src'){
-                // ensure src is proxied if relative (server usually already rewrote)
+              if(a.name === 'src'){
                 s.src = a.value;
                 s.async = false;
                 s.onload = ()=>resolve();
@@ -156,7 +158,7 @@ pre{white-space:pre-wrap;word-wrap:break-word}
                 document.head.appendChild(s);
                 return;
               } else {
-                s.setAttribute(a.name,a.value);
+                s.setAttribute(a.name, a.value);
               }
             }
             s.textContent = old.textContent;
@@ -182,7 +184,7 @@ pre{white-space:pre-wrap;word-wrap:break-word}
   goBtn.addEventListener('click', ()=> { const v = normalizeInput(address.value); if(!v) showMsg('Enter a URL or search'); else fetchProxyAndRender(v, true); });
   address.addEventListener('keydown', (e)=>{ if(e.key==='Enter') goBtn.click(); });
 
-  // initial
+  // initial load
   (function init(){ fetchProxyAndRender('https://www.google.com', true); })();
 })();
 </script>
