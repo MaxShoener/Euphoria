@@ -1,16 +1,20 @@
 {
-  "name": "euphoria-v2",
-  "version": "2.0.0",
-  "description": "Euphoria v2 — no-iframe proxy with HTML rewrite",
+  "name": "euphoria-v2-hybrid",
+  "version": "1.0.0",
   "type": "module",
   "main": "server.js",
-  "scripts": { "start": "node server.js" },
+  "scripts": {
+    "start": "node server.js"
+  },
   "dependencies": {
     "express": "^4.18.2",
-    "jsdom": "^22.1.0",
+    "cheerio": "^1.0.0-rc.12",
     "ws": "^8.13.0",
     "compression": "^1.7.4",
     "morgan": "^1.10.0",
-    "cors": "^2.8.5"
+    "cors": "^2.8.5",
+    "cookie": "^0.5.0",
+    "acorn": "^8.8.2",
+    "escodegen": "^2.0.0"
   }
 }
