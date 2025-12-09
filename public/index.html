@@ -1,121 +1,285 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>EUPHORIA v2 – No-Iframe Proxy</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Euphoria v2 — Slim Oval UI</title>
 <style>
-    body {
-        margin: 0;
-        background: #0f0f0f;
-        color: #fff;
-        font-family: Arial, sans-serif;
-    }
-    header {
-        padding: 15px;
-        background: #1a1a1a;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        border-bottom: 1px solid #333;
-    }
-    #address {
-        flex: 1;
-        padding: 10px;
-        border-radius: 6px;
-        border: none;
-        font-size: 16px;
-        background: #222;
-        color: #fff;
-        outline: none;
-    }
-    #go {
-        padding: 10px 15px;
-        background: #3a78ff;
-        border: none;
-        border-radius: 6px;
-        color: #fff;
-        cursor: pointer;
-        font-size: 15px;
-    }
-    #output {
-        width: 100%;
-        height: calc(100vh - 60px);
-        background: #000;
-        overflow: auto;
-        color: white;
-        padding: 20px;
-        box-sizing: border-box;
-        white-space: pre-wrap;
-        line-height: 1.4;
-    }
+  :root{
+    --bg:#0b0c0d;
+    --panel: rgba(18,18,18,0.55);
+    --control: rgba(255,255,255,0.07);
+    --accent:#2e7d32;
+    --muted:#aeb3b7;
+  }
+  html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;background:var(--bg);color:#fff}
+  /* slim oval top bar, centered */
+  #topbar{
+    position:fixed;
+    top:14px;
+    left:50%;
+    transform:translateX(-50%);
+    width:min(1040px,92%);
+    height:52px;
+    border-radius:999px;
+    background:var(--panel);
+    display:flex;
+    gap:8px;
+    align-items:center;
+    padding:6px 12px;
+    z-index:2147483647;
+    box-shadow:0 10px 30px rgba(0,0,0,0.5);
+    backdrop-filter: blur(8px) saturate(120%);
+  }
+  .tb-btn{
+    width:40px;height:40px;border-radius:10px;border:0;background:var(--control);color:#fff;font-size:16px;display:grid;place-items:center;cursor:pointer;
+  }
+  .tb-btn:active{transform:translateY(1px)}
+  #address{
+    height:36px;flex:1;border-radius:10px;border:none;padding:6px 12px;background:rgba(0,0,0,0.22);color:#fff;font-size:14px;outline:2px solid transparent;
+  }
+  #goBtn{min-width:56px;background:var(--accent)}
+  /* progress bar under topbar */
+  #progressWrap{position:fixed;left:12px;right:12px;top:76px;height:4px;border-radius:4px;overflow:hidden;z-index:2200;pointer-events:none}
+  #progress{height:100%;width:0;background:linear-gradient(90deg,#4caf50,#2e7d32);transition:width 150ms linear}
+  /* main view */
+  #view{
+    position:fixed;top:92px;left:12px;right:12px;bottom:12px;border-radius:12px;overflow:auto;background:#fff;color:#000;box-shadow:0 8px 24px rgba(0,0,0,0.45);
+  }
+  #overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.28);z-index:2300}
+  .spinner{width:44px;height:44px;border-radius:50%;border:6px solid rgba(255,255,255,0.14);border-top-color:#4caf50;animation:spin 900ms linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  #msg{position:fixed;left:18px;bottom:18px;color:#fff;background:rgba(0,0,0,0.45);padding:8px 12px;border-radius:10px;font-size:13px;display:none;z-index:2400}
+  /* content padding */
+  #viewInner{min-height:100%;padding:20px}
+  pre{white-space:pre-wrap;word-wrap:break-word}
 </style>
 </head>
 <body>
+  <div id="topbar" role="navigation" aria-label="Euphoria controls">
+    <button id="back" class="tb-btn" title="Back">◀</button>
+    <button id="forward" class="tb-btn" title="Forward">▶</button>
+    <button id="refresh" class="tb-btn" title="Refresh">⟳</button>
+    <button id="home" class="tb-btn" title="Home">🏠</button>
+    <input id="address" placeholder="Type a URL (example.com) or search (anything with spaces)" />
+    <button id="goBtn" class="tb-btn" title="Go">Go</button>
+  </div>
 
-<header>
-    <input id="address" placeholder="Enter URL or search..." autocomplete="off">
-    <button id="go">Go</button>
-</header>
+  <div id="progressWrap" aria-hidden="true"><div id="progress"></div></div>
 
-<div id="output">Waiting for request...</div>
+  <div id="view">
+    <div id="overlay"><div class="spinner" aria-hidden="true"></div></div>
+    <div id="viewInner" aria-live="polite">
+      <h2 style="margin-top:0">Euphoria</h2>
+      <p style="color:#444">Enter a URL or search above. No iframe — proxied HTML is loaded into this container and rewritten so subresources route through the proxy.</p>
+      <p style="color:#444">Example: <code>google.com</code> or <code>https://xbox.com</code></p>
+    </div>
+  </div>
+
+  <div id="msg" role="status"></div>
 
 <script>
-// -----------------------------
-// NORMALIZE ALL USER INPUT
-// -----------------------------
-function normalizeInput(input) {
-    input = input.trim();
-    if (!input) return "";
+(function(){
+  const address = document.getElementById('address');
+  const goBtn = document.getElementById('goBtn');
+  const viewInner = document.getElementById('viewInner');
+  const overlay = document.getElementById('overlay');
+  const progress = document.getElementById('progress');
+  const msg = document.getElementById('msg');
 
-    // Full URL
-    if (/^https?:\/\//i.test(input)) return input;
+  let historyStack = [], historyIndex = -1;
 
-    // Bare domain (xbox.com)
-    if (/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(input)) {
-        return "https://" + input;
-    }
+  function showMsg(t, ms=3000){ msg.textContent = t; msg.style.display='block'; setTimeout(()=>msg.style.display='none', ms); }
+  function showOverlay(v=true){ overlay.style.display = v ? 'flex' : 'none'; }
+  function setProgress(p){ progress.style.width = Math.max(0,Math.min(100,p)) + '%'; }
 
-    // Treat anything else as a Google search
-    return "https://www.google.com/search?q=" + encodeURIComponent(input);
-}
+  function isLikelySearch(v){
+    if(!v) return true;
+    if(v.includes(' ')) return true;
+    if(/^https?:\/\//i.test(v)) return false;
+    if(/\./.test(v)) return false;
+    return true;
+  }
+  function normalizeInput(v){
+    v = (v||'').trim();
+    if(!v) return '';
+    if(/^https?:\/\//i.test(v)) return v;
+    if(/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(v)) return 'https://' + v;
+    if(isLikelySearch(v)) return 'https://www.google.com/search?q=' + encodeURIComponent(v);
+    return 'https://' + v;
+  }
 
-// -----------------------------
-// REQUEST HANDLER
-// -----------------------------
-async function loadSite(url) {
-    document.getElementById("output").textContent = "Loading…";
-
+  async function fetchProxy(url){
+    // small progress feedback
+    setProgress(10); showOverlay(true);
     try {
-        const res = await fetch("/proxy?url=" + encodeURIComponent(url));
-
+      const res = await fetch('/proxy?url=' + encodeURIComponent(url), { headers: { 'X-Euphoria-Client': 'v2' } });
+      setProgress(40);
+      if(!res.ok) throw new Error(res.status + ' ' + res.statusText);
+      const ct = (res.headers.get('content-type') || '').toLowerCase();
+      // If HTML, load and render DOM; otherwise if it's binary or other, try to show text or blob link
+      if(ct.includes('text/html')){
+        const html = await res.text();
+        setProgress(70);
+        await renderHtml(html, url);
+        setProgress(100);
+        setTimeout(()=> setProgress(0), 220);
+      } else if(ct.includes('application/json') || ct.includes('text/')){
         const txt = await res.text();
-        document.getElementById("output").textContent = txt.substring(0, 500000);
-    } catch (err) {
-        document.getElementById("output").textContent =
-            "Error loading site:\n" + err.toString();
+        viewInner.innerHTML = '<pre>' + escapeHtml(txt) + '</pre>';
+        setProgress(100); setTimeout(()=> setProgress(0), 220);
+      } else {
+        // For binary assets, create blob link and open in new tab
+        const blob = await res.blob();
+        const u = URL.createObjectURL(blob);
+        viewInner.innerHTML = '<div style="padding:20px"><a href="' + u + '" target="_blank">Open resource (binary)</a></div>';
+        setProgress(100); setTimeout(()=> setProgress(0), 220);
+      }
+    } catch(err){
+      viewInner.innerHTML = '<div style="padding:18px;color:#900;background:#fee;border-radius:8px"><h3>Error loading page</h3><pre>' + escapeHtml(String(err)) + '</pre></div>';
+      console.error('load error', err);
+      showMsg('Load failed: ' + (err && err.message ? err.message : String(err)), 6000);
+    } finally {
+      showOverlay(false);
     }
-}
+  }
 
-// -----------------------------
-// BUTTON + ENTER KEY
-// -----------------------------
-document.getElementById("go").addEventListener("click", () => {
-    let input = document.getElementById("address").value;
-    let normalized = normalizeInput(input);
+  function escapeHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-    if (!normalized) {
-        alert("Enter a URL or search");
-        return;
+  async function renderHtml(htmlText, originUrl){
+    // parse the HTML and adopt nodes into our page
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(htmlText, 'text/html');
+
+      // move non-script head nodes to our head (styles, links)
+      if(doc.head){
+        const headChildren = Array.from(doc.head.children);
+        headChildren.forEach(node => {
+          try {
+            // skip base tags (we keep our own)
+            if(node.tagName && node.tagName.toLowerCase() === 'base') return;
+            if(node.tagName && node.tagName.toLowerCase() === 'script') return;
+            document.head.appendChild(document.importNode(node, true));
+          } catch(e){}
+        });
+      }
+
+      // inject transformed body into viewInner
+      viewInner.innerHTML = '';
+      const bodyChildren = Array.from(doc.body.childNodes);
+      bodyChildren.forEach(n => {
+        try { viewInner.appendChild(document.importNode(n, true)); } catch(e){}
+      });
+
+      // execute scripts sequentially: inline scripts and external scripts via proxied srcs will be executed
+      const scripts = Array.from(viewInner.querySelectorAll('script'));
+      for(const old of scripts){
+        await new Promise(resolve => {
+          try {
+            const s = document.createElement('script');
+            // copy attributes
+            for(let i=0;i<old.attributes.length;i++){
+              const a = old.attributes[i];
+              if(a.name === 'src'){
+                // ensure absolute src goes through proxy (server already rewrote in most cases)
+                s.src = a.value;
+                s.async = false;
+                s.onload = () => resolve();
+                s.onerror = () => resolve();
+                document.head.appendChild(s);
+                return;
+              } else {
+                s.setAttribute(a.name, a.value);
+              }
+            }
+            // inline
+            s.textContent = old.textContent;
+            viewInner.appendChild(s);
+            resolve();
+          } catch(e){ resolve(); }
+        });
+        try { old.remove(); } catch(e){}
+      }
+
+      // Some pages assume window.location; make address reflect final origin
+      address.value = originUrl;
+    } catch(e){
+      viewInner.innerHTML = '<pre>' + escapeHtml(htmlText.slice(0,10000)) + '</pre>';
+      console.warn('renderHtml error', e);
     }
+  }
 
-    loadSite(normalized);
-});
+  // Navigation controls
+  document.getElementById('back').addEventListener('click', ()=> {
+    if(historyIndex > 0) loadUrl(historyStack[--historyIndex], false);
+  });
+  document.getElementById('forward').addEventListener('click', ()=> {
+    if(historyIndex < historyStack.length - 1) loadUrl(historyStack[++historyIndex], false);
+  });
+  document.getElementById('refresh').addEventListener('click', ()=> {
+    if(historyIndex >= 0) loadUrl(historyStack[historyIndex], false);
+  });
+  document.getElementById('home').addEventListener('click', ()=> loadUrl('https://www.google.com', true));
+  goBtn.addEventListener('click', ()=> loadUrl(address.value, true));
+  address.addEventListener('keydown', (e)=> { if(e.key === 'Enter') goBtn.click(); });
 
-document.getElementById("address").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") document.getElementById("go").click();
-});
+  async function loadUrl(raw, push = true){
+    const normalized = normalizeInput(raw);
+    if(!normalized){ showMsg('Please enter a URL or search'); return; }
+    if(push){
+      historyStack = historyStack.slice(0, historyIndex + 1);
+      historyStack.push(normalized);
+      historyIndex = historyStack.length - 1;
+    }
+    await fetchProxyAndRender(normalized);
+  }
+
+  async function fetchProxyAndRender(url){
+    setProgress(6);
+    showOverlay(true);
+    try {
+      await fetchProxy(url);
+    } finally {
+      showOverlay(false);
+    }
+  }
+
+  // single-call that uses fetchProxy + render
+  async function fetchProxy(url){
+    setProgress(12);
+    try {
+      const res = await fetch('/proxy?url=' + encodeURIComponent(url), { headers: { 'X-Euphoria-Client': 'v2', 'Accept': 'text/html,*/*;q=0.9' } });
+      if(!res.ok) throw new Error('Proxy failed: ' + res.status + ' ' + res.statusText);
+      const ct = (res.headers.get('content-type')||'').toLowerCase();
+      if(ct.includes('text/html')){
+        const html = await res.text();
+        setProgress(48);
+        await renderHtml(html, url);
+        setProgress(100);
+        setTimeout(()=> setProgress(0), 220);
+      } else if(ct.includes('text') || ct.includes('json')){
+        const txt = await res.text();
+        viewInner.innerHTML = '<pre>' + escapeHtml(txt) + '</pre>';
+        setProgress(100);
+        setTimeout(()=> setProgress(0), 220);
+      } else {
+        // binary
+        const blob = await res.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        viewInner.innerHTML = '<div style="padding:20px"><a href="'+objectUrl+'" target="_blank">Open resource</a></div>';
+        setProgress(100);
+        setTimeout(()=> setProgress(0), 220);
+      }
+    } catch(err){
+      throw err;
+    }
+  }
+
+  // initial: load Google
+  (function init(){ loadUrl('https://www.google.com', true); })();
+
+})();
 </script>
-
 </body>
 </html>
