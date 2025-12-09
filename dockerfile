@@ -1,16 +1,16 @@
-# Use Node 20 slim for modern global fetch + small footprint
+# Use Node 20 slim - modern fetch API + small image
 FROM node:20-slim
 
 WORKDIR /app
 
-# copy package manifest and install prod deps
+# copy package manifest and install deps
 COPY package.json package-lock.json* ./
 RUN npm install --omit=dev --no-audit --no-fund
 
-# copy app files
+# copy application
 COPY . .
 
-# create cache dir
+# create cache directory
 RUN mkdir -p /app/cache /app/public
 
 EXPOSE 3000
