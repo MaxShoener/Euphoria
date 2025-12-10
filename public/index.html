@@ -3,36 +3,33 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Euphoria v2 — Hybrid (JSDOM)</title>
+<title>Euphoria — Proxy</title>
 <style>
 :root{
-  --bg:#0b0c0e;
-  --panel: rgba(18,18,18,0.52);
-  --control: rgba(255,255,255,0.07);
-  --accent:#2e7d32;
-  --muted:#aeb3b7;
+  --bg:#0b0c0e; --panel: rgba(20,20,20,0.46); --control: rgba(255,255,255,0.06);
+  --accent:#2e7d32; --muted:#aeb3b7;
 }
 html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;background:var(--bg);color:#fff}
 #topbar{
   position:fixed; top:14px; left:50%; transform:translateX(-50%);
-  width:min(1040px,92%); height:52px; border-radius:999px;
-  background:var(--panel); display:flex; gap:8px; align-items:center;
-  padding:6px 12px; z-index:2147483647; box-shadow:0 10px 30px rgba(0,0,0,0.5);
+  width:min(1100px,92%); height:56px; border-radius:999px;
+  background:var(--panel); display:flex; gap:10px; align-items:center;
+  padding:6px 14px; z-index:2147483647; box-shadow:0 10px 30px rgba(0,0,0,0.5);
   backdrop-filter: blur(8px) saturate(120%);
 }
-.tb-btn{width:40px;height:40px;border-radius:10px;border:0;background:var(--control);color:#fff;font-size:16px;display:grid;place-items:center;cursor:pointer}
+.tb-btn{width:44px;height:44px;border-radius:12px;border:0;background:var(--control);color:#fff;font-size:16px;display:grid;place-items:center;cursor:pointer}
 .tb-btn:active{transform:translateY(1px)}
-#address{height:36px;flex:1;border-radius:10px;border:none;padding:6px 12px;background:rgba(0,0,0,0.22);color:#fff;font-size:14px;outline:2px solid transparent}
-#goBtn{min-width:56px;background:var(--accent)}
-#progressWrap{position:fixed;left:12px;right:12px;top:76px;height:4px;border-radius:4px;overflow:hidden;z-index:2200;pointer-events:none}
-#progress{height:100%;width:0;background:linear-gradient(90deg,#4caf50,#2e7d32);transition:width 140ms linear}
-#view{position:fixed;top:92px;left:12px;right:12px;bottom:12px;border-radius:12px;overflow:auto;background:#fff;color:#000;box-shadow:0 8px 24px rgba(0,0,0,0.45)}
+#address{height:40px;flex:1;border-radius:12px;border:none;padding:8px 12px;background:rgba(0,0,0,0.22);color:#fff;font-size:14px;outline:2px solid transparent}
+#goBtn{min-width:64px;background:var(--accent)}
+#progressWrap{position:fixed;left:12px;right:12px;top:86px;height:4px;border-radius:4px;overflow:hidden;z-index:2200;pointer-events:none}
+#progress{height:100%;width:0;background:linear-gradient(90deg,#4caf50,#2e7d32);transition:width 120ms linear}
+#view{position:fixed;top:102px;left:12px;right:12px;bottom:12px;border-radius:12px;overflow:auto;background:#fff;color:#000;box-shadow:0 8px 24px rgba(0,0,0,0.45)}
 #overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.28);z-index:2300}
 .spinner{width:44px;height:44px;border-radius:50%;border:6px solid rgba(255,255,255,0.14);border-top-color:#4caf50;animation:spin 900ms linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 #msg{position:fixed;left:18px;bottom:18px;color:#fff;background:rgba(0,0,0,0.45);padding:8px 12px;border-radius:10px;font-size:13px;display:none;z-index:2400}
-#viewInner{min-height:100%;padding:20px}
-pre{white-space:pre-wrap;word-wrap:break-word}
+#viewInner{min-height:100%;padding:18px}
+a.proxy-link{color:var(--accent)}
 </style>
 </head>
 <body>
@@ -50,28 +47,28 @@ pre{white-space:pre-wrap;word-wrap:break-word}
   <div id="view">
     <div id="overlay"><div class="spinner" aria-hidden="true"></div></div>
     <div id="viewInner" aria-live="polite">
-      <h2 style="margin-top:0">Euphoria v2 — Hybrid (JSDOM)</h2>
-      <p style="color:#444">Enter a URL or query above. No iframe — proxied HTML is rewritten and executed in-place.</p>
-      <p style="color:#444">Examples: <code>google.com</code>, <code>https://xbox.com</code></p>
+      <h2 style="margin-top:0">Euphoria</h2>
+      <p style="color:#444">No iframe. Type a host (example.com), url (https://example.com), or a search. Home → Google.</p>
     </div>
   </div>
 
   <div id="msg" role="status"></div>
 
 <script>
-(function(){
+(() => {
+  const DEPLOY = (window.__DEPLOYMENT_ORIGIN__ || location.origin);
   const address = document.getElementById('address');
   const goBtn = document.getElementById('goBtn');
   const viewInner = document.getElementById('viewInner');
   const overlay = document.getElementById('overlay');
-  const progress = document.getElementById('progress');
+  const progressEl = document.getElementById('progress');
   const msg = document.getElementById('msg');
 
   let historyStack = [], historyIndex = -1;
 
   function showMsg(t, ms=3000){ msg.textContent = t; msg.style.display='block'; setTimeout(()=>msg.style.display='none', ms); }
   function showOverlay(v=true){ overlay.style.display = v ? 'flex' : 'none'; }
-  function setProgress(p){ progress.style.width = Math.max(0,Math.min(100,p)) + '%'; }
+  function setProgress(p){ progressEl.style.width = Math.max(0,Math.min(100,p)) + '%'; }
 
   function isLikelySearch(v){
     if(!v) return true;
@@ -83,9 +80,10 @@ pre{white-space:pre-wrap;word-wrap:break-word}
   function normalizeInput(v){
     v = (v||'').trim();
     if(!v) return '';
-    if(/^https?:\/\//i.test(v)) return v;
-    if(/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(v)) return 'https://' + v;
+    // allow shorthand: google.com or /google.com
+    if(v.startsWith('/')) v = v.slice(1);
     if(isLikelySearch(v)) return 'https://www.google.com/search?q=' + encodeURIComponent(v);
+    if(/^https?:\/\//i.test(v)) return v;
     return 'https://' + v;
   }
 
@@ -93,25 +91,25 @@ pre{white-space:pre-wrap;word-wrap:break-word}
     if(push){ historyStack = historyStack.slice(0, historyIndex + 1); historyStack.push(url); historyIndex = historyStack.length - 1; }
     setProgress(6); showOverlay(true);
     try {
-      const res = await fetch('/proxy?url=' + encodeURIComponent(url), { headers: { 'X-Euphoria-Client': 'b1', 'Accept': 'text/html,*/*;q=0.9' }});
-      if(!res.ok) throw new Error('Proxy error ' + res.status);
+      const res = await fetch('/proxy?url=' + encodeURIComponent(url), { headers: { 'X-Euphoria-Client': 'c-autoproxy', 'Accept': 'text/html,*/*;q=0.9' }});
+      if(!res.ok) throw new Error('Proxy error ' + res.status + ' ' + res.statusText);
       const ct = (res.headers.get('content-type')||'').toLowerCase();
       if(ct.includes('text/html')){
         const html = await res.text();
-        setProgress(35);
+        setProgress(30);
         await renderHtml(html, url);
         setProgress(100);
-        setTimeout(()=> setProgress(0), 220);
-      } else if(ct.includes('text') || ct.includes('json')){
+        setTimeout(()=> setProgress(0), 260);
+      } else if(ct.includes('application/json') || ct.includes('text/')){
         const txt = await res.text();
-        viewInner.innerHTML = '<pre>' + escapeHtml(txt) + '</pre>';
+        viewInner.innerHTML = '<pre style="white-space:pre-wrap">'+escapeHtml(txt)+'</pre>';
       } else {
         const blob = await res.blob();
         const u = URL.createObjectURL(blob);
-        viewInner.innerHTML = '<div style="padding:20px"><a href="' + u + '" target="_blank">Open resource</a></div>';
+        viewInner.innerHTML = '<div style="padding:20px"><a href="'+u+'" target="_blank" class="proxy-link">Open resource</a></div>';
       }
-    } catch(err) {
-      viewInner.innerHTML = '<div style="padding:18px;color:#900;background:#fee;border-radius:8px"><h3>Error</h3><pre>' + escapeHtml(String(err)) + '</pre></div>';
+    } catch(err){
+      viewInner.innerHTML = `<div style="padding:18px;color:#900;background:#fee;border-radius:8px"><h3>Error</h3><pre>${escapeHtml(String(err))}</pre></div>`;
       console.error(err);
     } finally {
       showOverlay(false);
@@ -125,58 +123,116 @@ pre{white-space:pre-wrap;word-wrap:break-word}
       const parser = new DOMParser();
       const doc = parser.parseFromString(htmlText, 'text/html');
 
-      // adopt head (styles & links) but skip inline scripts
-      if(doc.head){
-        const headChildren = Array.from(doc.head.children);
-        headChildren.forEach(node=>{
-          try{
-            if(node.tagName && node.tagName.toLowerCase() === 'script') return;
-            if(node.tagName && node.tagName.toLowerCase() === 'base') return;
-            document.head.appendChild(document.importNode(node, true));
-          } catch(e){}
-        });
+      // import head assets (stylesheets only, avoid title/base conflicts)
+      const headChildren = Array.from(doc.head ? doc.head.children : []);
+      headChildren.forEach(node => {
+        try {
+          if(['title','base'].includes(node.tagName.toLowerCase())) return;
+          document.head.appendChild(document.importNode(node, true));
+        } catch(e){}
+      });
+
+      // replace body
+      viewInner.innerHTML = '';
+      const bodyNodes = Array.from(doc.body ? doc.body.childNodes : []);
+      bodyNodes.forEach(n => { try { viewInner.appendChild(document.importNode(n, true)); } catch(e){} });
+
+      // inject sandbox if missing
+      if(!document.getElementById('__euph_sandbox')) {
+        const s = document.createElement('script');
+        s.id = '__euph_sandbox';
+        s.textContent = window.__EUPHORIA_SANDBOX || buildSandboxString();
+        document.head.appendChild(s);
       }
 
-      // place proxied body into viewInner
-      viewInner.innerHTML = '';
-      const bodyChildren = Array.from(doc.body.childNodes);
-      bodyChildren.forEach(n=>{ try { viewInner.appendChild(document.importNode(n, true)); } catch(e){} });
-
-      // execute scripts sequentially
+      // execute proxied scripts sequentially
       const scripts = Array.from(viewInner.querySelectorAll('script'));
       for(const old of scripts){
-        await new Promise(resolve=>{
+        await new Promise(resolve => {
           try{
-            const s = document.createElement('script');
+            const ns = document.createElement('script');
             for(let i=0;i<old.attributes.length;i++){
               const a = old.attributes[i];
+              if(a.name === 'integrity' || a.name === 'crossorigin') continue;
               if(a.name === 'src'){
-                s.src = a.value;
-                s.async = false;
-                s.onload = ()=>resolve();
-                s.onerror = ()=>resolve();
-                document.head.appendChild(s);
+                ns.src = a.value;
+                ns.async = false;
+                ns.onload = ()=>resolve();
+                ns.onerror = ()=>resolve();
+                document.body.appendChild(ns);
                 return;
               } else {
-                s.setAttribute(a.name, a.value);
+                ns.setAttribute(a.name, a.value);
               }
             }
-            s.textContent = old.textContent;
-            viewInner.appendChild(s);
+            ns.textContent = old.textContent;
+            old.replaceWith(ns);
             resolve();
           } catch(e){ resolve(); }
         });
-        try { old.remove(); } catch(e){}
       }
 
       address.value = originUrl;
     } catch(e){
-      viewInner.innerHTML = '<pre>' + escapeHtml(htmlText.slice(0,20000)) + '</pre>';
       console.warn('renderHtml error', e);
+      viewInner.innerHTML = '<pre>' + escapeHtml(htmlText.slice(0,20000)) + '</pre>';
     }
   }
 
-  // controls
+  function buildSandboxString(){
+    return `// EUPHORIA client sandbox fallback (injected)
+(function(){
+  const DEPLOY = "${DEPLOY}";
+  function prox(u){ try{ if(!u) return u; if(u.includes('/proxy?url=')) return u; if(/^data:/i.test(u)) return u; return DEPLOY + '/proxy?url=' + encodeURIComponent(new URL(u, document.baseURI).href); }catch(e){return u;} }
+  // fetch
+  const origFetch = window.fetch.bind(window);
+  window.fetch = function(resource, init){
+    try{
+      if(typeof resource === 'string' && !resource.includes('/proxy?url=') && !/^data:/i.test(resource)) resource = prox(resource);
+      else if(resource instanceof Request){
+        if(!resource.url.includes('/proxy?url=')) resource = new Request(prox(resource.url), resource);
+      }
+    }catch(e){}
+    return origFetch(resource, init);
+  };
+  // XHR
+  try{
+    const OrigXHR = window.XMLHttpRequest;
+    window.XMLHttpRequest = function(){
+      const xhr = new OrigXHR();
+      const origOpen = xhr.open;
+      xhr.open = function(method, url, ...rest){
+        try{ if(url && !url.includes('/proxy?url=') && !/^(data:|blob:|about:|javascript:)/i.test(url)) url = prox(url); }catch(e){}
+        return origOpen.call(this, method, url, ...rest);
+      };
+      return xhr;
+    };
+  }catch(e){}
+  // ws
+  try{
+    const OrigWS = window.WebSocket;
+    window.WebSocket = function(url, proto){
+      try{ if(url && !url.includes('/proxy?url=')) url = DEPLOY + '/_wsproxy?url=' + encodeURIComponent(new URL(url, document.baseURI).href); }catch(e){}
+      return new OrigWS(url, proto);
+    };
+  }catch(e){}
+  // window.open
+  try{
+    const origOpen = window.open.bind(window);
+    window.open = function(url,name,specs){
+      try{ if(url && !url.includes('/proxy?url=') && !/^(data:|javascript:)/i.test(url)) url = prox(url); }catch(e){}
+      return origOpen(url,name,specs);
+    };
+  }catch(e){}
+  // location overrides
+  try { const _assign = location.assign.bind(location); location.assign = function(u){ try{ if(u && !u.includes('/proxy?url=')) u = prox(u); }catch(e){} return _assign(u); }; }catch(e){}
+  try { const _replace = location.replace.bind(location); location.replace = function(u){ try{ if(u && !u.includes('/proxy?url=')) u = prox(u); }catch(e){} return _replace(u); }; }catch(e){}
+  // service worker registration
+  try{ if(navigator && navigator.serviceWorker && navigator.serviceWorker.register){ const origRegister = navigator.serviceWorker.register.bind(navigator.serviceWorker); navigator.serviceWorker.register = function(s,...r){ try{ if(s && !s.includes('/proxy?url=')) s = prox(s); }catch(e){} return origRegister(s,...r); }; } }catch(e){}
+})();
+`;
+  }
+
   document.getElementById('back').addEventListener('click', ()=>{ if(historyIndex>0) fetchProxyAndRender(historyStack[--historyIndex], false); });
   document.getElementById('forward').addEventListener('click', ()=>{ if(historyIndex < historyStack.length-1) fetchProxyAndRender(historyStack[++historyIndex], false); });
   document.getElementById('refresh').addEventListener('click', ()=>{ if(historyIndex >= 0) fetchProxyAndRender(historyStack[historyIndex], false); });
@@ -185,7 +241,7 @@ pre{white-space:pre-wrap;word-wrap:break-word}
   address.addEventListener('keydown', (e)=>{ if(e.key==='Enter') goBtn.click(); });
 
   // initial load
-  (function init(){ fetchProxyAndRender('https://www.google.com', true); })();
+  fetchProxyAndRender('https://www.google.com', true);
 })();
 </script>
 </body>
