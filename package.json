@@ -1,5 +1,5 @@
 {
-  "name": "euphoria-v2-hybrid-jdom",
+  "name": "euphoria-bc-hybrid",
   "version": "1.0.0",
   "type": "module",
   "main": "server.js",
