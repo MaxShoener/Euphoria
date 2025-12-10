@@ -1,23 +1,19 @@
-# Use Node 20 slim as base
+# Euphoria v2 Dockerfile
 FROM node:20-slim
 
 # Set working directory
 WORKDIR /app
 
-# Upgrade npm to latest stable
-RUN npm install -g npm@11.7.0
-
-# Copy package files
+# Copy package files and install dependencies
 COPY package.json package-lock.json* ./
-
-# Install dependencies (omit dev)
 RUN npm install --omit=dev
 
-# Copy application code
-COPY . .
+# Copy full application code
+COPY server.js ./
+COPY public ./public
 
-# Expose default port
+# Expose port
 EXPOSE 3000
 
-# Start server
+# Start the server
 CMD ["node", "server.js"]
