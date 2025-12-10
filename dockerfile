@@ -1,17 +1,18 @@
+# Base image
 FROM node:20-slim
 
+# Set working directory
 WORKDIR /app
 
-# copy package info and install dependencies first (cache layer)
+# Copy package files and install dependencies
 COPY package.json package-lock.json* ./
-RUN npm install --omit=dev --no-audit --no-fund
+RUN npm install --omit=dev
 
-# copy application code
+# Copy application code
 COPY . .
 
-# create cache and public folder (public may already exist)
-RUN mkdir -p /app/cache /app/public
+# Expose the proxy port
+EXPOSE 8000
 
-EXPOSE 3000
-ENV NODE_ENV=production
-CMD ["node", "server.js"]
+# Start the application
+CMD ["npm", "start"]
