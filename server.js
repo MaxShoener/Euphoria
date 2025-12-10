@@ -1,31 +1,23 @@
-// server.js — EUPHORIA v3 (Auto-proxy + Captcha helper)
-// Node 18+ recommended. Uses undici/node-fetch (node-fetch dependency present).
-// See package.json for required dependencies.
-
+// Core imports
 import express from "express";
+import fetch from "node-fetch";
 import compression from "compression";
-import morgan from "morgan";
-import cors from "cors";
-import fs from "fs";
-import fsPromises from "fs/promises";
 import path from "path";
-import { fileURLToPath } from "url";
-import { WebSocketServer } from "ws";
+import fs from "fs";
+import https from "https";
 import http from "http";
-import { createProxyServer } from "http-proxy";
-import fetchPkg from "node-fetch";
-const { Request, Response, Headers, fetch } = fetchPkg;
-import cheerio from "cheerio";
-import cookie from "cookie";
-import setCookieParser from "set-cookie-parser";
-import { URL } from "url";
-import os from "os";
-import pRetry from "p-retry";
-import { Agent } from "http";
-import { Agent: HttpsAgent } from "https";
+import { fileURLToPath } from "url";
 
+// Setup dirname
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Universal agent
+const httpAgent = new http.Agent({ keepAlive: true });
+const httpsAgent = new https.Agent({
+    keepAlive: true,
+    rejectUnauthorized: false // required for Xbox/Google TLS quirks
+}););
 
 // ---------------- CONFIG ----------------
 const DEPLOYMENT_ORIGIN = process.env.DEPLOYMENT_ORIGIN || "https://useful-karil-maxshoener-6cb890d9.koyeb.app";
