@@ -2,14 +2,14 @@ FROM node:20-slim
 
 WORKDIR /app
 
-# copy package & install
+# copy package info and install dependencies first (cache layer)
 COPY package.json package-lock.json* ./
 RUN npm install --omit=dev --no-audit --no-fund
 
-# copy app
+# copy application files
 COPY . .
 
-# prepare cache dir
+# create cache folder
 RUN mkdir -p /app/cache /app/public
 
 EXPOSE 3000
