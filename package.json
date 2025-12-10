@@ -1,7 +1,7 @@
 {
-  "name": "euphoria",
+  "name": "euphoria-bc-hybrid",
   "version": "1.0.0",
-  "description": "Euphoria server",
+  "type": "module",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -9,12 +9,10 @@
   "dependencies": {
     "express": "^4.18.2",
     "jsdom": "^22.1.0",
-    "node-fetch": "^3.3.2",
-    "cookie-parser": "^1.4.6",
-    "uuid": "^9.0.0",
-    "lru-cache": "^10.1.0",
-    "fs-extra": "^11.1.1",
-    "chokidar": "^3.7.1"
-  },
-  "type": "module"
+    "ws": "^8.13.0",
+    "compression": "^1.7.4",
+    "morgan": "^1.10.0",
+    "cors": "^2.8.5",
+    "cookie": "^0.5.0"
+  }
 }
