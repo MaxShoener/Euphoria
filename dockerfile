@@ -1,18 +1,23 @@
-# Base image
+# Use Node 20 slim as base
 FROM node:20-slim
 
 # Set working directory
 WORKDIR /app
 
-# Copy package files and install dependencies
+# Upgrade npm to latest stable
+RUN npm install -g npm@11.7.0
+
+# Copy package files
 COPY package.json package-lock.json* ./
+
+# Install dependencies (omit dev)
 RUN npm install --omit=dev
 
 # Copy application code
 COPY . .
 
-# Expose the proxy port
-EXPOSE 8000
+# Expose default port
+EXPOSE 3000
 
-# Start the application
-CMD ["npm", "start"]
+# Start server
+CMD ["node", "server.js"]
