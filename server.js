@@ -1,7 +1,7 @@
 // server.js
 // EUPHORIA v2 (B1) — JSDOM-powered hybrid smart rewriter
 // - Node 20+ recommended
-// - Dependencies: express, jsdom, ws, compression, morgan, cors, cookie
+// - Dependencies: see package.json (express, jsdom, ws, compression, morgan, cors, cookie)
 
 import express from "express";
 import compression from "compression";
@@ -58,6 +58,7 @@ app.use(compression({ threshold: 1024 }));
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public"), { index: false }));
+
 // ------------------------ CACHE (memory + disk) ------------------------
 const MEM_CACHE = new Map();
 function now(){ return Date.now(); }
@@ -71,10 +72,7 @@ function cacheGet(key){
       if(fs.existsSync(fname)){
         const raw = fs.readFileSync(fname, "utf8");
         const obj = JSON.parse(raw);
-        if((now() - obj.t) < CACHE_TTL){
-          MEM_CACHE.set(key, { v: obj.v, t: obj.t });
-          return obj.v;
-        }
+        if((now() - obj.t) < CACHE_TTL){ MEM_CACHE.set(key, { v: obj.v, t: obj.t }); return obj.v; }
         try { fs.unlinkSync(fname); } catch(e){}
       }
     } catch(e){}
@@ -88,39 +86,19 @@ function cacheSet(key, val){
     fsPromises.writeFile(fname, JSON.stringify({ v: val, t: now() }), "utf8").catch(()=>{});
   }
 }
+
 // ------------------------ SESSIONS / COOKIE STORE ------------------------
 const SESSION_NAME = "euphoria_sid";
 const SESSIONS = new Map();
-
-function makeSid(){
-  return Math.random().toString(36).slice(2) + Date.now().toString(36);
-}
-
-function createSession(){
-  const sid = makeSid();
-  const payload = { cookies: new Map(), last: now(), ua: USER_AGENT_DEFAULT };
-  SESSIONS.set(sid, payload);
-  return { sid, payload };
-}
-
-function parseCookies(header = ""){
-  const out = {};
-  header.split(";").forEach(p => {
-    const [k,v] = (p||"").split("=").map(s => (s||"").trim());
-    if(k && v) out[k] = v;
-  });
-  return out;
-}
-
+function makeSid(){ return Math.random().toString(36).slice(2) + Date.now().toString(36); }
+function createSession(){ const sid = makeSid(); const payload = { cookies: new Map(), last: now(), ua: USER_AGENT_DEFAULT }; SESSIONS.set(sid, payload); return { sid, payload }; }
+function parseCookies(header=""){ const out = {}; header.split(";").forEach(p=>{ const [k,v] = (p||"").split("=").map(s=> (s||"").trim()); if(k && v) out[k]=v; }); return out; }
 function getSessionFromReq(req){
   const parsed = parseCookies(req.headers.cookie || "");
   let sid = parsed[SESSION_NAME] || req.headers["x-euphoria-session"];
   if(!sid || !SESSIONS.has(sid)) return createSession();
-  const payload = SESSIONS.get(sid);
-  payload.last = now();
-  return { sid, payload };
+  const payload = SESSIONS.get(sid); payload.last = now(); return { sid, payload };
 }
-
 function setSessionCookieHeader(res, sid){
   const cookieStr = `${SESSION_NAME}=${sid}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${60*60*24}`;
   const prev = res.getHeader("Set-Cookie");
@@ -128,58 +106,39 @@ function setSessionCookieHeader(res, sid){
   else if(Array.isArray(prev)) res.setHeader("Set-Cookie", [...prev, cookieStr]);
   else res.setHeader("Set-Cookie", [prev, cookieStr]);
 }
-
 function storeSetCookieToSession(setCookies = [], sessionPayload){
   for(const sc of setCookies){
     try {
       const kv = sc.split(";")[0];
       const idx = kv.indexOf("=");
       if(idx === -1) continue;
-      const k = kv.slice(0, idx).trim();
-      const v = kv.slice(idx+1).trim();
+      const k = kv.slice(0, idx).trim(); const v = kv.slice(idx+1).trim();
       if(k) sessionPayload.cookies.set(k, v);
     } catch(e){}
   }
 }
+function buildCookieHeader(map){ return [...map.entries()].map(([k,v]) => `${k}=${v}`).join("; "); }
 
-function buildCookieHeader(map){
-  return [...map.entries()].map(([k,v]) => `${k}=${v}`).join("; ");
-}
+// cleanup stale sessions occasionally
+setInterval(()=>{ const cutoff = Date.now() - (1000*60*60*24); for(const [k,p] of SESSIONS.entries()) if(p.last < cutoff) SESSIONS.delete(k); }, 1000*60*30);
 
-// Cleanup stale sessions every 30 minutes
-setInterval(() => {
-  const cutoff = Date.now() - (1000*60*60*24);
-  for(const [k,p] of SESSIONS.entries()) if(p.last < cutoff) SESSIONS.delete(k);
-}, 1000*60*30);
-// ------------------------ HELPERS / URL REWRITING ------------------------
+// ------------------------ HELPERS ------------------------
 function isAlreadyProxiedHref(href){
   if(!href) return false;
-  try {
+  try{
     if(href.includes('/proxy?url=')) return true;
     const resolved = new URL(href, DEPLOYMENT_ORIGIN);
     if(resolved.origin === (new URL(DEPLOYMENT_ORIGIN)).origin && resolved.pathname.startsWith("/proxy")) return true;
   } catch(e){}
   return false;
 }
-
 function toAbsolute(href, base){
-  try { return new URL(href, base).href; } catch(e) { return null; }
+  try{ return new URL(href, base).href; } catch(e){ return null; }
 }
-
 function proxyizeAbsoluteUrl(abs){
-  try { 
-    const u = new URL(abs);
-    return `${DEPLOYMENT_ORIGIN}/proxy?url=${encodeURIComponent(u.href)}`;
-  } catch(e) { 
-    try { 
-      const u2 = new URL("https://" + abs);
-      return `${DEPLOYMENT_ORIGIN}/proxy?url=${encodeURIComponent(u2.href)}`;
-    } catch(e2) { 
-      return abs; 
-    } 
-  }
+  try { const u = new URL(abs); return `${DEPLOYMENT_ORIGIN}/proxy?url=${encodeURIComponent(u.href)}`; }
+  catch(e){ try { const u2 = new URL("https://" + abs); return `${DEPLOYMENT_ORIGIN}/proxy?url=${encodeURIComponent(u2.href)}`; } catch(e2) { return abs; } }
 }
-
 function looksLikeAsset(urlStr){
   if(!urlStr) return false;
   try {
@@ -205,7 +164,8 @@ function sanitizeHtml(html){
   return html;
 }
 
-// ------------------------ JSDOM TRANSFORM ------------------------
+// JSDOM-based transform: rewrite anchors, assets, forms, srcset, css url(), meta refresh.
+// Returns transformed HTML string.
 function jsdomTransform(html, baseUrl){
   try{
     const dom = new JSDOM(html, { url: baseUrl, contentType: "text/html" });
@@ -237,8 +197,8 @@ function jsdomTransform(html, baseUrl){
 
     // rewrite forms
     const forms = Array.from(document.querySelectorAll('form[action]'));
-    forms.forEach(f => {
-      try {
+    forms.forEach(f=>{
+      try{
         const act = f.getAttribute('action') || '';
         if(!act) return;
         if(isAlreadyProxiedHref(act)) return;
@@ -251,8 +211,8 @@ function jsdomTransform(html, baseUrl){
     const assetTags = ['img','script','link','iframe','source','video','audio'];
     assetTags.forEach(tag => {
       const nodes = Array.from(document.getElementsByTagName(tag));
-      nodes.forEach(el => {
-        try {
+      nodes.forEach(el=>{
+        try{
           const srcAttr = el.getAttribute('src') ? 'src' : (el.getAttribute('href') ? 'href' : null);
           if(!srcAttr) return;
           const v = el.getAttribute(srcAttr);
@@ -261,16 +221,16 @@ function jsdomTransform(html, baseUrl){
           if(isAlreadyProxiedHref(v)) return;
           const abs = toAbsolute(v, baseUrl) || v;
           el.setAttribute(srcAttr, proxyizeAbsoluteUrl(abs));
-        } catch(e){}
+        }catch(e){}
       });
     });
 
     // srcset rewrite
     const srcsetEls = Array.from(document.querySelectorAll('[srcset]'));
-    srcsetEls.forEach(el => {
-      try {
+    srcsetEls.forEach(el=>{
+      try{
         const ss = el.getAttribute('srcset') || '';
-        const parts = ss.split(',').map(p => {
+        const parts = ss.split(',').map(p=>{
           const [u, rest] = p.trim().split(/\s+/,2);
           if(!u) return p;
           if(/^data:/i.test(u)) return p;
@@ -279,24 +239,78 @@ function jsdomTransform(html, baseUrl){
           return proxyizeAbsoluteUrl(abs) + (rest ? ' ' + rest : '');
         });
         el.setAttribute('srcset', parts.join(', '));
+      }catch(e){}
+    });
+
+    // CSS url(...) rewrite in style elements and inline styles
+    const styles = Array.from(document.querySelectorAll('style'));
+    styles.forEach(st=>{
+      try{
+        let txt = st.textContent || '';
+        txt = txt.replace(/url\((['"]?)(.*?)\1\)/gi, (m,q,u)=>{
+          if(!u) return m;
+          if(/^data:/i.test(u)) return m;
+          if(isAlreadyProxiedHref(u)) return m;
+          const abs = toAbsolute(u, baseUrl) || u;
+          return `url("${proxyizeAbsoluteUrl(abs)}")`;
+        });
+        st.textContent = txt;
+      }catch(e){}
+    });
+    const inlines = Array.from(document.querySelectorAll('[style]'));
+    inlines.forEach(el=>{
+      try{
+        const s = el.getAttribute('style') || '';
+        const out = s.replace(/url\((['"]?)(.*?)\1\)/gi, (m,q,u)=>{
+          if(!u) return m;
+          if(/^data:/i.test(u)) return m;
+          if(isAlreadyProxiedHref(u)) return m;
+          const abs = toAbsolute(u, baseUrl) || u;
+          return `url("${proxyizeAbsoluteUrl(abs)}")`;
+        });
+        el.setAttribute('style', out);
+      }catch(e){}
+    });
+
+    // meta refresh rewrite
+    const metas = Array.from(document.querySelectorAll('meta[http-equiv]'));
+    metas.forEach(m=>{
+      try{
+        if((m.getAttribute('http-equiv')||'').toLowerCase() !== 'refresh') return;
+        const c = m.getAttribute('content') || '';
+        const parts = c.split(';');
+        if(parts.length < 2) return;
+        const urlpart = parts.slice(1).join(';').match(/url=(.*)/i);
+        if(!urlpart) return;
+        const dest = urlpart[1].replace(/['"]/g,'').trim();
+        const abs = toAbsolute(dest, baseUrl) || dest;
+        m.setAttribute('content', parts[0] + ';url=' + proxyizeAbsoluteUrl(abs));
       } catch(e){}
     });
 
+    // remove problematic noscript blocks that may hide content when JS disabled (best effort)
+    const noscripts = Array.from(document.getElementsByTagName('noscript'));
+    noscripts.forEach(n => { try { n.parentNode && n.parentNode.removeChild(n); } catch(e){} });
+
+    // finally return serialized HTML
     return dom.serialize();
   } catch(err){
     console.warn("jsdom transform failed", err && err.message ? err.message : err);
     return html;
   }
 }
-// ------------------------ INLINE JS REWRITING ------------------------
+
+// JS rewriting (conservative): rewrite string-literal URLs and simple fetch('/path') occurrences
 function rewriteInlineJs(source, baseUrl){
   try{
-    // 1) fetch('...') -> proxied
+    // safe regex replacements - not perfect but useful for many scripts
+    // 1) fetch('...') and fetch("...") -> proxied
     source = source.replace(/fetch\((['"])([^'"]+?)\1/gi, (m,q,u) => {
       try{
         if(u.includes('/proxy?url=') || /^data:/i.test(u)) return m;
         const abs = toAbsolute(u, baseUrl) || u;
-        return `fetch('${proxyizeAbsoluteUrl(abs)}'`;
+        const prox = proxyizeAbsoluteUrl(abs);
+        return `fetch('${prox}'`;
       } catch(e){ return m; }
     });
     // 2) XHR open: open('GET','/path'...)
@@ -304,10 +318,11 @@ function rewriteInlineJs(source, baseUrl){
       try{
         if(u.includes('/proxy?url=') || /^data:/i.test(u)) return m;
         const abs = toAbsolute(u, baseUrl) || u;
-        return `.open(${p1}${method || ''}${p1},'${proxyizeAbsoluteUrl(abs)}'`;
+        const prox = proxyizeAbsoluteUrl(abs);
+        return `.open(${p1}${method || ''}${p1},'${prox}'`;
       } catch(e){ return m; }
     });
-    // 3) string literals that look like relative/absolute URLs
+    // 3) string literals that look like absolute or relative urls (quick pass) -> proxied
     source = source.replace(/(['"])(\/[^'"]+?\.[a-z0-9]{2,6}[^'"]*?)\1/gi, (m,q,u)=>{
       try{
         if(u.includes('/proxy?url=') || /^data:/i.test(u)) return m;
@@ -316,16 +331,18 @@ function rewriteInlineJs(source, baseUrl){
       } catch(e){ return m; }
     });
     return source;
-  } catch(e){ return source; }
+  } catch(e){
+    return source;
+  }
 }
 
-// ------------------------ SERVICE WORKER PATCH ------------------------
+// Service worker patch (naive safe rewrites): importScripts(...) and fetch('...') string literals
 function patchServiceWorker(source, baseUrl){
   try{
     let s = source;
-    // importScripts(...) -> proxied
     s = s.replace(/importScripts\(([^)]+)\)/gi, (m, args)=>{
       try{
+        // args may be 'a.js', 'b.js'
         const arr = eval("[" + args + "]");
         const out = arr.map(item => {
           if(typeof item === 'string'){
@@ -337,7 +354,6 @@ function patchServiceWorker(source, baseUrl){
         return `importScripts(${out.join(',')})`;
       } catch(e){ return m; }
     });
-    // fetch('...') -> proxied
     s = s.replace(/fetch\((['"])([^'"]+?)\1/gi, (m,q,u)=>{
       try{
         if(u.includes('/proxy?url=') || /^data:/i.test(u)) return m;
@@ -348,6 +364,17 @@ function patchServiceWorker(source, baseUrl){
     return s;
   } catch(e){ return source; }
 }
+
+// ------------------------ WEBSOCKET TELEMETRY ------------------------
+const server = app.listen(PORT, () => console.log(`Euphoria v2 (B1 JSDOM) running on port ${PORT}`));
+const wss = new WebSocketServer({ server, path: "/_euph_ws" });
+wss.on("connection", ws=>{
+  ws.send(JSON.stringify({ msg:"welcome", ts: Date.now() }));
+  ws.on("message", raw => {
+    try { const parsed = JSON.parse(raw.toString()); if(parsed && parsed.cmd === 'ping') ws.send(JSON.stringify({ msg:'pong', ts: Date.now() })); } catch(e){}
+  });
+});
+
 // ------------------------ MAIN /proxy ENDPOINT ------------------------
 app.get("/proxy", async (req, res) => {
   // accept both /proxy?url=... and /proxy/<encoded>
@@ -501,19 +528,26 @@ ${clientMarker}
     for(const s of scripts){
       try {
         const src = s.getAttribute('src');
-        if(src) continue; // already proxied
+        if(src) {
+          // external scripts should already be proxied by earlier transform (src points to our /proxy)
+          continue;
+        }
         let code = s.textContent || '';
         if(!code.trim()) continue;
+        // if likely a service worker registration or SW code, patch service worker API calls
         const lower = code.slice(0, 300).toLowerCase();
         if(lower.includes('self.addeventlistener') || lower.includes('importscripts') || lower.includes('caches.open')){
           code = patchServiceWorker(code, originRes.url || raw);
         }
+        // conservative inline JS rewriting
         code = rewriteInlineJs(code, originRes.url || raw);
         s.textContent = code;
       } catch(e){}
     }
     transformed = dom2.serialize();
-  } catch(e){ console.warn("post-process inline scripts failed", e && e.message ? e.message : e); }
+  } catch(e){
+    console.warn("post-process inline scripts failed", e && e.message ? e.message : e);
+  }
 
   // forward safe headers
   try{ originRes.headers.forEach((v,k) => { if(!DROP_HEADERS.has(k.toLowerCase())) try{ res.setHeader(k,v) } catch(e){} }); } catch(e){}
@@ -526,6 +560,7 @@ ${clientMarker}
 
   return res.send(transformed);
 });
+
 // ------------------------ FALLBACK: direct-path requests using Referer ------------------------
 app.use(async (req, res, next) => {
   const p = req.path || "/";
@@ -546,11 +581,7 @@ app.use(async (req, res, next) => {
   try{
     const session = getSessionFromReq(req);
     setSessionCookieHeader(res, session.sid);
-    const originHeaders = { 
-      "User-Agent": session.payload.ua || USER_AGENT_DEFAULT, 
-      "Accept": req.headers.accept || "*/*", 
-      "Accept-Language": req.headers['accept-language'] || "en-US,en;q=0.9" 
-    };
+    const originHeaders = { "User-Agent": session.payload.ua || USER_AGENT_DEFAULT, "Accept": req.headers.accept || "*/*", "Accept-Language": req.headers['accept-language'] || "en-US,en;q=0.9" };
     const cookieHdr = buildCookieHeader(session.payload.cookies);
     if(cookieHdr) originHeaders["Cookie"] = cookieHdr;
 
@@ -561,10 +592,7 @@ app.use(async (req, res, next) => {
 
     if([301,302,303,307,308].includes(originRes.status)){
       const loc = originRes.headers.get("location");
-      if(loc){ 
-        const abs = new URL(loc, attempted).href; 
-        return res.redirect(proxyizeAbsoluteUrl(abs)); 
-      }
+      if(loc){ const abs = new URL(loc, attempted).href; return res.redirect(proxyizeAbsoluteUrl(abs)); }
     }
 
     const ct = (originRes.headers.get("content-type") || "").toLowerCase();
@@ -582,18 +610,7 @@ app.use(async (req, res, next) => {
     const final = transformed.replace(/<\/body>/i, `
 <script>
 /* EUPHORIA FALLBACK */
-(function(){ 
-  const D="${DEPLOYMENT_ORIGIN}"; 
-  (function(){ 
-    const orig = window.fetch; 
-    window.fetch = function(r,i){ 
-      try{ 
-        if(typeof r==='string' && !r.includes('/proxy?url=')) r = D + '/proxy?url=' + encodeURIComponent(new URL(r, document.baseURI).href); 
-      }catch(e){} 
-      return orig.call(this,r,i); 
-    }; 
-  })(); 
-})();
+(function(){ const D="${DEPLOYMENT_ORIGIN}"; (function(){ const orig = window.fetch; window.fetch = function(r,i){ try{ if(typeof r==='string' && !r.includes('/proxy?url=')) r = D + '/proxy?url=' + encodeURIComponent(new URL(r, document.baseURI).href); }catch(e){} return orig.call(this,r,i); }; })(); })();
 </script></body>`);
     originRes.headers.forEach((v,k)=>{ if(!DROP_HEADERS.has(k.toLowerCase())) try{ res.setHeader(k,v) } catch(e){} });
     res.setHeader("Content-Type","text/html; charset=utf-8");
@@ -607,81 +624,10 @@ app.use(async (req, res, next) => {
 // ------------------------ SPA fallback ------------------------
 app.get("/", (req,res) => res.sendFile(path.join(__dirname, "public", "index.html")));
 app.get("*", (req,res,next) => {
-  if(req.method === "GET" && req.headers.accept && req.headers.accept.includes("text/html")) 
-    return res.sendFile(path.join(__dirname, "public", "index.html"));
+  if(req.method === "GET" && req.headers.accept && req.headers.accept.includes("text/html")) return res.sendFile(path.join(__dirname, "public", "index.html"));
   next();
 });
 
 // ------------------------ ERRORS ------------------------
 process.on("unhandledRejection", err => console.error("unhandledRejection", err));
 process.on("uncaughtException", err => console.error("uncaughtException", err));
-// ------------------------ SECTION 9: ERROR HANDLING & LOGGING ------------------------
-process.on("unhandledRejection", (err) => {
-  console.error("[EUPHORIA ERROR] unhandledRejection:", err && err.stack ? err.stack : err);
-});
-
-process.on("uncaughtException", (err) => {
-  console.error("[EUPHORIA ERROR] uncaughtException:", err && err.stack ? err.stack : err);
-});
-
-// optional: capture warnings
-process.on("warning", (warning) => {
-  console.warn("[EUPHORIA WARNING]:", warning.name, warning.message, warning.stack);
-});
-
-// ------------------------ SECTION 10: OPTIONAL EXTENSIONS / PLUGINS ------------------------
-// Example hooks for extending Euphoria functionality
-const EXTENSIONS = new Map();
-
-// register an extension
-function registerExtension(name, fn) {
-  if(typeof fn !== "function") throw new Error("Extension must be a function");
-  EXTENSIONS.set(name, fn);
-}
-
-// run all extensions on HTML transform
-async function runExtensions(html, context={}) {
-  let output = html;
-  for(const [name, fn] of EXTENSIONS.entries()) {
-    try { output = await fn(output, context) || output; } catch(e){ console.error(`Extension ${name} failed:`, e); }
-  }
-  return output;
-}
-
-// Example usage: add a small banner to all HTML pages
-registerExtension("bannerInject", (html, context) => {
-  if(!html.includes("<body")) return html;
-  const banner = `<div style="position:fixed;top:0;width:100%;background:#222;color:#fff;text-align:center;z-index:9999;font-family:sans-serif;padding:4px 0;font-size:12px;">Euphoria Proxy Active</div>`;
-  return html.replace(/<body[^>]*>/i, (match) => match + banner);
-});
-
-// ------------------------ SECTION 11: ADMIN / DEBUG ENDPOINTS ------------------------
-app.get("/_euph_debug/sessions", (req, res) => {
-  // optionally add simple auth here
-  const sessions = {};
-  for(const [sid, payload] of SESSIONS.entries()){
-    sessions[sid] = {
-      lastActive: new Date(payload.last).toISOString(),
-      cookies: Object.fromEntries(payload.cookies.entries()),
-      ua: payload.ua
-    };
-  }
-  res.json({ activeSessions: sessions });
-});
-
-app.get("/_euph_debug/cache", (req, res) => {
-  const memCache = {};
-  for(const [key, val] of MEM_CACHE.entries()){
-    memCache[key] = { ageSec: Math.floor((Date.now() - val.t)/1000), size: val.v.length || 0 };
-  }
-  res.json({ memoryCache: memCache });
-});
-
-app.get("/_euph_debug/extensions", (req, res) => {
-  res.json({ registeredExtensions: Array.from(EXTENSIONS.keys()) });
-});
-
-// simple ping endpoint
-app.get("/_euph_debug/ping", (req,res) => res.json({ msg:"pong", ts:Date.now() }));
-
-// ------------------------ END OF SECTIONS 9-11 ------------------------
