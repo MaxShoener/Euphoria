@@ -1,5 +1,6 @@
-// server.js — EUPHORIA C / Auto-proxy (no iframe)
-// Node 18+ required (global fetch available). Uses cheerio for HTML parsing.
+// server.js — EUPHORIA v3 (Auto-proxy + Captcha helper)
+// Node 18+ recommended. Uses undici/node-fetch (node-fetch dependency present).
+// See package.json for required dependencies.
 
 import express from "express";
 import compression from "compression";
@@ -9,10 +10,19 @@ import fs from "fs";
 import fsPromises from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
-import cheerio from "cheerio";
 import { WebSocketServer } from "ws";
+import http from "http";
+import { createProxyServer } from "http-proxy";
+import fetchPkg from "node-fetch";
+const { Request, Response, Headers, fetch } = fetchPkg;
+import cheerio from "cheerio";
 import cookie from "cookie";
+import setCookieParser from "set-cookie-parser";
+import { URL } from "url";
 import os from "os";
+import pRetry from "p-retry";
+import { Agent } from "http";
+import { Agent: HttpsAgent } from "https";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -22,19 +32,21 @@ const DEPLOYMENT_ORIGIN = process.env.DEPLOYMENT_ORIGIN || "https://useful-karil
 const PORT = parseInt(process.env.PORT || "3000", 10);
 const CACHE_DIR = path.join(__dirname, "cache");
 const ENABLE_DISK_CACHE = true;
-const CACHE_TTL = 1000 * 60 * 6;
-const ASSET_CACHE_MAX = 256 * 1024;
+const CACHE_TTL = 1000 * 60 * 6; // 6 minutes
+const ASSET_CACHE_MAX = 256 * 1024; // 256 KB
+const HTML_CACHE_MAX = 512 * 1024; // 512 KB
 const FETCH_TIMEOUT = 30000;
 const SESSION_NAME = "euphoria_sid";
 const USER_AGENT_FALLBACK = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120 Safari/537.36";
 
-if(ENABLE_DISK_CACHE) fsPromises.mkdir(CACHE_DIR, { recursive: true }).catch(()=>{});
+// Create cache directory
+if (ENABLE_DISK_CACHE) fsPromises.mkdir(CACHE_DIR, { recursive: true }).catch(() => {});
 
-// asset extensions treated as binary
-const ASSET_EXTENSIONS = [".wasm",".js",".mjs",".css",".png",".jpg",".jpeg",".webp",".gif",".svg",".ico",".ttf",".woff",".woff2",".eot",".mp4",".webm",".mp3",".json",".map"];
-const SPECIAL_FILES = ["service-worker.js","sw.js","worker.js","manifest.json"];
+// Asset file endings (binary)
+const ASSET_EXTENSIONS = [".wasm", ".js", ".mjs", ".css", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".ico", ".ttf", ".woff", ".woff2", ".eot", ".mp4", ".webm", ".mp3", ".json", ".map"];
+const SPECIAL_FILES = ["service-worker.js", "sw.js", "worker.js", "manifest.json"];
 
-// headers to drop (CSP etc.)
+// Headers to drop (CSP / blocking)
 const DROP_HEADERS = new Set([
   "content-security-policy",
   "x-frame-options",
@@ -44,7 +56,7 @@ const DROP_HEADERS = new Set([
   "permissions-policy"
 ]);
 
-// ---------------- APP ----------------
+// ---------------- EXPRESS SETUP ----------------
 const app = express();
 app.use(cors());
 app.use(morgan("tiny"));
@@ -53,191 +65,164 @@ app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public"), { index: false }));
 
-// ---------------- CACHE ----------------
+// ---------------- SIMPLE CACHE ----------------
 const MEM_CACHE = new Map();
-function now(){ return Date.now(); }
-function cacheKey(s){ return Buffer.from(s).toString("base64url"); }
-function cacheGet(key){
+function now() { return Date.now(); }
+function cacheKey(s) { return Buffer.from(s).toString("base64url"); }
+function cacheGet(key) {
   const e = MEM_CACHE.get(key);
-  if(e && (now() - e.t) < CACHE_TTL) return e.v;
-  if(ENABLE_DISK_CACHE){
+  if (e && (now() - e.t) < CACHE_TTL) return e.v;
+  if (ENABLE_DISK_CACHE) {
     try {
-      const f = path.join(CACHE_DIR, cacheKey(key));
-      if(fs.existsSync(f)){
-        const raw = fs.readFileSync(f, "utf8");
+      const fname = path.join(CACHE_DIR, cacheKey(key));
+      if (fs.existsSync(fname)) {
+        const raw = fs.readFileSync(fname, "utf8");
         const obj = JSON.parse(raw);
-        if((now() - obj.t) < CACHE_TTL) { MEM_CACHE.set(key, { v: obj.v, t: obj.t }); return obj.v; }
-        try{ fs.unlinkSync(f); } catch(e){}
+        if ((now() - obj.t) < CACHE_TTL) { MEM_CACHE.set(key, { v: obj.v, t: obj.t }); return obj.v; }
+        try { fs.unlinkSync(fname); } catch (e) { /* ignore */ }
       }
-    } catch(e){}
+    } catch (e) { /* ignore */ }
   }
   return null;
 }
-function cacheSet(key, val){
+function cacheSet(key, val) {
   MEM_CACHE.set(key, { v: val, t: now() });
-  if(ENABLE_DISK_CACHE){
-    const f = path.join(CACHE_DIR, cacheKey(key));
-    fsPromises.writeFile(f, JSON.stringify({ v: val, t: now() }), "utf8").catch(()=>{});
+  if (ENABLE_DISK_CACHE) {
+    const fname = path.join(CACHE_DIR, cacheKey(key));
+    fsPromises.writeFile(fname, JSON.stringify({ v: val, t: now() }), "utf8").catch(() => { });
   }
 }
 
-// ---------------- SESSIONS ----------------
+// ---------------- SESSION / COOKIES ----------------
 const SESSIONS = new Map();
-function makeSid(){ return Math.random().toString(36).slice(2) + Date.now().toString(36); }
-function createSession(){ const sid = makeSid(); const payload = { cookies: new Map(), ua: USER_AGENT_FALLBACK, last: now() }; SESSIONS.set(sid, payload); return { sid, payload }; }
-function parseCookies(header=""){ const out={}; header.split(";").forEach(p=>{ const [k,v] = (p||"").split("=").map(s => (s||"").trim()); if(k && v) out[k] = v; }); return out; }
-function getSessionFromReq(req){ const parsed = parseCookies(req.headers.cookie || ""); let sid = parsed[SESSION_NAME] || req.headers["x-euphoria-session"]; if(!sid || !SESSIONS.has(sid)) return createSession(); const payload = SESSIONS.get(sid); payload.last = now(); return { sid, payload }; }
-function setSessionCookie(res, sid){ const str = `${SESSION_NAME}=${sid}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${60*60*24}`; const prev = res.getHeader("Set-Cookie"); if(!prev) res.setHeader("Set-Cookie", str); else if(Array.isArray(prev)) res.setHeader("Set-Cookie", [...prev, str]); else res.setHeader("Set-Cookie", [prev, str]); }
-function storeSetCookie(setCookies=[], sessionPayload){ for(const sc of setCookies){ try{ const kv = sc.split(";")[0]; const idx = kv.indexOf("="); if(idx === -1) continue; const k = kv.slice(0, idx).trim(); const v = kv.slice(idx+1).trim(); if(k) sessionPayload.cookies.set(k, v); } catch(e){} } }
-function buildCookieHeader(map){ return [...map.entries()].map(([k,v]) => `${k}=${v}`).join("; "); }
+function makeSid() { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
+function createSession() { const sid = makeSid(); const payload = { cookies: new Map(), last: now(), ua: USER_AGENT_FALLBACK }; SESSIONS.set(sid, payload); return { sid, payload }; }
+function parseCookieHeader(h = "") {
+  const out = {};
+  h.split(";").forEach(p => {
+    const [k, v] = (p || "").split("=").map(s => (s || "").trim());
+    if (k && v) out[k] = v;
+  });
+  return out;
+}
+function getSessionFromReq(req) {
+  const parsed = parseCookieHeader(req.headers.cookie || "");
+  let sid = parsed[SESSION_NAME] || req.headers["x-euphoria-session"];
+  if (!sid || !SESSIONS.has(sid)) return createSession();
+  const payload = SESSIONS.get(sid);
+  payload.last = now();
+  return { sid, payload };
+}
+function setSessionCookieHeader(res, sid) {
+  const cookieStr = `${SESSION_NAME}=${sid}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${60 * 60 * 24}`;
+  const prev = res.getHeader("Set-Cookie");
+  if (!prev) res.setHeader("Set-Cookie", cookieStr);
+  else if (Array.isArray(prev)) res.setHeader("Set-Cookie", [...prev, cookieStr]);
+  else res.setHeader("Set-Cookie", [prev, cookieStr]);
+}
+function storeSetCookieToSession(setCookies = [], sessionPayload) {
+  for (const sc of setCookies) {
+    try {
+      const parsed = setCookieParser.parse(sc);
+      parsed.forEach(p => {
+        if (p.name && p.value) sessionPayload.cookies.set(p.name, p.value);
+      });
+    } catch (e) { /* ignore */ }
+  }
+}
+function buildCookieHeader(map) {
+  return [...map.entries()].map(([k, v]) => `${k}=${v}`).join("; ");
+}
 
-// periodic cleanup
-setInterval(()=>{ const cutoff = now() - (1000*60*60*24); for(const [k,p] of SESSIONS.entries()) if(p.last < cutoff) SESSIONS.delete(k); }, 1000*60*30);
+// cleanup old sessions occasionally
+setInterval(() => {
+  const cutoff = now() - (1000 * 60 * 60 * 24); // 24h TTL for this demo
+  for (const [k, v] of SESSIONS.entries()) if (v.last < cutoff) SESSIONS.delete(k);
+}, 1000 * 60 * 30);
 
-// ---------------- HELPERS ----------------
-function isAlreadyProxied(href){
-  if(!href) return false;
+// ---------------- UTIL FUNCTIONS ----------------
+function toAbsolute(href, base) {
+  try { return new URL(href, base).href; } catch (e) { return null; }
+}
+function isAlreadyProxiedHref(href) {
+  if (!href) return false;
   try {
-    if(href.includes('/proxy?url=')) return true;
+    if (href.includes('/proxy?url=')) return true;
     const resolved = new URL(href, DEPLOYMENT_ORIGIN);
-    if(resolved.origin === (new URL(DEPLOYMENT_ORIGIN)).origin && resolved.pathname.startsWith("/proxy")) return true;
-  } catch(e){}
+    if (resolved.origin === (new URL(DEPLOYMENT_ORIGIN)).origin && resolved.pathname.startsWith("/proxy")) return true;
+  } catch (e) { /* ignore */ }
   return false;
 }
-function toAbsolute(href, base){ try { return new URL(href, base).href; } catch(e){ return null; } }
-function proxyLink(abs){ try{ const u = new URL(abs); return `${DEPLOYMENT_ORIGIN}/proxy?url=${encodeURIComponent(u.href)}`; } catch(e){ try{ const u2 = new URL("https://" + abs); return `${DEPLOYMENT_ORIGIN}/proxy?url=${encodeURIComponent(u2.href)}`; } catch(e2){ return abs; } } }
-function looksLikeAsset(u){
-  if(!u) return false;
+function proxyizeAbsoluteUrl(absUrl) {
+  try { const u = new URL(absUrl); return `${DEPLOYMENT_ORIGIN}/proxy?url=${encodeURIComponent(u.href)}`; } catch (e) { try { const u2 = new URL("https://" + absUrl); return `${DEPLOYMENT_ORIGIN}/proxy?url=${encodeURIComponent(u2.href)}`; } catch (e2) { return absUrl; } }
+}
+function looksLikeAssetPath(urlStr) {
+  if (!urlStr) return false;
   try {
-    const p = new URL(u, DEPLOYMENT_ORIGIN).pathname.toLowerCase();
-    for(const ext of ASSET_EXTENSIONS) if(p.endsWith(ext)) return true;
-    for(const s of SPECIAL_FILES) if(p.endsWith(s)) return true;
+    const p = new URL(urlStr, DEPLOYMENT_ORIGIN).pathname.toLowerCase();
+    for (const ext of ASSET_EXTENSIONS) if (p.endsWith(ext)) return true;
+    for (const seg of SPECIAL_FILES) if (p.endsWith(seg)) return true;
     return false;
-  } catch(e){
-    const low = u.toLowerCase();
-    for(const ext of ASSET_EXTENSIONS) if(low.endsWith(ext)) return true;
-    for(const s of SPECIAL_FILES) if(low.endsWith(s)) return true;
+  } catch (e) {
+    const low = urlStr.toLowerCase();
+    for (const ext of ASSET_EXTENSIONS) if (low.endsWith(ext)) return true;
+    for (const seg of SPECIAL_FILES) if (low.endsWith(seg)) return true;
     return false;
   }
 }
-function sanitize(html){ try{ html = html.replace(/<meta[^>]*http-equiv=["']?content-security-policy["']?[^>]*>/gi, ""); html = html.replace(/\s+integrity=(["'])(.*?)\1/gi, ""); html = html.replace(/\s+crossorigin=(["'])(.*?)\1/gi, ""); }catch(e){} return html; }
+function sanitizeHtml(html) {
+  try {
+    html = html.replace(/<meta[^>]*http-equiv=["']?content-security-policy["']?[^>]*>/gi, "");
+    html = html.replace(/\s+integrity=(["'])(.*?)\1/gi, "");
+    html = html.replace(/\s+crossorigin=(["'])(.*?)\1/gi, "");
+  } catch (e) { /* ignore */ }
+  return html;
+}
 
-// ---------------- INJECTION SNIPPET (client sandbox) ----------------
-function clientSandboxSnippet(){
+// ---------------- CLIENT SANDBOX SNIPPET ----------------
+function clientSandboxSnippet() {
   return `
 <!-- EUPHORIA-SANDBOX -->
 <script id="__EUPHORIA_SANDBOX">
 (function(){
   const DEPLOY = "${DEPLOYMENT_ORIGIN}";
   function prox(u){ try{ if(!u) return u; if(u.includes('/proxy?url=')) return u; if(/^data:/i.test(u)) return u; return DEPLOY + '/proxy?url=' + encodeURIComponent(new URL(u, document.baseURI).href); }catch(e){return u;} }
-  // fetch
-  (function(){
-    const orig = window.fetch.bind(window);
-    window.fetch = function(resource, init){
-      try{
-        if(typeof resource === 'string' && !resource.includes('/proxy?url=') && !/^data:/i.test(resource)) resource = prox(resource);
-        else if(resource instanceof Request && !resource.url.includes('/proxy?url=')) resource = new Request(prox(resource.url), resource);
-      }catch(e){}
-      return orig(resource, init);
+  // fetch wrapper
+  const origFetch = window.fetch.bind(window);
+  window.fetch = function(resource, init){
+    try{
+      if(typeof resource === 'string' && !resource.includes('/proxy?url=') && !/^data:/i.test(resource)) resource = prox(resource);
+      else if(resource instanceof Request && !resource.url.includes('/proxy?url=')) resource = new Request(prox(resource.url), resource);
+    }catch(e){}
+    return origFetch(resource, init);
+  };
+  // XHR wrapper
+  try {
+    const OrigXHR = window.XMLHttpRequest;
+    window.XMLHttpRequest = function(){
+      const xhr = new OrigXHR();
+      const open = xhr.open;
+      xhr.open = function(method, url, ...rest){
+        try { if(url && !url.includes('/proxy?url=') && !/^(data:|blob:|about:|javascript:)/i.test(url)) url = prox(url); } catch(e){}
+        return open.call(this, method, url, ...rest);
+      };
+      return xhr;
     };
-  })();
-  // XHR
-  (function(){
-    try{
-      const Orig = window.XMLHttpRequest;
-      window.XMLHttpRequest = function(){
-        const xhr = new Orig();
-        const open = xhr.open;
-        xhr.open = function(method, url, ...rest){
-          try{ if(url && !url.includes('/proxy?url=') && !/^(data:|blob:|about:|javascript:)/i.test(url)) url = prox(url); }catch(e){}
-          return open.call(this, method, url, ...rest);
-        };
-        return xhr;
-      };
-    }catch(e){}
-  })();
-  // WebSocket
-  (function(){
-    try{
-      const Orig = window.WebSocket;
-      window.WebSocket = function(url, protocol){
-        try{ if(url && !url.includes('/proxy?url=')) url = DEPLOY + '/_wsproxy?url=' + encodeURIComponent(new URL(url, document.baseURI).href); }catch(e){}
-        return new Orig(url, protocol);
-      };
-    }catch(e){}
-  })();
+  } catch(e){}
   // window.open
-  (function(){
+  try {
     const origOpen = window.open.bind(window);
-    window.open = function(url, name, specs){
+    window.open = function(url,name,specs){
       try{ if(url && !url.includes('/proxy?url=') && !/^(data:|javascript:)/i.test(url)) url = prox(url); }catch(e){}
-      return origOpen(url, name, specs);
+      return origOpen(url,name,specs);
     };
-  })();
-  // service worker register
+  } catch(e){}
+  // rewrite anchors & assets dynamically
   (function(){
-    try{
-      if(navigator && navigator.serviceWorker && navigator.serviceWorker.register){
-        const origRegister = navigator.serviceWorker.register.bind(navigator.serviceWorker);
-        navigator.serviceWorker.register = function(scriptURL, options){
-          try{ if(scriptURL && !scriptURL.includes('/proxy?url=')) scriptURL = prox(scriptURL); }catch(e){}
-          return origRegister(scriptURL, options);
-        };
-      }
-    }catch(e){}
-  })();
-  // rewrite anchors and assets dynamically
-  (function(){
-    function rewriteAnchor(a){
-      try{
-        const h = a.getAttribute('href'); if(!h) return;
-        if(/^(javascript:|mailto:|tel:|#)/i.test(h)) return;
-        if(h.includes('/proxy?url=')) return;
-        a.setAttribute('href', prox(h));
-        a.removeAttribute('target');
-      }catch(e){}
-    }
-    function rewriteAsset(el){
-      try{
-        ['src','href','poster','data-src','data-href'].forEach(attr=>{
-          if(el.hasAttribute && el.hasAttribute(attr)){
-            const v = el.getAttribute(attr); if(!v) return;
-            if(/^data:/i.test(v) || v.includes('/proxy?url=')) return;
-            el.setAttribute(attr, prox(v));
-          }
-        });
-        if(el.hasAttribute && el.hasAttribute('srcset')){
-          const ss = el.getAttribute('srcset') || '';
-          const parts = ss.split(',').map(p=>{
-            const [u, rest] = p.trim().split(/\\s+/,2);
-            if(!u) return p;
-            if(/^data:/i.test(u) || u.includes('/proxy?url=')) return p;
-            return prox(u) + (rest ? ' ' + rest : '');
-          });
-          el.setAttribute('srcset', parts.join(', '));
-        }
-      }catch(e){}
-    }
-    const mo = new MutationObserver(muts=>{
-      muts.forEach(m=>{
-        m.addedNodes.forEach(n=>{
-          if(n.nodeType !== 1) return;
-          if(n.matches && n.matches('a[href]')) rewriteAnchor(n);
-          n.querySelectorAll && n.querySelectorAll('a[href]').forEach(rewriteAnchor);
-          ['img','script','link','source','video','audio','iframe'].forEach(tag=>{
-            if(n.matches && n.matches(tag+'[src]')) rewriteAsset(n);
-            n.querySelectorAll && n.querySelectorAll(tag+'[src]').forEach(rewriteAsset);
-            if(n.matches && n.matches(tag+'[href]')) rewriteAsset(n);
-            n.querySelectorAll && n.querySelectorAll(tag+'[href]').forEach(rewriteAsset);
-          });
-          n.querySelectorAll && n.querySelectorAll('[srcset]').forEach(el=>{
-            rewriteAsset(el);
-          });
-        });
-      });
-    });
+    function rewriteAnchor(a){ try{ const h=a.getAttribute('href'); if(!h) return; if(/^(javascript:|mailto:|tel:|#)/i.test(h)) return; if(h.includes('/proxy?url=')) return; a.setAttribute('href', prox(h)); a.removeAttribute('target'); }catch(e){} }
+    function rewriteAsset(el){ try{ ['src','href','poster','data-src','data-href'].forEach(attr=>{ if(el.hasAttribute && el.hasAttribute(attr)){ const v=el.getAttribute(attr); if(!v) return; if(/^data:/i.test(v) || v.includes('/proxy?url=')) return; el.setAttribute(attr, prox(v)); } }); if(el.hasAttribute && el.hasAttribute('srcset')){ const ss = el.getAttribute('srcset')||''; const parts = ss.split(',').map(p=>{ const [u,rest]=p.trim().split(/\\s+/,2); if(!u) return p; if(/^data:/i.test(u) || u.includes('/proxy?url=')) return p; return prox(u) + (rest ? ' ' + rest : ''); }); el.setAttribute('srcset', parts.join(', ')); } }catch(e){} }
+    const mo = new MutationObserver(muts=>{ muts.forEach(m=>{ m.addedNodes.forEach(n=>{ if(n.nodeType !== 1) return; if(n.matches && n.matches('a[href]')) rewriteAnchor(n); n.querySelectorAll && n.querySelectorAll('a[href]').forEach(rewriteAnchor); ['img','script','link','source','video','audio','iframe'].forEach(tag=>{ if(n.matches && n.matches(tag+'[src]')) rewriteAsset(n); n.querySelectorAll && n.querySelectorAll(tag+'[src]').forEach(rewriteAsset); if(n.matches && n.matches(tag+'[href]')) rewriteAsset(n); n.querySelectorAll && n.querySelectorAll(tag+'[href]').forEach(rewriteAsset); }); n.querySelectorAll && n.querySelectorAll('[srcset]').forEach(el=>rewriteAsset(el)); }); }); });
     mo.observe(document.documentElement || document, { childList:true, subtree:true });
-    // initial
     document.querySelectorAll('a[href]').forEach(rewriteAnchor);
     document.querySelectorAll('img,script,link,source,video,audio,iframe').forEach(rewriteAsset);
   })();
@@ -247,72 +232,135 @@ function clientSandboxSnippet(){
 `;
 }
 
-// ---------------- WS PROXY (upgrade) ----------------
-import http from "http";
+// ---------------- HTTP + WS PROXY SETUP ----------------
 const server = http.createServer(app);
-const wss = new WebSocketServer({ server, path: "/_euph_ws" });
-wss.on("connection", ws => { ws.send(JSON.stringify({ msg: "welcome", ts: Date.now(), host: os.hostname() })); ws.on("message", m=>{ try{ const d = JSON.parse(m.toString()); if(d && d.cmd==='ping') ws.send(JSON.stringify({ msg:'pong', ts:Date.now() })); }catch(e){} }); });
 
-import { createProxyServer } from "http-proxy";
 const wsProxy = createProxyServer({ ws: true, secure: false, xfwd: true });
-wsProxy.on("error", (err, req, res)=>{ try{ if(res && !res.headersSent) res.writeHead(502); if(res && res.end) res.end("WS proxy error"); }catch(e){} });
-
-// accept upgrade: route to _wsproxy?url=
+wsProxy.on("error", (err, req, res) => {
+  try { if (res && !res.headersSent) res.writeHead(502); if (res && res.end) res.end("WS proxy error"); } catch (e) { /* ignore */ }
+});
 server.on('upgrade', (req, socket, head) => {
   try {
     const urlObj = new URL(req.url, `http://${req.headers.host}`);
-    if(urlObj.pathname === '/_wsproxy'){
+    if (urlObj.pathname === '/_wsproxy') {
       const target = urlObj.searchParams.get('url');
-      if(!target){ socket.destroy(); return; }
+      if (!target) { socket.destroy(); return; }
       wsProxy.ws(req, socket, head, { target });
     }
-  } catch(e){ socket.destroy(); }
+  } catch (e) { socket.destroy(); }
 });
 
-// ---------------- AUTO-PROXY ROUTE (support /host.tld as shorthand) ----------------
+// telemetry WS for client (optional)
+const wss = new WebSocketServer({ server, path: "/_euph_ws" });
+wss.on("connection", ws => {
+  ws.send(JSON.stringify({ msg: "welcome", ts: Date.now(), host: os.hostname() }));
+  ws.on("message", m => {
+    try { const d = JSON.parse(m.toString()); if (d && d.cmd === 'ping') ws.send(JSON.stringify({ msg: 'pong', ts: Date.now() })); } catch (e) { }
+  });
+});
+
+// ---------------- AUTO-PROXY MIDDLEWARE (allow /host.tld style) ----------------
 app.use((req, res, next) => {
-  // if path looks like /example.com or /www.example.com, redirect to /proxy?url=https://...
-  const p = (req.path || '').replace(/^\//,'');
-  if(p && !p.includes('proxy') && req.method === 'GET' && /^[\w.-]+\.[a-z]{2,}/i.test(p) && !req.path.includes('.')) {
-    // ignore static file paths (public/)
-  }
-  // If the client requested root with a single segment that looks like hostname, rewrite
   const segments = req.path.split('/').filter(Boolean);
-  if(segments.length === 1 && /^[\w.-]+\.[a-z]{2,}$/i.test(segments[0])){
+  if (segments.length === 1 && /^[\w\.-]+\.[a-z]{2,}$/i.test(segments[0]) && req.method === 'GET') {
     const host = segments[0];
-    const url = 'https://' + host;
-    // rewrite to /proxy?url=...
-    req.url = '/proxy?url=' + encodeURIComponent(url) + (req.url.includes('?') ? '&' + req.url.split('?')[1] : '');
+    req.url = '/proxy?url=' + encodeURIComponent('https://' + host) + (req.url.includes('?') ? '&' + req.url.split('?')[1] : '');
   }
   next();
 });
 
-// ---------------- MAIN /proxy HANDLER ----------------
-app.get("/proxy", async (req, res) => {
-  let raw = req.query.url || null;
-  if(!raw) return res.status(400).send("Missing url (use /proxy?url=https://example.com)");
-  try{ raw = decodeURIComponent(raw); } catch(e){}
-  if(!/^https?:\/\//i.test(raw)) raw = 'https://' + raw;
+// ---------------- CAPTCHA HELPER ROUTE ----------------
+// This route fetches the target URL and if it detects a CAPTCHA/verification page
+// it returns the page to the user (so human can solve it). Solved cookies are stored in session.
+app.get("/__euph_captcha", async (req, res) => {
+  const tgt = req.query.target;
+  if (!tgt) return res.status(400).send("missing target");
+  let raw = tgt;
+  try { raw = decodeURIComponent(tgt); } catch (e) { }
+  if (!/^https?:\/\//i.test(raw)) raw = 'https://' + raw;
 
   const session = getSessionFromReq(req);
-  try{ setSessionCookie(res, session.sid); } catch(e){}
+  setSessionCookieHeader(res, session.sid);
 
-  // choose accept
+  // fetch raw page
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
+    const upstream = await fetch(raw, { headers: { 'User-Agent': session.payload.ua }, signal: controller.signal });
+    clearTimeout(timeout);
+
+    const ct = (upstream.headers.get('content-type') || '').toLowerCase();
+
+    // persist any cookies set by captcha provider
+    const setCookies = upstream.headers.raw ? (upstream.headers.raw()['set-cookie'] || []) : [];
+    if (setCookies.length) storeSetCookieToSession(setCookies, session.payload);
+
+    if (ct.includes('text/html')) {
+      let html = await upstream.text();
+      html = sanitizeHtml(html);
+      // inject our small helper to post cookies back to euphoria afterwards
+      const $ = cheerio.load(html, { decodeEntities: false });
+      $('head').append(`<meta name="euph-captcha" content="1">`);
+      // append small script to notify after form submit (best-effort)
+      $('body').append(`<script>
+        (function(){
+          try {
+            // after successful solve, try to post cookies back via fetch
+            setTimeout(()=>{ fetch('/__euph_captcha_done?target=${encodeURIComponent(raw)}', { method:'POST', credentials:'include' }).catch(()=>{}); }, 3000);
+          } catch(e){}
+        })();
+      </script>`);
+      res.setHeader("Content-Type", "text/html; charset=utf-8");
+      return res.send($.html());
+    } else {
+      const buffer = await upstream.arrayBuffer();
+      res.setHeader("Content-Type", ct || "application/octet-stream");
+      return res.send(Buffer.from(buffer));
+    }
+  } catch (err) {
+    return res.status(502).send("Failed to fetch captcha target: " + String(err));
+  }
+});
+
+// When user solved captcha in the UI, this route can be called to confirm cookies
+app.post("/__euph_captcha_done", express.json(), (req, res) => {
+  const session = getSessionFromReq(req);
+  setSessionCookieHeader(res, session.sid);
+  // developer can extend to fetch cookies from browser and store them here
+  // for this simple helper we just mark session as captcha-solved
+  session.payload.captcha_solved = true;
+  return res.json({ ok: true });
+});
+
+// ---------------- MAIN /proxy HANDLER ----------------
+app.get("/proxy", async (req, res) => {
+  // support /proxy?url=... and /proxy/<encoded>
+  let raw = req.query.url || (req.path && req.path.startsWith("/proxy/") ? decodeURIComponent(req.path.replace(/^\/proxy\//, "")) : null);
+  if (!raw) return res.status(400).send("Missing url (use /proxy?url=https://example.com)");
+  try { raw = decodeURIComponent(raw); } catch (e) { /* ignore */ }
+  if (!/^https?:\/\//i.test(raw)) raw = 'https://' + raw;
+
+  const session = getSessionFromReq(req);
+  try { setSessionCookieHeader(res, session.sid); } catch (e) { /* ignore */ }
+
+  // quick asset cache for non-HTML Accepts
   const accept = (req.headers.accept || "").toLowerCase();
   const wantHtml = accept.includes("text/html") || req.query.force_html === '1' || req.headers['x-euphoria-client'] === 'c-autoproxy';
   const assetKey = raw + "::asset";
   const htmlKey = raw + "::html";
 
-  // quick asset cache
-  if(!wantHtml){
+  if (!wantHtml) {
     const cached = cacheGet(assetKey);
-    if(cached){ if(cached.headers) Object.entries(cached.headers).forEach(([k,v])=>res.setHeader(k,v)); return res.send(Buffer.from(cached.body, "base64")); }
+    if (cached) {
+      if (cached.headers) Object.entries(cached.headers).forEach(([k, v]) => res.setHeader(k, v));
+      return res.send(Buffer.from(cached.body, "base64"));
+    }
   } else {
     const cachedHtml = cacheGet(htmlKey);
-    if(cachedHtml){ res.setHeader("Content-Type","text/html; charset=utf-8"); return res.send(cachedHtml); }
+    if (cachedHtml) { res.setHeader("Content-Type", "text/html; charset=utf-8"); return res.send(cachedHtml); }
   }
 
-  // build headers for upstream request
+  // build upstream headers
   const originHeaders = {
     "User-Agent": session.payload.ua || (req.headers['user-agent'] || USER_AGENT_FALLBACK),
     "Accept": req.headers.accept || "*/*",
@@ -320,230 +368,236 @@ app.get("/proxy", async (req, res) => {
     "Accept-Encoding": "gzip, deflate, br"
   };
   const cookieHdr = buildCookieHeader(session.payload.cookies);
-  if(cookieHdr) originHeaders["Cookie"] = cookieHdr;
-  if(req.headers.referer) originHeaders["Referer"] = req.headers.referer;
-  try { originHeaders["Origin"] = new URL(raw).origin; } catch(e){}
+  if (cookieHdr) originHeaders["Cookie"] = cookieHdr;
+  if (req.headers.referer) originHeaders["Referer"] = req.headers.referer;
 
-  // fetch upstream (manual redirect handling to rewrite Location)
-  let originRes;
+  // fetch upstream with manual redirect handling (so we can rewrite Location header to our proxy)
+  let upstream;
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(()=>controller.abort(), FETCH_TIMEOUT);
-    originRes = await fetch(raw, { headers: originHeaders, redirect: "manual", signal: controller.signal });
+    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
+
+    // Use retry for flaky networks/abrupt closes (some large CDNs time out occasionally)
+    upstream = await pRetry(() => fetch(raw, { method: "GET", headers: originHeaders, redirect: "manual", signal: controller.signal }), { retries: 1 });
+
     clearTimeout(timeout);
-  } catch(err){
+  } catch (err) {
     console.error("fetch error", err && err.message ? err.message : err);
     return res.status(502).send("Euphoria: failed to fetch target: " + String(err));
   }
 
-  // collect set-cookie
-  try { const setCookies = originRes.headers.raw ? (originRes.headers.raw()['set-cookie'] || []) : []; if(setCookies.length) storeSetCookie(setCookies, session.payload); } catch(e){}
+  // record Set-Cookie headers
+  try {
+    const setCookies = upstream.headers.raw ? (upstream.headers.raw()['set-cookie'] || []) : [];
+    if (setCookies.length) storeSetCookieToSession(setCookies, session.payload);
+  } catch (e) { /* ignore */ }
 
-  // handle redirects: rewrite Location to our /proxy?url=...
-  const status = originRes.status || 200;
-  if([301,302,303,307,308].includes(status)){
-    const loc = originRes.headers.get("location");
-    if(loc){
+  // handle redirects from upstream: rewrite Location header to point back to our /proxy?url=
+  const status = upstream.status || 200;
+  if ([301, 302, 303, 307, 308].includes(status)) {
+    const loc = upstream.headers.get("location");
+    if (loc) {
       const abs = toAbsolute(loc, raw) || loc;
-      const prox = proxyLink(abs);
-      try{ res.setHeader("Location", prox); setSessionCookie(res, session.sid); } catch(e){}
+      const prox = proxyizeAbsoluteUrl(abs);
+      try { res.setHeader("Location", prox); setSessionCookieHeader(res, session.sid); } catch (e) { /* ignore */ }
       return res.status(status).send(`Redirecting to ${prox}`);
     }
   }
 
-  const contentType = (originRes.headers.get("content-type")||"").toLowerCase();
+  // examine content-type
+  const contentType = (upstream.headers.get("content-type") || "").toLowerCase();
   const isHtml = contentType.includes("text/html");
   const treatAsAsset = !isHtml;
 
-  // stream asset
-  if(treatAsAsset){
-    try{ originRes.headers.forEach((v,k)=>{ if(!DROP_HEADERS.has(k.toLowerCase())) try{ res.setHeader(k,v) }catch(e){} }); } catch(e){}
-    try{ setSessionCookie(res, session.sid); } catch(e){}
+  // ASSET path: stream binary data and cache small assets
+  if (treatAsAsset) {
+    try { upstream.headers.forEach((v, k) => { if (!DROP_HEADERS.has(k.toLowerCase())) try { res.setHeader(k, v); } catch (e) { } }); } catch (e) { }
+    try { setSessionCookieHeader(res, session.sid); } catch (e) { }
+
     try {
-      const arr = await originRes.arrayBuffer();
-      const buf = Buffer.from(arr);
-      if(buf.length < ASSET_CACHE_MAX){
-        try{ cacheSet(assetKey, { headers: Object.fromEntries(originRes.headers.entries()), body: buf.toString("base64") }); } catch(e){}
+      const buf = Buffer.from(await upstream.arrayBuffer());
+      if (buf.length < ASSET_CACHE_MAX) {
+        try { cacheSet(assetKey, { headers: Object.fromEntries(upstream.headers.entries()), body: buf.toString("base64") }); } catch (e) { /* ignore */ }
       }
       res.setHeader("Content-Type", contentType || "application/octet-stream");
-      if(originRes.headers.get("cache-control")) res.setHeader("Cache-Control", originRes.headers.get("cache-control"));
+      if (upstream.headers.get("cache-control")) res.setHeader("Cache-Control", upstream.headers.get("cache-control"));
       return res.send(buf);
-    } catch(err){
-      try { originRes.body.pipe(res); return; } catch(e){ return res.status(502).send("Euphoria: asset streaming failed"); }
+    } catch (err) {
+      // fallback streaming if arrayBuffer fails
+      try { upstream.body.pipe(res); return; } catch (e) { return res.status(502).send("Euphoria: asset stream failed"); }
     }
   }
 
-  // HTML path
+  // HTML transform path
   let html;
-  try { html = await originRes.text(); } catch(e){ return res.status(502).send("Euphoria: failed to read HTML"); }
-  html = sanitize(html);
+  try { html = await upstream.text(); } catch (e) { return res.status(502).send("Euphoria: failed to read HTML"); }
+  html = sanitizeHtml(html);
 
-  // parse & rewrite with cheerio
+  // Cheerios-based rewriting (robust)
   try {
     const $ = cheerio.load(html, { decodeEntities: false });
 
-    // insert base tag if missing
-    if($('base').length === 0){
-      const baseHref = originRes.url || raw;
+    // add <base> so relative links work
+    if ($('base').length === 0) {
+      const baseHref = upstream.url || raw;
       $('head').prepend(`<base href="${baseHref}">`);
     }
 
     // remove CSP meta tags
-    $('meta[http-equiv]').each((i,el)=>{ try{ const eq = ($(el).attr('http-equiv')||'').toLowerCase(); if(eq === 'content-security-policy') $(el).remove(); }catch(e){} });
+    $('meta[http-equiv]').each((i, el) => {
+      try { if ((($(el).attr('http-equiv') || '').toLowerCase()) === 'content-security-policy') $(el).remove(); } catch (e) { }
+    });
 
     // remove integrity/crossorigin attributes
-    $('[integrity]').each((i,el)=> $(el).removeAttr('integrity'));
-    $('[crossorigin]').each((i,el)=> $(el).removeAttr('crossorigin'));
+    $('[integrity]').each((i, el) => $(el).removeAttr('integrity'));
+    $('[crossorigin]').each((i, el) => $(el).removeAttr('crossorigin'));
 
-    // rewrite anchors
-    $('a[href]').each((i,el)=>{
+    // rewrite anchor hrefs
+    $('a[href]').each((i, el) => {
       try {
         const href = $(el).attr('href') || '';
-        if(!href) return;
-        if(/^(javascript:|mailto:|tel:|#)/i.test(href)) return;
-        if(isAlreadyProxied(href)) return;
-        const abs = toAbsolute(href, originRes.url || raw) || href;
-        $(el).attr('href', proxyLink(abs));
+        if (!href) return;
+        if (/^(javascript:|mailto:|tel:|#)/i.test(href)) return;
+        if (isAlreadyProxiedHref(href)) return;
+        const abs = toAbsolute(href, upstream.url || raw) || href;
+        $(el).attr('href', proxyizeAbsoluteUrl(abs));
         $(el).removeAttr('target');
-      } catch(e){}
+      } catch (e) { /* ignore */ }
     });
 
-    // rewrite form actions
-    $('form[action]').each((i,el)=>{
+    // rewrite forms
+    $('form[action]').each((i, el) => {
       try {
         const act = $(el).attr('action') || '';
-        if(!act) return;
-        if(isAlreadyProxied(act)) return;
-        const abs = toAbsolute(act, originRes.url || raw) || act;
-        $(el).attr('action', proxyLink(abs));
-      } catch(e){}
+        if (!act) return;
+        if (isAlreadyProxiedHref(act)) return;
+        const abs = toAbsolute(act, upstream.url || raw) || act;
+        $(el).attr('action', proxyizeAbsoluteUrl(abs));
+      } catch (e) { /* ignore */ }
     });
 
-    // rewrite src/href for common tags
-    const assetTags = ['img','script','link','source','video','audio','iframe'];
-    assetTags.forEach(tag => {
-      $(tag + '[src]').each((i,el)=>{
-        try{
+    // rewrite assets (src/href) for common tags
+    ['img','script','link','source','video','audio','iframe'].forEach(tag => {
+      $(tag + '[src]').each((i, el) => {
+        try {
           const val = $(el).attr('src') || '';
-          if(!val) return;
-          if(/^data:/i.test(val)) return;
-          if(isAlreadyProxied(val)) return;
-          const abs = toAbsolute(val, originRes.url || raw) || val;
-          $(el).attr('src', proxyLink(abs));
+          if (!val) return;
+          if (/^data:/i.test(val)) return;
+          if (isAlreadyProxiedHref(val)) return;
+          const abs = toAbsolute(val, upstream.url || raw) || val;
+          $(el).attr('src', proxyizeAbsoluteUrl(abs));
           $(el).removeAttr('integrity'); $(el).removeAttr('crossorigin');
-        }catch(e){}
+        } catch (e) {}
       });
-      $(tag + '[href]').each((i,el)=>{
-        try{
+      $(tag + '[href]').each((i, el) => {
+        try {
           const val = $(el).attr('href') || '';
-          if(!val) return;
-          if(/^data:/i.test(val)) return;
-          if(isAlreadyProxied(val)) return;
-          const abs = toAbsolute(val, originRes.url || raw) || val;
-          $(el).attr('href', proxyLink(abs));
+          if (!val) return;
+          if (/^data:/i.test(val)) return;
+          if (isAlreadyProxiedHref(val)) return;
+          const abs = toAbsolute(val, upstream.url || raw) || val;
+          $(el).attr('href', proxyizeAbsoluteUrl(abs));
           $(el).removeAttr('integrity'); $(el).removeAttr('crossorigin');
-        }catch(e){}
+        } catch (e) {}
       });
     });
 
-    // rewrite srcset attributes
-    $('[srcset]').each((i,el)=>{
-      try{
+    // rewrite srcset
+    $('[srcset]').each((i, el) => {
+      try {
         const ss = $(el).attr('srcset') || '';
-        const parts = ss.split(',').map(p=>{
-          const [u, rest] = p.trim().split(/\s+/,2);
-          if(!u) return p;
-          if(/^data:/i.test(u)) return p;
-          if(isAlreadyProxied(u)) return p;
-          const abs = toAbsolute(u, originRes.url || raw) || u;
-          return proxyLink(abs) + (rest ? ' ' + rest : '');
+        const parts = ss.split(',').map(p => {
+          const [u, rest] = p.trim().split(/\s+/, 2);
+          if (!u) return p;
+          if (/^data:/i.test(u)) return p;
+          if (isAlreadyProxiedHref(u)) return p;
+          const abs = toAbsolute(u, upstream.url || raw) || u;
+          return proxyizeAbsoluteUrl(abs) + (rest ? ' ' + rest : '');
         });
         $(el).attr('srcset', parts.join(', '));
-      } catch(e){}
+      } catch (e) { }
     });
 
-    // rewrite CSS url(...) in style tags
-    $('style').each((i,el)=>{
-      try{
+    // rewrite CSS url(...) in <style> tags
+    $('style').each((i, el) => {
+      try {
         let txt = $(el).html() || '';
         txt = txt.replace(/url\\((['"]?)(.*?)\\1\\)/gi, (m, q, p) => {
-          if(!p) return m;
-          if(/^data:/i.test(p)) return m;
-          if(isAlreadyProxied(p)) return m;
-          const abs = toAbsolute(p, originRes.url || raw) || p;
-          return 'url("' + proxyLink(abs) + '")';
+          if (!p) return m;
+          if (/^data:/i.test(p)) return m;
+          if (isAlreadyProxiedHref(p)) return m;
+          const abs = toAbsolute(p, upstream.url || raw) || p;
+          return 'url("' + proxyizeAbsoluteUrl(abs) + '")';
         });
         $(el).text(txt);
-      }catch(e){}
+      } catch (e) { /* ignore */ }
     });
 
-    // rewrite inline style attributes
-    $('[style]').each((i,el)=>{
-      try{
+    // inline style attribute rewrite
+    $('[style]').each((i, el) => {
+      try {
         let s = $(el).attr('style') || '';
-        s = s.replace(/url\\((['"]?)(.*?)\\1\\)/gi, (m,q,u)=>{
-          if(!u) return m;
-          if(/^data:/i.test(u)) return m;
-          if(isAlreadyProxied(u)) return m;
-          const abs = toAbsolute(u, originRes.url || raw) || u;
-          return 'url("' + proxyLink(abs) + '")';
+        s = s.replace(/url\\((['"]?)(.*?)\\1\\)/gi, (m, q, u) => {
+          if (!u) return m;
+          if (/^data:/i.test(u)) return m;
+          if (isAlreadyProxiedHref(u)) return m;
+          const abs = toAbsolute(u, upstream.url || raw) || u;
+          return 'url("' + proxyizeAbsoluteUrl(abs) + '")';
         });
         $(el).attr('style', s);
-      } catch(e){}
+      } catch (e) { /* ignore */ }
     });
 
     // meta refresh rewrite
-    $('meta[http-equiv]').each((i,el)=>{
+    $('meta[http-equiv]').each((i, el) => {
       try {
-        const eq = ($(el).attr('http-equiv')||'').toLowerCase();
-        if(eq !== 'refresh') return;
+        const eq = (($(el).attr('http-equiv') || '').toLowerCase());
+        if (eq !== 'refresh') return;
         const c = $(el).attr('content') || '';
         const parts = c.split(';');
-        if(parts.length < 2) return;
+        if (parts.length < 2) return;
         const urlPart = parts.slice(1).join(';').match(/url=(.*)/i);
-        if(!urlPart) return;
-        const dest = urlPart[1].replace(/['"]/g,'').trim();
-        const abs = toAbsolute(dest, originRes.url || raw) || dest;
-        $(el).attr('content', parts[0] + ';url=' + proxyLink(abs));
-      } catch(e){}
+        if (!urlPart) return;
+        const dest = urlPart[1].replace(/['"]/g, '').trim();
+        const abs = toAbsolute(dest, upstream.url || raw) || dest;
+        $(el).attr('content', parts[0] + ';url=' + proxyizeAbsoluteUrl(abs));
+      } catch (e) { /* ignore */ }
     });
 
-    // remove common trackers (best-effort)
-    $('script[src]').each((i,el) => {
-      try{
-        const s = ($(el).attr('src')||'').toLowerCase();
-        if(/googletagmanager|googlesyndication|doubleclick|analytics|gtag/gi.test(s)) $(el).remove();
-      } catch(e){}
+    // best-effort remove known analytics/tracker scripts
+    $('script[src]').each((i, el) => {
+      try {
+        const s = ($(el).attr('src') || '').toLowerCase();
+        if (/googletagmanager|googlesyndication|doubleclick|analytics|gtag|ga.js|collect|adsbygoogle/i.test(s)) $(el).remove();
+      } catch (e) {}
     });
 
-    // inject sandbox snippet just before </body>
-    const injection = clientSandboxSnippet();
-    $('body').append(injection);
+    // inject client sandbox snippet before end of body
+    $('body').append(clientSandboxSnippet());
 
-    // final html
     html = $.html();
-    // cache smaller HTML
-    if(html && html.length < 512 * 1024) cacheSet(htmlKey, html);
-  } catch(e){
+    if (html && html.length < HTML_CACHE_MAX) cacheSet(htmlKey, html);
+  } catch (e) {
     console.warn("cheerio transform failed", e && e.message ? e.message : e);
   }
 
-  // set safe headers (forward upstream except DROP_HEADERS)
-  try { originRes.headers.forEach((v,k) => { if(!DROP_HEADERS.has(k.toLowerCase())) try{ res.setHeader(k,v); } catch(e){} }); } catch(e){}
+  // forward safe headers from upstream (except DROP_HEADERS)
+  try { upstream.headers.forEach((v, k) => { if (!DROP_HEADERS.has(k.toLowerCase())) try { res.setHeader(k, v); } catch (e) { } }); } catch (e) { }
   res.setHeader("Content-Type", "text/html; charset=utf-8");
-  try{ setSessionCookie(res, session.sid); } catch(e){}
+  try { setSessionCookieHeader(res, session.sid); } catch (e) { }
   return res.send(html);
 });
 
-// ---------------- FALLBACK SPA ----------
-app.get("/", (req,res)=> res.sendFile(path.join(__dirname, "public", "index.html")));
-app.get("*", (req,res,next) => {
-  if(req.method === "GET" && req.headers.accept && req.headers.accept.includes("text/html")) return res.sendFile(path.join(__dirname, "public", "index.html"));
+// ---------------- FALLBACK / SPA SERVE ----------------
+app.get("/", (req, res) => res.sendFile(path.join(__dirname, "public", "index.html")));
+app.get("*", (req, res, next) => {
+  if (req.method === "GET" && req.headers.accept && req.headers.accept.includes("text/html")) return res.sendFile(path.join(__dirname, "public", "index.html"));
   next();
 });
 
-// ---------------- ERRORS ----------------
-process.on('unhandledRejection', err => console.error('unhandledRejection', err));
-process.on('uncaughtException', err => console.error('uncaughtException', err));
+// ---------------- ERROR HANDLERS ----------------
+process.on("unhandledRejection", err => console.error("unhandledRejection", err));
+process.on("uncaughtException", err => console.error("uncaughtException", err));
 
-server.listen(PORT, ()=> console.log(`Euphoria C Auto-proxy running on port ${PORT}`));
+// ---------------- START ----------------
+server.listen(PORT, () => console.log(`Euphoria v3 starting on port ${PORT}. DEPLOYMENT_ORIGIN=${DEPLOYMENT_ORIGIN}`));
