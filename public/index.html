@@ -3,33 +3,35 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Euphoria — Proxy (BC Hybrid)</title>
+<title>Euphoria v2 — Hybrid</title>
 <style>
 :root{
-  --bg:#0b0c0e; --panel: rgba(18,18,18,0.46); --control: rgba(255,255,255,0.07);
-  --accent:#2e7d32; --muted:#aeb3b7;
+  --bg:#0b0c0e; --panel: rgba(20,20,20,0.48); --muted:#bdbfc3; --accent:#2e7d32;
 }
-html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;background:var(--bg);color:#fff}
+html,body{height:100%;margin:0;background:var(--bg);color:#fff;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;}
+/* SLIM oval top bar */
 #topbar{
   position:fixed; top:14px; left:50%; transform:translateX(-50%);
-  width:min(1100px,92%); height:56px; border-radius:999px;
-  background:var(--panel); display:flex; gap:10px; align-items:center;
-  padding:6px 14px; z-index:2147483647; box-shadow:0 10px 30px rgba(0,0,0,0.5);
+  width:min(1100px,92%); height:52px; border-radius:999px;
+  background:var(--panel); display:flex; gap:8px; align-items:center;
+  padding:6px 12px; z-index:2147483647; box-shadow:0 10px 28px rgba(0,0,0,0.5);
   backdrop-filter: blur(8px) saturate(120%);
 }
-.tb-btn{width:44px;height:44px;border-radius:12px;border:0;background:var(--control);color:#fff;font-size:16px;display:grid;place-items:center;cursor:pointer}
+.tb-btn{width:40px;height:40px;border-radius:10px;border:0;background:rgba(0,0,0,0.12);color:#fff;font-size:16px;display:grid;place-items:center;cursor:pointer}
 .tb-btn:active{transform:translateY(1px)}
-#address{height:40px;flex:1;border-radius:12px;border:none;padding:8px 12px;background:rgba(0,0,0,0.22);color:#fff;font-size:14px;outline:2px solid transparent}
-#goBtn{min-width:64px;background:var(--accent)}
-#progressWrap{position:fixed;left:12px;right:12px;top:86px;height:4px;border-radius:4px;overflow:hidden;z-index:2200;pointer-events:none}
-#progress{height:100%;width:0;background:linear-gradient(90deg,#4caf50,#2e7d32);transition:width 120ms linear}
-#view{position:fixed;top:102px;left:12px;right:12px;bottom:12px;border-radius:12px;overflow:auto;background:#fff;color:#000;box-shadow:0 8px 24px rgba(0,0,0,0.45)}
+#address{height:36px;flex:1;border-radius:10px;border:none;padding:6px 12px;background:rgba(0,0,0,0.22);color:#fff;font-size:14px;outline:2px solid transparent}
+#goBtn{min-width:56px;background:var(--accent)}
+/* progress bar */
+#progressWrap{position:fixed;left:12px;right:12px;top:76px;height:4px;border-radius:4px;overflow:hidden;z-index:2200;pointer-events:none}
+#progress{height:100%;width:0;background:linear-gradient(90deg,#4caf50,#2e7d32);transition:width 140ms linear}
+/* main view */
+#view{position:fixed;top:92px;left:12px;right:12px;bottom:12px;border-radius:12px;overflow:auto;background:#fff;color:#000;box-shadow:0 8px 24px rgba(0,0,0,0.45)}
 #overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.28);z-index:2300}
-.spinner{width:44px;height:44px;border-radius:50%;border:6px solid rgba(255,255,255,0.14);border-top-color:#4caf50;animation:spin 900ms linear infinite}
+.spinner{width:44px;height:44px;border-radius:50%;border:6px solid rgba(255,255,255,0.12);border-top-color:#4caf50;animation:spin 900ms linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 #msg{position:fixed;left:18px;bottom:18px;color:#fff;background:rgba(0,0,0,0.45);padding:8px 12px;border-radius:10px;font-size:13px;display:none;z-index:2400}
-#viewInner{min-height:100%;padding:18px}
-code { background: rgba(0,0,0,0.05); padding:2px 6px; border-radius:4px; }
+#viewInner{min-height:100%;padding:20px}
+pre{white-space:pre-wrap;word-wrap:break-word}
 </style>
 </head>
 <body>
@@ -47,9 +49,9 @@ code { background: rgba(0,0,0,0.05); padding:2px 6px; border-radius:4px; }
   <div id="view">
     <div id="overlay"><div class="spinner" aria-hidden="true"></div></div>
     <div id="viewInner" aria-live="polite">
-      <h2 style="margin-top:0">Euphoria — BC Hybrid</h2>
-      <p style="color:#444">No iframe. The proxy rewrites pages so they run inside this UI. Try <code>google.com</code> or <code>xbox.com</code>.</p>
-      <p style="color:#444">If a site triggers CAPTCHA frequently, that's the target site blocking the proxy IP — that requires IP rotation.</p>
+      <h2 style="margin-top:0">Euphoria v2 — Hybrid</h2>
+      <p style="color:#444">Enter a URL or search above. No iframe — proxied HTML is loaded into this container, rewritten and executed in-place.</p>
+      <p style="color:#444">Examples: <code>google.com</code>, <code>https://xbox.com</code>, or paste a full URL.</p>
     </div>
   </div>
 
@@ -90,8 +92,8 @@ code { background: rgba(0,0,0,0.05); padding:2px 6px; border-radius:4px; }
     if(push){ historyStack = historyStack.slice(0, historyIndex + 1); historyStack.push(url); historyIndex = historyStack.length - 1; }
     setProgress(6); showOverlay(true);
     try {
-      const res = await fetch('/proxy?url=' + encodeURIComponent(url), { headers: { 'X-Euphoria-Client': 'bc-hybrid', 'Accept': 'text/html,*/*;q=0.9' }});
-      if(!res.ok) throw new Error('Proxy error ' + res.status + ' ' + res.statusText);
+      const res = await fetch('/proxy?url=' + encodeURIComponent(url), { headers: { 'X-Euphoria-Client': 'a3', 'Accept': 'text/html,*/*;q=0.9' }});
+      if(!res.ok) throw new Error('Proxy error ' + res.status);
       const ct = (res.headers.get('content-type')||'').toLowerCase();
       if(ct.includes('text/html')){
         const html = await res.text();
@@ -99,7 +101,7 @@ code { background: rgba(0,0,0,0.05); padding:2px 6px; border-radius:4px; }
         await renderHtml(html, url);
         setProgress(100);
         setTimeout(()=> setProgress(0), 220);
-      } else if(ct.includes('application/json') || ct.includes('text/')){
+      } else if(ct.includes('text') || ct.includes('json')){
         const txt = await res.text();
         viewInner.innerHTML = '<pre>' + escapeHtml(txt) + '</pre>';
       } else {
@@ -117,80 +119,58 @@ code { background: rgba(0,0,0,0.05); padding:2px 6px; border-radius:4px; }
 
   function escapeHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-  // The renderHtml below takes proxied HTML and injects a client-side sandbox runtime (already added server-side too,
-  // but we re-ensure needed shims run here) and executes scripts sequentially. This approach avoids iframes.
   async function renderHtml(htmlText, originUrl){
     try{
       const parser = new DOMParser();
       const doc = parser.parseFromString(htmlText, 'text/html');
-
-      // merge <head> elements (links/styles) into the parent document head (avoid duplicate topbar)
-      const incomingHead = doc.head ? Array.from(doc.head.children) : [];
-      incomingHead.forEach(node=>{
-        try {
-          // skip meta viewport/application-critical tags to avoid conflicts
-          if(node.tagName && node.tagName.toLowerCase() === 'meta') {
-            // allow charset and viewport only if not already present
-            const name = node.getAttribute('name') || node.getAttribute('charset') || '';
-            if(name && (name.toLowerCase() === 'viewport' || node.getAttribute('charset'))) return;
-          }
-          // avoid title and base replacement in host document
-          if(node.tagName && ['title','base'].includes(node.tagName.toLowerCase())) return;
-          // append stylesheets & links
-          document.head.appendChild(document.importNode(node, true));
-        } catch(e){}
-      });
-
-      // replace body content inside our view area
-      viewInner.innerHTML = '';
-      const bodyNodes = doc.body ? Array.from(doc.body.childNodes) : [];
-      bodyNodes.forEach(n => {
-        try { viewInner.appendChild(document.importNode(n, true)); } catch(e){}
-      });
-
-      // Inject our runtime sandbox if missing (client-side)
-      if(!document.getElementById('__euph_sandbox')) {
-        const s = document.createElement('script');
-        s.id = '__euph_sandbox';
-        s.textContent = window.__EUPHORIA_SANDBOX || '';
-        document.head.appendChild(s);
+      // adopt safe head nodes (styles, links)
+      if(doc.head){
+        const headChildren = Array.from(doc.head.children);
+        headChildren.forEach(node=>{
+          try{
+            if(node.tagName && node.tagName.toLowerCase()==='script') return;
+            if(node.tagName && node.tagName.toLowerCase()==='base') return;
+            document.head.appendChild(document.importNode(node, true));
+          } catch(e){}
+        });
       }
+      // adopt body into viewInner
+      viewInner.innerHTML = '';
+      const bodyChildren = Array.from(doc.body.childNodes);
+      bodyChildren.forEach(n=>{ try { viewInner.appendChild(document.importNode(n, true)); } catch(e){} });
 
-      // Execute inline scripts present in proxied content sequentially
+      // sequentially execute scripts from injected content (external and inline)
       const scripts = Array.from(viewInner.querySelectorAll('script'));
       for(const old of scripts){
         await new Promise(resolve=>{
           try{
-            const ns = document.createElement('script');
-            // copy attributes except integrity/crossorigin which break proxied assets
+            const s = document.createElement('script');
             for(let i=0;i<old.attributes.length;i++){
               const a = old.attributes[i];
-              if(a.name === 'integrity' || a.name === 'crossorigin') continue;
-              if(a.name === 'src'){
-                // external script src will already have been rewritten to /proxy?url=... by server
-                ns.src = a.value;
-                ns.async = false;
-                ns.onload = ()=>resolve();
-                ns.onerror = ()=>resolve();
-                document.body.appendChild(ns);
+              if(a.name==='src'){
+                // ensure src is proxied if relative (server usually already rewrote)
+                s.src = a.value;
+                s.async = false;
+                s.onload = ()=>resolve();
+                s.onerror = ()=>resolve();
+                document.head.appendChild(s);
                 return;
               } else {
-                ns.setAttribute(a.name, a.value);
+                s.setAttribute(a.name,a.value);
               }
             }
-            ns.textContent = old.textContent;
-            // append and execute
-            old.replaceWith(ns);
+            s.textContent = old.textContent;
+            viewInner.appendChild(s);
             resolve();
           } catch(e){ resolve(); }
         });
+        try { old.remove(); } catch(e){}
       }
 
-      // set address bar to final origin
       address.value = originUrl;
     } catch(e){
-      console.warn('renderHtml error', e);
       viewInner.innerHTML = '<pre>' + escapeHtml(htmlText.slice(0,20000)) + '</pre>';
+      console.warn('renderHtml error', e);
     }
   }
 
@@ -202,95 +182,8 @@ code { background: rgba(0,0,0,0.05); padding:2px 6px; border-radius:4px; }
   goBtn.addEventListener('click', ()=> { const v = normalizeInput(address.value); if(!v) showMsg('Enter a URL or search'); else fetchProxyAndRender(v, true); });
   address.addEventListener('keydown', (e)=>{ if(e.key==='Enter') goBtn.click(); });
 
-  // expose sandbox runtime string to be injected for new loads if not present
-  window.__EUPHORIA_SANDBOX = (function(){
-    // This string is replaced by the server too, but keeping here as fallback.
-    return `// client-side sandbox runtime (fallback)
-(function(){
-  const DEPLOY = location.origin;
-  function proxURL(u){
-    try{ if(!u) return u; if(u.includes('/proxy?url=')) return u; if(/^data:/i.test(u)) return u; const abs = new URL(u, document.baseURI).href; return DEPLOY + '/proxy?url=' + encodeURIComponent(abs); } catch(e){ return u; }
-  }
-
-  // intercept fetch
-  const origFetch = window.fetch;
-  window.fetch = function(resource, init){
-    try {
-      if(typeof resource === 'string' && !resource.includes('/proxy?url=') && !/^data:/i.test(resource)) resource = proxURL(resource);
-      else if(resource instanceof Request && !resource.url.includes('/proxy?url=')) resource = new Request(proxURL(resource.url), resource);
-    } catch(e){}
-    return origFetch(resource, init);
-  };
-
-  // intercept XHR
-  try {
-    const OrigXHR = window.XMLHttpRequest;
-    window.XMLHttpRequest = function(){
-      const xhr = new OrigXHR();
-      const origOpen = xhr.open;
-      xhr.open = function(method,url,...rest){
-        try {
-          if(url && !url.includes('/proxy?url=') && !/^(data:|blob:|about:|javascript:)/i.test(url)){
-            url = proxURL(url);
-          }
-        } catch(e){}
-        return origOpen.call(this, method, url, ...rest);
-      };
-      return xhr;
-    };
-  } catch(e){}
-
-  // intercept WebSocket (best-effort): route ws-> /_wsproxy?url=
-  try {
-    const OrigWS = window.WebSocket;
-    window.WebSocket = function(url, protocols){
-      try {
-        if(url && !url.includes('/proxy?url=')){
-          // map ws:// or wss:// to an HTTP proxy endpoint that will perform WS proxying server-side
-          const mapped = DEPLOY + '/_wsproxy?url=' + encodeURIComponent(new URL(url, document.baseURI).href);
-          return new OrigWS(mapped, protocols);
-        }
-      } catch(e){}
-      return new OrigWS(url, protocols);
-    };
-  } catch(e){}
-
-  // override window.open to navigate via proxy
-  const origOpen = window.open;
-  window.open = function(url, name, specs){
-    try {
-      if(url && !(String(url)).includes('/proxy?url=') && !/^(data:|javascript:)/i.test(url)){
-        const p = proxURL(url);
-        return origOpen.call(window, p, name, specs);
-      }
-    } catch(e){}
-    return origOpen.apply(window, arguments);
-  };
-
-  // override location assignments
-  try {
-    const _assign = location.assign.bind(location);
-    location.assign = function(u){ try{ if(u && !u.includes('/proxy?url=')) u = proxURL(u); }catch(e){} return _assign(u); };
-    const _replace = location.replace.bind(location);
-    location.replace = function(u){ try{ if(u && !u.includes('/proxy?url=')) u = proxURL(u); }catch(e){} return _replace(u); };
-  } catch(e){}
-
-  // serviceWorker registration interception: route script to proxy
-  if(navigator.serviceWorker && navigator.serviceWorker.register){
-    const origRegister = navigator.serviceWorker.register.bind(navigator.serviceWorker);
-    navigator.serviceWorker.register = function(scriptURL, options){
-      try{
-        if(scriptURL && !scriptURL.includes('/proxy?url=')) scriptURL = proxURL(scriptURL);
-      }catch(e){}
-      return origRegister(scriptURL, options);
-    };
-  }
-})();
-`;
-  })();
-
-  // initial load
-  fetchProxyAndRender('https://www.google.com', true);
+  // initial
+  (function init(){ fetchProxyAndRender('https://www.google.com', true); })();
 })();
 </script>
 </body>
