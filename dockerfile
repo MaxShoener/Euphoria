@@ -1,16 +1,15 @@
-# Use Node 20 slim - modern fetch API + small image
 FROM node:20-slim
 
 WORKDIR /app
 
-# copy package manifest and install deps
+# copy package & install
 COPY package.json package-lock.json* ./
 RUN npm install --omit=dev --no-audit --no-fund
 
-# copy application
+# copy app
 COPY . .
 
-# create cache directory
+# prepare cache dir
 RUN mkdir -p /app/cache /app/public
 
 EXPOSE 3000
