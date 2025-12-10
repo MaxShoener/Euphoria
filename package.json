@@ -1,28 +1,23 @@
 {
   "name": "euphoria-proxy",
   "version": "2.0.0",
-  "description": "Full rewriting proxy with Xbox, Google, CAPTCHA, redirects, auto-proxy",
+  "description": "Euphoria v2 — JSDOM-powered hybrid smart rewriter",
   "type": "module",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "acorn": "^8.12.0",
+    "cookie": "^0.6.1",
     "compression": "^1.7.4",
-    "cookie": "^0.5.0",
+    "cors": "^2.8.5",
     "express": "^4.18.2",
-    "express-session": "^1.17.3",
-    "http-proxy": "^1.18.1",
-    "node-fetch": "^3.4.1",
     "jsdom": "^22.1.0",
-    "ws": "^8.14.1",
-    "body-parser": "^1.20.2",
-    "formidable": "^2.1.2",
-    "uuid": "^9.0.0",
-    "cheerio": "^1.0.0-rc.12"
+    "morgan": "^1.10.0",
+    "ws": "^8.13.0",
+    "node-fetch": "^3.3.2"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=20"
   }
 }
