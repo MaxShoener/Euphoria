@@ -6,10 +6,10 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm install --omit=dev --no-audit --no-fund
 
-# copy application files
+# copy application code
 COPY . .
 
-# create cache folder
+# create cache and public folder (public may already exist)
 RUN mkdir -p /app/cache /app/public
 
 EXPOSE 3000
