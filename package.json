@@ -12,6 +12,7 @@
     "cookie": "^0.6.0",
     "cors": "^2.8.5",
     "express": "^4.21.1",
+    "express-rate-limit": "^7.1.0",
     "http-proxy": "^1.18.1",
     "jsdom": "^24.0.0",
     "morgan": "^1.10.0",
