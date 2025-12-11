@@ -30,6 +30,7 @@ html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial
 #msg{position:fixed;left:18px;bottom:18px;color:#fff;background:rgba(0,0,0,0.45);padding:8px 12px;border-radius:10px;font-size:13px;display:none;z-index:2400}
 #viewInner{min-height:100%;padding:18px}
 code { background: rgba(0,0,0,0.05); padding:2px 6px; border-radius:4px; }
+a { color: #1565c0; }
 </style>
 </head>
 <body>
@@ -117,38 +118,29 @@ code { background: rgba(0,0,0,0.05); padding:2px 6px; border-radius:4px; }
 
   function escapeHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-  // The renderHtml below takes proxied HTML and injects a client-side sandbox runtime (already added server-side too,
-  // but we re-ensure needed shims run here) and executes scripts sequentially. This approach avoids iframes.
   async function renderHtml(htmlText, originUrl){
     try{
       const parser = new DOMParser();
       const doc = parser.parseFromString(htmlText, 'text/html');
 
-      // merge <head> elements (links/styles) into the parent document head (avoid duplicate topbar)
       const incomingHead = doc.head ? Array.from(doc.head.children) : [];
       incomingHead.forEach(node=>{
         try {
-          // skip meta viewport/application-critical tags to avoid conflicts
           if(node.tagName && node.tagName.toLowerCase() === 'meta') {
-            // allow charset and viewport only if not already present
             const name = node.getAttribute('name') || node.getAttribute('charset') || '';
             if(name && (name.toLowerCase() === 'viewport' || node.getAttribute('charset'))) return;
           }
-          // avoid title and base replacement in host document
           if(node.tagName && ['title','base'].includes(node.tagName.toLowerCase())) return;
-          // append stylesheets & links
           document.head.appendChild(document.importNode(node, true));
         } catch(e){}
       });
 
-      // replace body content inside our view area
       viewInner.innerHTML = '';
       const bodyNodes = doc.body ? Array.from(doc.body.childNodes) : [];
       bodyNodes.forEach(n => {
         try { viewInner.appendChild(document.importNode(n, true)); } catch(e){}
       });
 
-      // Inject our runtime sandbox if missing (client-side)
       if(!document.getElementById('__euph_sandbox')) {
         const s = document.createElement('script');
         s.id = '__euph_sandbox';
@@ -156,18 +148,15 @@ code { background: rgba(0,0,0,0.05); padding:2px 6px; border-radius:4px; }
         document.head.appendChild(s);
       }
 
-      // Execute inline scripts present in proxied content sequentially
       const scripts = Array.from(viewInner.querySelectorAll('script'));
       for(const old of scripts){
         await new Promise(resolve=>{
           try{
             const ns = document.createElement('script');
-            // copy attributes except integrity/crossorigin which break proxied assets
             for(let i=0;i<old.attributes.length;i++){
               const a = old.attributes[i];
               if(a.name === 'integrity' || a.name === 'crossorigin') continue;
               if(a.name === 'src'){
-                // external script src will already have been rewritten to /proxy?url=... by server
                 ns.src = a.value;
                 ns.async = false;
                 ns.onload = ()=>resolve();
@@ -179,14 +168,12 @@ code { background: rgba(0,0,0,0.05); padding:2px 6px; border-radius:4px; }
               }
             }
             ns.textContent = old.textContent;
-            // append and execute
             old.replaceWith(ns);
             resolve();
           } catch(e){ resolve(); }
         });
       }
 
-      // set address bar to final origin
       address.value = originUrl;
     } catch(e){
       console.warn('renderHtml error', e);
@@ -194,7 +181,6 @@ code { background: rgba(0,0,0,0.05); padding:2px 6px; border-radius:4px; }
     }
   }
 
-  // controls
   document.getElementById('back').addEventListener('click', ()=>{ if(historyIndex>0) fetchProxyAndRender(historyStack[--historyIndex], false); });
   document.getElementById('forward').addEventListener('click', ()=>{ if(historyIndex < historyStack.length-1) fetchProxyAndRender(historyStack[++historyIndex], false); });
   document.getElementById('refresh').addEventListener('click', ()=>{ if(historyIndex >= 0) fetchProxyAndRender(historyStack[historyIndex], false); });
@@ -202,17 +188,13 @@ code { background: rgba(0,0,0,0.05); padding:2px 6px; border-radius:4px; }
   goBtn.addEventListener('click', ()=> { const v = normalizeInput(address.value); if(!v) showMsg('Enter a URL or search'); else fetchProxyAndRender(v, true); });
   address.addEventListener('keydown', (e)=>{ if(e.key==='Enter') goBtn.click(); });
 
-  // expose sandbox runtime string to be injected for new loads if not present
   window.__EUPHORIA_SANDBOX = (function(){
-    // This string is replaced by the server too, but keeping here as fallback.
     return `// client-side sandbox runtime (fallback)
 (function(){
   const DEPLOY = location.origin;
   function proxURL(u){
     try{ if(!u) return u; if(u.includes('/proxy?url=')) return u; if(/^data:/i.test(u)) return u; const abs = new URL(u, document.baseURI).href; return DEPLOY + '/proxy?url=' + encodeURIComponent(abs); } catch(e){ return u; }
   }
-
-  // intercept fetch
   const origFetch = window.fetch;
   window.fetch = function(resource, init){
     try {
@@ -221,8 +203,6 @@ code { background: rgba(0,0,0,0.05); padding:2px 6px; border-radius:4px; }
     } catch(e){}
     return origFetch(resource, init);
   };
-
-  // intercept XHR
   try {
     const OrigXHR = window.XMLHttpRequest;
     window.XMLHttpRequest = function(){
@@ -239,14 +219,11 @@ code { background: rgba(0,0,0,0.05); padding:2px 6px; border-radius:4px; }
       return xhr;
     };
   } catch(e){}
-
-  // intercept WebSocket (best-effort): route ws-> /_wsproxy?url=
   try {
     const OrigWS = window.WebSocket;
     window.WebSocket = function(url, protocols){
       try {
         if(url && !url.includes('/proxy?url=')){
-          // map ws:// or wss:// to an HTTP proxy endpoint that will perform WS proxying server-side
           const mapped = DEPLOY + '/_wsproxy?url=' + encodeURIComponent(new URL(url, document.baseURI).href);
           return new OrigWS(mapped, protocols);
         }
@@ -254,8 +231,6 @@ code { background: rgba(0,0,0,0.05); padding:2px 6px; border-radius:4px; }
       return new OrigWS(url, protocols);
     };
   } catch(e){}
-
-  // override window.open to navigate via proxy
   const origOpen = window.open;
   window.open = function(url, name, specs){
     try {
@@ -266,16 +241,12 @@ code { background: rgba(0,0,0,0.05); padding:2px 6px; border-radius:4px; }
     } catch(e){}
     return origOpen.apply(window, arguments);
   };
-
-  // override location assignments
   try {
     const _assign = location.assign.bind(location);
     location.assign = function(u){ try{ if(u && !u.includes('/proxy?url=')) u = proxURL(u); }catch(e){} return _assign(u); };
     const _replace = location.replace.bind(location);
     location.replace = function(u){ try{ if(u && !u.includes('/proxy?url=')) u = proxURL(u); }catch(e){} return _replace(u); };
   } catch(e){}
-
-  // serviceWorker registration interception: route script to proxy
   if(navigator.serviceWorker && navigator.serviceWorker.register){
     const origRegister = navigator.serviceWorker.register.bind(navigator.serviceWorker);
     navigator.serviceWorker.register = function(scriptURL, options){
@@ -289,7 +260,6 @@ code { background: rgba(0,0,0,0.05); padding:2px 6px; border-radius:4px; }
 `;
   })();
 
-  // initial load
   fetchProxyAndRender('https://www.google.com', true);
 })();
 </script>
