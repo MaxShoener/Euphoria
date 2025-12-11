@@ -14,7 +14,7 @@
     "http-proxy": "^1.18.1",
     "morgan": "^1.10.0",
     "node-cache": "^5.1.2",
-    "rate-limiter-flexible": "^2.4.4",
+    "rate-limiter-flexible": "^2.3.10",
     "ws": "^8.18.0"
   }
 }
