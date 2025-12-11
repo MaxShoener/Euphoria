@@ -16,7 +16,7 @@ import { WebSocketServer } from "ws";
 import cookie from "cookie";
 import { EventEmitter } from "events";
 import rateLimit from "express-rate-limit";
-import LRU from "lru-cache";
+import { LRUCache } from "lru-cache"; // <-- FIXED import
 import http from "http";
 import https from "https";
 
@@ -75,8 +75,8 @@ const globalLimiter = rateLimit({
 });
 app.use(globalLimiter);
 
-// memory cache using LRU
-const MEM_CACHE = new LRU({
+// memory cache using LRUCache
+const MEM_CACHE = new LRUCache({
   max: MAX_MEMORY_CACHE_ITEMS,
   ttl: CACHE_TTL,
   sizeCalculation: (val, key) => (typeof val === "string" ? Buffer.byteLength(val, "utf8") : JSON.stringify(val).length)
