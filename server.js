@@ -1,8 +1,4 @@
 // server.js
-// EUPHORIA v2 (B1) — JSDOM-powered hybrid smart rewriter
-// - Node 20+ recommended
-// - Dependencies: see package.json (express, jsdom, ws, compression, morgan, cors, cookie)
-
 import express from "express";
 import compression from "compression";
 import morgan from "morgan";
@@ -21,26 +17,22 @@ EventEmitter.defaultMaxListeners = 200;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// ------------------------ CONFIG ------------------------
 const DEPLOYMENT_ORIGIN = process.env.DEPLOYMENT_ORIGIN || "https://useful-karil-maxshoener-6cb890d9.koyeb.app";
 const PORT = parseInt(process.env.PORT || "3000", 10);
 const CACHE_DIR = path.join(__dirname, "cache");
 const ENABLE_DISK_CACHE = true;
-const CACHE_TTL = 1000 * 60 * 6; // 6 minutes
+const CACHE_TTL = 1000 * 60 * 6;
 const FETCH_TIMEOUT_MS = 30000;
-const ASSET_CACHE_THRESHOLD = 256 * 1024; // 256KB
+const ASSET_CACHE_THRESHOLD = 256 * 1024;
 const USER_AGENT_DEFAULT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36";
 
-if (ENABLE_DISK_CACHE) fsPromises.mkdir(CACHE_DIR, { recursive: true }).catch(() => {});
+if (ENABLE_DISK_CACHE) fsPromises.mkdir(CACHE_DIR, { recursive: true }).catch(()=>{});
 
-// asset extensions considered binary
 const ASSET_EXTENSIONS = [
   ".wasm",".js",".mjs",".css",".png",".jpg",".jpeg",".webp",".gif",".svg",".ico",
   ".ttf",".otf",".woff",".woff2",".eot",".json",".map",".mp4",".webm",".mp3"
 ];
 const SPECIAL_FILES = ["service-worker.js","sw.js","worker.js","manifest.json"];
-
-// Headers to drop (CSP, frame policies, etc.)
 const DROP_HEADERS = new Set([
   "content-security-policy",
   "x-frame-options",
@@ -50,7 +42,6 @@ const DROP_HEADERS = new Set([
   "permissions-policy"
 ]);
 
-// ------------------------ EXPRESS SETUP ------------------------
 const app = express();
 app.use(cors());
 app.use(morgan("tiny"));
@@ -59,7 +50,6 @@ app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public"), { index: false }));
 
-// ------------------------ CACHE (memory + disk) ------------------------
 const MEM_CACHE = new Map();
 function now(){ return Date.now(); }
 function cacheKey(s){ return Buffer.from(s).toString("base64url"); }
@@ -72,8 +62,11 @@ function cacheGet(key){
       if(fs.existsSync(fname)){
         const raw = fs.readFileSync(fname, "utf8");
         const obj = JSON.parse(raw);
-        if((now() - obj.t) < CACHE_TTL){ MEM_CACHE.set(key, { v: obj.v, t: obj.t }); return obj.v; }
-        try { fs.unlinkSync(fname); } catch(e){}
+        if((now() - obj.t) < CACHE_TTL){
+          MEM_CACHE.set(key, { v: obj.v, t: obj.t });
+          return obj.v;
+        }
+        try{ fs.unlinkSync(fname); } catch(e){}
       }
     } catch(e){}
   }
@@ -87,7 +80,6 @@ function cacheSet(key, val){
   }
 }
 
-// ------------------------ SESSIONS / COOKIE STORE ------------------------
 const SESSION_NAME = "euphoria_sid";
 const SESSIONS = new Map();
 function makeSid(){ return Math.random().toString(36).slice(2) + Date.now().toString(36); }
@@ -119,10 +111,8 @@ function storeSetCookieToSession(setCookies = [], sessionPayload){
 }
 function buildCookieHeader(map){ return [...map.entries()].map(([k,v]) => `${k}=${v}`).join("; "); }
 
-// cleanup stale sessions occasionally
 setInterval(()=>{ const cutoff = Date.now() - (1000*60*60*24); for(const [k,p] of SESSIONS.entries()) if(p.last < cutoff) SESSIONS.delete(k); }, 1000*60*30);
 
-// ------------------------ HELPERS ------------------------
 function isAlreadyProxiedHref(href){
   if(!href) return false;
   try{
@@ -153,8 +143,6 @@ function looksLikeAsset(urlStr){
     return false;
   }
 }
-
-// sanitize HTML string: remove CSP meta, integrity, crossorigin attributes
 function sanitizeHtml(html){
   try {
     html = html.replace(/<meta[^>]*http-equiv=["']?content-security-policy["']?[^>]*>/gi, "");
@@ -164,14 +152,11 @@ function sanitizeHtml(html){
   return html;
 }
 
-// JSDOM-based transform: rewrite anchors, assets, forms, srcset, css url(), meta refresh.
-// Returns transformed HTML string.
 function jsdomTransform(html, baseUrl){
   try{
     const dom = new JSDOM(html, { url: baseUrl, contentType: "text/html" });
     const document = dom.window.document;
 
-    // inject base if missing
     if(!document.querySelector('base')){
       const head = document.querySelector('head');
       if(head) {
@@ -181,7 +166,6 @@ function jsdomTransform(html, baseUrl){
       }
     }
 
-    // rewrite anchors
     const anchors = Array.from(document.querySelectorAll('a[href]'));
     anchors.forEach(a => {
       try {
@@ -195,7 +179,6 @@ function jsdomTransform(html, baseUrl){
       } catch(e){}
     });
 
-    // rewrite forms
     const forms = Array.from(document.querySelectorAll('form[action]'));
     forms.forEach(f=>{
       try{
@@ -207,7 +190,6 @@ function jsdomTransform(html, baseUrl){
       } catch(e){}
     });
 
-    // assets: src / href attributes
     const assetTags = ['img','script','link','iframe','source','video','audio'];
     assetTags.forEach(tag => {
       const nodes = Array.from(document.getElementsByTagName(tag));
@@ -225,7 +207,6 @@ function jsdomTransform(html, baseUrl){
       });
     });
 
-    // srcset rewrite
     const srcsetEls = Array.from(document.querySelectorAll('[srcset]'));
     srcsetEls.forEach(el=>{
       try{
@@ -242,7 +223,6 @@ function jsdomTransform(html, baseUrl){
       }catch(e){}
     });
 
-    // CSS url(...) rewrite in style elements and inline styles
     const styles = Array.from(document.querySelectorAll('style'));
     styles.forEach(st=>{
       try{
@@ -257,6 +237,7 @@ function jsdomTransform(html, baseUrl){
         st.textContent = txt;
       }catch(e){}
     });
+
     const inlines = Array.from(document.querySelectorAll('[style]'));
     inlines.forEach(el=>{
       try{
@@ -272,7 +253,6 @@ function jsdomTransform(html, baseUrl){
       }catch(e){}
     });
 
-    // meta refresh rewrite
     const metas = Array.from(document.querySelectorAll('meta[http-equiv]'));
     metas.forEach(m=>{
       try{
@@ -288,11 +268,9 @@ function jsdomTransform(html, baseUrl){
       } catch(e){}
     });
 
-    // remove problematic noscript blocks that may hide content when JS disabled (best effort)
     const noscripts = Array.from(document.getElementsByTagName('noscript'));
     noscripts.forEach(n => { try { n.parentNode && n.parentNode.removeChild(n); } catch(e){} });
 
-    // finally return serialized HTML
     return dom.serialize();
   } catch(err){
     console.warn("jsdom transform failed", err && err.message ? err.message : err);
@@ -300,29 +278,22 @@ function jsdomTransform(html, baseUrl){
   }
 }
 
-// JS rewriting (conservative): rewrite string-literal URLs and simple fetch('/path') occurrences
 function rewriteInlineJs(source, baseUrl){
   try{
-    // safe regex replacements - not perfect but useful for many scripts
-    // 1) fetch('...') and fetch("...") -> proxied
     source = source.replace(/fetch\((['"])([^'"]+?)\1/gi, (m,q,u) => {
       try{
         if(u.includes('/proxy?url=') || /^data:/i.test(u)) return m;
         const abs = toAbsolute(u, baseUrl) || u;
-        const prox = proxyizeAbsoluteUrl(abs);
-        return `fetch('${prox}'`;
+        return `fetch('${proxyizeAbsoluteUrl(abs)}'`;
       } catch(e){ return m; }
     });
-    // 2) XHR open: open('GET','/path'...)
     source = source.replace(/\.open\(\s*(['"])(GET|POST|PUT|DELETE|HEAD|OPTIONS)?\1\s*,\s*(['"])([^'"]+?)\3/gi, (m,p1,method,p3,u)=>{
       try{
         if(u.includes('/proxy?url=') || /^data:/i.test(u)) return m;
         const abs = toAbsolute(u, baseUrl) || u;
-        const prox = proxyizeAbsoluteUrl(abs);
-        return `.open(${p1}${method || ''}${p1},'${prox}'`;
+        return `.open(${p1}${method || ''}${p1},'${proxyizeAbsoluteUrl(abs)}'`;
       } catch(e){ return m; }
     });
-    // 3) string literals that look like absolute or relative urls (quick pass) -> proxied
     source = source.replace(/(['"])(\/[^'"]+?\.[a-z0-9]{2,6}[^'"]*?)\1/gi, (m,q,u)=>{
       try{
         if(u.includes('/proxy?url=') || /^data:/i.test(u)) return m;
@@ -331,18 +302,14 @@ function rewriteInlineJs(source, baseUrl){
       } catch(e){ return m; }
     });
     return source;
-  } catch(e){
-    return source;
-  }
+  } catch(e){ return source; }
 }
 
-// Service worker patch (naive safe rewrites): importScripts(...) and fetch('...') string literals
 function patchServiceWorker(source, baseUrl){
   try{
     let s = source;
     s = s.replace(/importScripts\(([^)]+)\)/gi, (m, args)=>{
       try{
-        // args may be 'a.js', 'b.js'
         const arr = eval("[" + args + "]");
         const out = arr.map(item => {
           if(typeof item === 'string'){
@@ -365,7 +332,6 @@ function patchServiceWorker(source, baseUrl){
   } catch(e){ return source; }
 }
 
-// ------------------------ WEBSOCKET TELEMETRY ------------------------
 const server = app.listen(PORT, () => console.log(`Euphoria v2 (B1 JSDOM) running on port ${PORT}`));
 const wss = new WebSocketServer({ server, path: "/_euph_ws" });
 wss.on("connection", ws=>{
@@ -375,26 +341,17 @@ wss.on("connection", ws=>{
   });
 });
 
-// ------------------------ MAIN /proxy ENDPOINT ------------------------
 app.get("/proxy", async (req, res) => {
-  // accept both /proxy?url=... and /proxy/<encoded>
   let raw = req.query.url || (req.path && req.path.startsWith("/proxy/") ? decodeURIComponent(req.path.replace(/^\/proxy\//, "")) : null);
   if(!raw) return res.status(400).send("Missing url (use /proxy?url=https://example.com)");
-
-  // normalize
   if(!/^https?:\/\//i.test(raw)) raw = "https://" + raw;
-
-  // session + cookie
   const session = getSessionFromReq(req);
   try{ setSessionCookieHeader(res, session.sid); } catch(e){}
-
-  // caching keys
   const accept = (req.headers.accept || "").toLowerCase();
   const wantHtml = accept.includes("text/html") || req.headers['x-euphoria-client'] === 'b1' || req.query.force_html === '1';
   const assetKey = raw + "::asset";
   const htmlKey = raw + "::html";
 
-  // small asset cache
   if(!wantHtml){
     const cached = cacheGet(assetKey);
     if(cached){
@@ -406,7 +363,6 @@ app.get("/proxy", async (req, res) => {
     if(cachedHtml){ res.setHeader("Content-Type","text/html; charset=utf-8"); return res.send(cachedHtml); }
   }
 
-  // build upstream headers
   const originHeaders = {
     "User-Agent": session.payload.ua || (req.headers['user-agent'] || USER_AGENT_DEFAULT),
     "Accept": req.headers.accept || "*/*",
@@ -418,7 +374,6 @@ app.get("/proxy", async (req, res) => {
   if(req.headers.referer) originHeaders["Referer"] = req.headers.referer;
   try { originHeaders["Origin"] = new URL(raw).origin; } catch(e){}
 
-  // fetch upstream (manual redirect to rewrite Location)
   let originRes;
   try {
     const controller = new AbortController();
@@ -430,13 +385,11 @@ app.get("/proxy", async (req, res) => {
     return res.status(502).send("Euphoria: failed to fetch target: " + String(err));
   }
 
-  // persist set-cookie
   try {
     const setCookies = originRes.headers.raw ? originRes.headers.raw()['set-cookie'] || [] : [];
     if(setCookies.length) storeSetCookieToSession(setCookies, session.payload);
   } catch(e){}
 
-  // handle redirects (rewrite Location to our proxy)
   const status = originRes.status || 200;
   if([301,302,303,307,308].includes(status)){
     const loc = originRes.headers.get("location");
@@ -449,12 +402,10 @@ app.get("/proxy", async (req, res) => {
     }
   }
 
-  // content detection
   const contentType = (originRes.headers.get("content-type") || "").toLowerCase();
   const isHtml = contentType.includes("text/html");
   const treatAsAsset = !isHtml;
 
-  // asset: stream binary + cache small ones
   if(treatAsAsset){
     try{ originRes.headers.forEach((v,k) => { if(!DROP_HEADERS.has(k.toLowerCase())) try{ res.setHeader(k,v); } catch(e){} }); } catch(e){}
     try{ setSessionCookieHeader(res, session.sid); } catch(e){}
@@ -472,16 +423,12 @@ app.get("/proxy", async (req, res) => {
     }
   }
 
-  // HTML path: read and transform
   let htmlText;
   try { htmlText = await originRes.text(); } catch(e){ console.error("read html error", e); return res.status(502).send("Euphoria: failed to read HTML"); }
 
   htmlText = sanitizeHtml(htmlText);
-
-  // JSDOM structural transformation
   let transformed = jsdomTransform(htmlText, originRes.url || raw);
 
-  // Inject client-side rewrite snippet if missing (runtime fetch/XHR interception)
   const clientMarker = "/* EUPHORIA_CLIENT_REWRITE */";
   if(!transformed.includes(clientMarker)){
     const clientSnippet = `
@@ -520,7 +467,6 @@ ${clientMarker}
     transformed = transformed.replace(/<\/body>/i, clientSnippet + "</body>");
   }
 
-  // Post-process inline scripts: conservative regex rewrites (fetch/XHR etc.) and SW patching
   try {
     const dom2 = new JSDOM(transformed, { url: originRes.url || raw });
     const document2 = dom2.window.document;
@@ -528,18 +474,13 @@ ${clientMarker}
     for(const s of scripts){
       try {
         const src = s.getAttribute('src');
-        if(src) {
-          // external scripts should already be proxied by earlier transform (src points to our /proxy)
-          continue;
-        }
+        if(src) continue;
         let code = s.textContent || '';
         if(!code.trim()) continue;
-        // if likely a service worker registration or SW code, patch service worker API calls
         const lower = code.slice(0, 300).toLowerCase();
         if(lower.includes('self.addeventlistener') || lower.includes('importscripts') || lower.includes('caches.open')){
           code = patchServiceWorker(code, originRes.url || raw);
         }
-        // conservative inline JS rewriting
         code = rewriteInlineJs(code, originRes.url || raw);
         s.textContent = code;
       } catch(e){}
@@ -549,31 +490,22 @@ ${clientMarker}
     console.warn("post-process inline scripts failed", e && e.message ? e.message : e);
   }
 
-  // forward safe headers
   try{ originRes.headers.forEach((v,k) => { if(!DROP_HEADERS.has(k.toLowerCase())) try{ res.setHeader(k,v) } catch(e){} }); } catch(e){}
-
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   try{ setSessionCookieHeader(res, session.sid); } catch(e){}
-
-  // cache small HTML
   try{ if(transformed && transformed.length < 512 * 1024) cacheSet(htmlKey, transformed); } catch(e){}
-
   return res.send(transformed);
 });
 
-// ------------------------ FALLBACK: direct-path requests using Referer ------------------------
 app.use(async (req, res, next) => {
   const p = req.path || "/";
   if(p.startsWith("/proxy") || p.startsWith("/_euph_ws") || p.startsWith("/static") || p.startsWith("/public")) return next();
-
   const referer = req.headers.referer || req.headers.referrer || "";
   const m = referer.match(/[?&]url=([^&]+)/);
   if(!m) return next();
-
   let orig;
   try { orig = decodeURIComponent(m[1]); } catch(e) { return next(); }
   if(!orig) return next();
-
   let baseOrigin;
   try { baseOrigin = new URL(orig).origin; } catch(e){ return next(); }
   const attempted = new URL(req.originalUrl, baseOrigin).href;
@@ -610,7 +542,18 @@ app.use(async (req, res, next) => {
     const final = transformed.replace(/<\/body>/i, `
 <script>
 /* EUPHORIA FALLBACK */
-(function(){ const D="${DEPLOYMENT_ORIGIN}"; (function(){ const orig = window.fetch; window.fetch = function(r,i){ try{ if(typeof r==='string' && !r.includes('/proxy?url=')) r = D + '/proxy?url=' + encodeURIComponent(new URL(r, document.baseURI).href); }catch(e){} return orig.call(this,r,i); }; })(); })();
+(function(){ 
+  const D="${DEPLOYMENT_ORIGIN}"; 
+  (function(){ 
+    const orig = window.fetch; 
+    window.fetch = function(r,i){ 
+      try{ 
+        if(typeof r==='string' && !r.includes('/proxy?url=')) r = D + '/proxy?url=' + encodeURIComponent(new URL(r, document.baseURI).href); 
+      }catch(e){} 
+      return orig.call(this,r,i); 
+    }; 
+  })(); 
+})();
 </script></body>`);
     originRes.headers.forEach((v,k)=>{ if(!DROP_HEADERS.has(k.toLowerCase())) try{ res.setHeader(k,v) } catch(e){} });
     res.setHeader("Content-Type","text/html; charset=utf-8");
@@ -621,13 +564,83 @@ app.use(async (req, res, next) => {
   }
 });
 
-// ------------------------ SPA fallback ------------------------
 app.get("/", (req,res) => res.sendFile(path.join(__dirname, "public", "index.html")));
 app.get("*", (req,res,next) => {
   if(req.method === "GET" && req.headers.accept && req.headers.accept.includes("text/html")) return res.sendFile(path.join(__dirname, "public", "index.html"));
   next();
 });
 
-// ------------------------ ERRORS ------------------------
-process.on("unhandledRejection", err => console.error("unhandledRejection", err));
-process.on("uncaughtException", err => console.error("uncaughtException", err));
+process.on("unhandledRejection", (err) => console.error("[EUPHORIA ERROR] unhandledRejection:", err && err.stack ? err.stack : err));
+process.on("uncaughtException", (err) => console.error("[EUPHORIA ERROR] uncaughtException:", err && err.stack ? err.stack : err));
+process.on("warning", (warning) => console.warn("[EUPHORIA WARNING]:", warning.name, warning.message));
+
+const EXTENSIONS = new Map();
+function registerExtension(name, fn) { if(typeof fn !== "function") throw new Error("Extension must be a function"); EXTENSIONS.set(name, fn); }
+async function runExtensions(html, context={}) { let output = html; for(const [name, fn] of EXTENSIONS.entries()) { try { output = await fn(output, context) || output; } catch(e){ console.error(`Extension ${name} failed:`, e); } } return output; }
+registerExtension("bannerInject", (html) => { if(!html.includes("<body")) return html; const banner = `<div style="position:fixed;top:0;width:100%;background:#222;color:#fff;text-align:center;z-index:9999;font-family:sans-serif;padding:4px 0;font-size:12px;">Euphoria Proxy Active</div>`; return html.replace(/<body[^>]*>/i, (match) => match + banner); });
+
+app.get("/_euph_debug/sessions", (req, res) => {
+  const sessions = {};
+  for(const [sid, payload] of SESSIONS.entries()){
+    sessions[sid] = { lastActive: new Date(payload.last).toISOString(), cookies: Object.fromEntries(payload.cookies.entries()), ua: payload.ua };
+  }
+  res.json({ activeSessions: sessions });
+});
+
+app.get("/_euph_debug/cache", (req, res) => {
+  const memCache = {};
+  for(const [key, val] of MEM_CACHE.entries()){
+    memCache[key] = { ageSec: Math.floor((Date.now() - val.t)/1000), size: (typeof val.v === 'string' ? val.v.length : (val.v && val.v.length) || 0) };
+  }
+  res.json({ memoryCache: memCache });
+});
+
+app.get("/_euph_debug/extensions", (req, res) => {
+  res.json({ registeredExtensions: Array.from(EXTENSIONS.keys()) });
+});
+
+app.get("/_euph_debug/ping", (req,res) => res.json({ msg:"pong", ts:Date.now() }));
+
+// basic ws-proxy endpoint helper (best-effort)
+// Note: This is a lightweight passthrough to help in-browser WebSocket re-mapping. Production usage needs hardened proxying.
+import http from "http";
+const httpServer = http.createServer();
+const wsProxy = new WebSocketServer({ noServer: true });
+httpServer.on('upgrade', (req, socket, head) => {
+  const url = new URL(req.url || "", `http://${req.headers.host}`);
+  if(url.pathname === '/_wsproxy'){
+    const target = url.searchParams.get('url');
+    if(!target){ socket.destroy(); return; }
+    wsProxy.handleUpgrade(req, socket, head, (clientWs) => {
+      (async () => {
+        try {
+          const targetUrl = new URL(target).href;
+          const proxyWs = new WebSocketServer({ noServer: true });
+          // Attempt simple TCP-level ws connection as client using native WebSocket (browser-to-server mapping)
+          const outbound = new (await import('ws')).WebSocket(targetUrl);
+          outbound.on('open', () => {
+            clientWs.on('message', msg => outbound.send(msg));
+            outbound.on('message', msg => clientWs.send(msg));
+            clientWs.on('close', () => outbound.close());
+            outbound.on('close', () => clientWs.close());
+          });
+          outbound.on('error', () => clientWs.close());
+        } catch(e){
+          try{ clientWs.close(); } catch(_) {}
+        }
+      })();
+    });
+  } else {
+    socket.destroy();
+  }
+});
+httpServer.listen(0, () => {/* ephemeral */});
+
+// simple health endpoint
+app.get("/_healthz", (req,res) => res.json({ status: "ok", ts: Date.now() }));
+
+// export minimal helpers for potential imports
+export {
+  jsdomTransform, rewriteInlineJs, patchServiceWorker, proxyizeAbsoluteUrl,
+  cacheGet, cacheSet, registerExtension, runExtensions
+};
