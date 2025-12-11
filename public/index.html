@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Euphoria — Proxy</title>
+<title>Euphoria — Proxy (BC Hybrid)</title>
 <style>
 :root{
   --bg:#0b0c0e; --panel: rgba(18,18,18,0.46); --control: rgba(255,255,255,0.07);
@@ -42,6 +42,20 @@ a.euph-link{color:var(--accent);}
     <input id="address" placeholder="Type a URL (example.com) or search (anything with spaces)"/>
     <button id="goBtn" class="tb-btn" title="Go">Go</button>
   </div>
+
+  <div id="progressWrap" aria-hidden="true"><div id="progress"></div></div>
+
+  <div id="view">
+    <div id="overlay"><div class="spinner" aria-hidden="true"></div></div>
+    <div id="viewInner" aria-live="polite">
+      <h2 style="margin-top:0">Euphoria — BC Hybrid</h2>
+      <p style="color:#444">No iframe. The proxy rewrites pages so they run inside this UI. Try <code>google.com</code> or <code>xbox.com</code>.</p>
+      <p style="color:#444">If a site triggers CAPTCHA frequently, that's the target site blocking the proxy IP — that requires IP rotation (server-side).</p>
+      <p style="color:#777;font-size:13px">Admin: <a class="euph-link" href="/_euph_debug/ping" target="_blank">/_euph_debug/ping</a> • Sessions: <a class="euph-link" href="/_euph_debug/sessions" target="_blank">/_euph_debug/sessions</a></p>
+    </div>
+  </div>
+
+  <div id="msg" role="status"></div>
 
 <script>
 (function(){
