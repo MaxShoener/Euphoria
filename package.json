@@ -15,7 +15,7 @@
     "express-rate-limit": "^7.1.0",
     "http-proxy": "^1.18.1",
     "jsdom": "^24.0.0",
-    "lru-cache": "^10.3.1"
+    "lru-cache": "^10.3.1",
     "morgan": "^1.10.0",
     "node-cache": "^5.1.2",
     "rate-limiter-flexible": "^2.3.10",
