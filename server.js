@@ -76,10 +76,15 @@ const globalLimiter = rateLimit({
 app.use(globalLimiter);
 
 // memory cache using LRUCache
+// estimate average item size in bytes (adjust if needed)
+const AVG_ITEM_SIZE = 50 * 1024; // 50 KB per entry
+
 const MEM_CACHE = new LRUCache({
-  max: MAX_MEMORY_CACHE_ITEMS,
+  // total cache size in bytes
+  maxSize: MAX_MEMORY_CACHE_ITEMS * AVG_ITEM_SIZE,
   ttl: CACHE_TTL,
-  sizeCalculation: (val, key) => (typeof val === "string" ? Buffer.byteLength(val, "utf8") : JSON.stringify(val).length)
+  sizeCalculation: (val, key) =>
+    typeof val === "string" ? Buffer.byteLength(val, "utf8") : JSON.stringify(val).length
 });
 
 // disk cache helper
