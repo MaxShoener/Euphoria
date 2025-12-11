@@ -30,7 +30,7 @@ html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial
 #msg{position:fixed;left:18px;bottom:18px;color:#fff;background:rgba(0,0,0,0.45);padding:8px 12px;border-radius:10px;font-size:13px;display:none;z-index:2400}
 #viewInner{min-height:100%;padding:18px}
 code { background: rgba(0,0,0,0.05); padding:2px 6px; border-radius:4px; }
-a { color: #1565c0; }
+a.euph-link{color:var(--accent);}
 </style>
 </head>
 <body>
@@ -50,7 +50,8 @@ a { color: #1565c0; }
     <div id="viewInner" aria-live="polite">
       <h2 style="margin-top:0">Euphoria — BC Hybrid</h2>
       <p style="color:#444">No iframe. The proxy rewrites pages so they run inside this UI. Try <code>google.com</code> or <code>xbox.com</code>.</p>
-      <p style="color:#444">If a site triggers CAPTCHA frequently, that's the target site blocking the proxy IP — that requires IP rotation.</p>
+      <p style="color:#444">If a site triggers CAPTCHA frequently, that's the target site blocking the proxy IP — that requires IP rotation (server-side).</p>
+      <p style="color:#777;font-size:13px">Admin: <a class="euph-link" href="/_euph_debug/ping" target="_blank">/_euph_debug/ping</a> • Sessions: <a class="euph-link" href="/_euph_debug/sessions" target="_blank">/_euph_debug/sessions</a></p>
     </div>
   </div>
 
@@ -256,8 +257,7 @@ a { color: #1565c0; }
       return origRegister(scriptURL, options);
     };
   }
-})();
-`;
+})();`;
   })();
 
   fetchProxyAndRender('https://www.google.com', true);
