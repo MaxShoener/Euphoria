@@ -1,183 +1,166 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Euphoria Wisp UI</title>
-  <style>
-    :root{--bg:#0b0e13;--panel:#0f1720;--muted:#9aa4b2;--accent:#4f46e5;--danger:#e11d48}
-    html,body{height:100%;margin:0;background:linear-gradient(180deg,#071021,#0b1220);font-family:Inter,system-ui,Segoe UI,Roboto,"Helvetica Neue",Arial}
-    .app{max-width:1100px;margin:28px auto;padding:20px;color:#e6eef6}
-    .header{display:flex;gap:12px;align-items:center}
-    .logo{font-weight:700;font-size:20px;letter-spacing:.6px}
-    .controls{margin-left:auto;display:flex;gap:8px;align-items:center}
-    input[type="text"]{background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.04);padding:8px 10px;border-radius:8px;color:#e6eef6;min-width:300px}
-    button{background:var(--accent);border:0;padding:8px 12px;border-radius:8px;color:white;cursor:pointer}
-    button.ghost{background:transparent;border:1px solid rgba(255,255,255,0.06)}
-    .frame-wrap{margin-top:18px;border-radius:8px;overflow:hidden;border:1px solid rgba(255,255,255,0.04)}
-    #targetFrame{width:100%;height:72vh;border:0;background:white}
-    .hint{color:var(--muted);font-size:13px;margin-top:8px}
-    .small{font-size:13px;color:var(--muted)}
-    .toolbar{display:flex;gap:8px;align-items:center}
-    .bad{color:var(--danger)}
-    .server-select{display:flex;gap:8px;align-items:center}
-    label{font-size:13px;color:var(--muted)}
-  </style>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Euphoria — Wisp Proxy</title>
+<style>
+:root{
+  --bg:#0b0c0e; --panel: rgba(18,18,18,0.46); --control: rgba(255,255,255,0.07);
+  --accent:#2e7d32; --muted:#aeb3b7;
+}
+html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;background:var(--bg);color:#fff}
+#topbar{
+  position:fixed; top:14px; left:50%; transform:translateX(-50%);
+  width:min(1100px,92%); height:56px; border-radius:999px;
+  background:var(--panel); display:flex; gap:10px; align-items:center;
+  padding:6px 14px; z-index:2147483647; box-shadow:0 10px 30px rgba(0,0,0,0.5);
+  backdrop-filter: blur(8px) saturate(120%);
+}
+.tb-btn{width:44px;height:44px;border-radius:12px;border:0;background:var(--control);color:#fff;font-size:16px;display:grid;place-items:center;cursor:pointer}
+.tb-btn:active{transform:translateY(1px)}
+#address,#wispServer{height:40px;flex:1;border-radius:12px;border:none;padding:8px 12px;background:rgba(0,0,0,0.22);color:#fff;font-size:14px;outline:2px solid transparent}
+#goBtn{min-width:64px;background:var(--accent)}
+#progressWrap{position:fixed;left:12px;right:12px;top:86px;height:4px;border-radius:4px;overflow:hidden;z-index:2200;pointer-events:none}
+#progress{height:100%;width:0;background:linear-gradient(90deg,#4caf50,#2e7d32);transition:width 120ms linear}
+#view{position:fixed;top:102px;left:12px;right:12px;bottom:12px;border-radius:12px;overflow:auto;background:#fff;color:#000;box-shadow:0 8px 24px rgba(0,0,0,0.45)}
+#overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.28);z-index:2300}
+.spinner{width:44px;height:44px;border-radius:50%;border:6px solid rgba(255,255,255,0.14);border-top-color:#4caf50;animation:spin 900ms linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#msg{position:fixed;left:18px;bottom:18px;color:#fff;background:rgba(0,0,0,0.45);padding:8px 12px;border-radius:10px;font-size:13px;display:none;z-index:2400}
+#viewInner{min-height:100%;padding:18px}
+code { background: rgba(0,0,0,0.05); padding:2px 6px; border-radius:4px; }
+a.euph-link{color:var(--accent);}
+#homeSection{margin-top:24px;color:#444}
+#wispSection{display:flex;gap:8px;margin-top:12px}
+#wispSection input{flex:1}
+</style>
 </head>
 <body>
-  <div class="app" role="application">
-    <div class="header">
-      <div class="logo">Euphoria — Wisp UI</div>
-      <div class="server-select" style="margin-left:16px">
-        <label for="wispUrl">Wisp server</label>
-        <input id="wispUrl" type="text" placeholder="https://your-wisp.example.com" />
-        <button id="saveServer" class="ghost">Save</button>
+  <div id="topbar" role="navigation" aria-label="Euphoria controls">
+    <button id="back" class="tb-btn" title="Back">◀</button>
+    <button id="forward" class="tb-btn" title="Forward">▶</button>
+    <button id="refresh" class="tb-btn" title="Refresh">⟳</button>
+    <button id="home" class="tb-btn" title="Home">🏠</button>
+    <input id="address" placeholder="Type a URL (example.com) or search (anything with spaces)"/>
+    <button id="goBtn" class="tb-btn" title="Go">Go</button>
+  </div>
+
+  <div id="progressWrap" aria-hidden="true"><div id="progress"></div></div>
+
+  <div id="view">
+    <div id="overlay"><div class="spinner" aria-hidden="true"></div></div>
+    <div id="viewInner" aria-live="polite">
+      <h2 style="margin-top:0">Euphoria — Wisp Proxy</h2>
+      <div id="homeSection">
+        <p>Enter the Wisp server URL you want to use:</p>
+        <div id="wispSection">
+          <input id="wispServer" placeholder="https://my-wisp-server.com"/>
+          <button id="setWisp" class="tb-btn" style="min-width:64px;background:#1976d2">Connect</button>
+        </div>
       </div>
-      <div class="controls">
-        <input id="rawUrl" type="text" placeholder="https://example.com or /proxy//host/path" />
-        <button id="go">Load</button>
-        <button id="openNew" title="Open in new tab">Open</button>
-      </div>
-    </div>
-
-    <div class="hint">Tip: paste a full URL (https://...) or a proxied path. Server setting controls the Wisp backend used by the client.</div>
-
-    <div class="frame-wrap">
-      <iframe id="targetFrame" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"></iframe>
-    </div>
-
-    <div class="toolbar" style="margin-top:10px">
-      <button id="back" class="ghost">Back</button>
-      <button id="forward" class="ghost">Forward</button>
-      <button id="reload" class="ghost">Reload</button>
-      <div style="flex:1"></div>
-      <div class="small">Connected to: <span id="currentServer">—</span></div>
-    </div>
-
-    <div style="margin-top:10px" class="small">
-      <strong>Notes:</strong> Use a publicly reachable Wisp server (or your backend URL). If a site uses strict CSP or cross-origin restrictions, some features may be limited. Saved server is stored locally.
+      <p style="color:#444;margin-top:16px">After connecting, type a target URL above and press Go.</p>
+      <p style="color:#777;font-size:13px">Admin: <a class="euph-link" href="/_euph_debug/ping" target="_blank">/_euph_debug/ping</a> • Sessions: <a class="euph-link" href="/_euph_debug/sessions" target="_blank">/_euph_debug/sessions</a></p>
     </div>
   </div>
 
-  <script>
-    (function(){
-      const wispInput = document.getElementById('wispUrl');
-      const rawInput = document.getElementById('rawUrl');
-      const goBtn = document.getElementById('go');
-      const saveBtn = document.getElementById('saveServer');
-      const openNew = document.getElementById('openNew');
-      const frame = document.getElementById('targetFrame');
-      const currentServer = document.getElementById('currentServer');
-      const backBtn = document.getElementById('back');
-      const forwardBtn = document.getElementById('forward');
-      const reloadBtn = document.getElementById('reload');
+  <div id="msg" role="status"></div>
 
-      function normalizeServer(s){
-        if(!s) return '';
-        s = s.trim();
-        if(!s) return '';
-        try{
-          const u = new URL(s);
-          return u.origin;
-        }catch(e){
-          // try http
-          try{ const u2 = new URL('https://' + s); return u2.origin; }catch(e){ return s; }
-        }
+<script>
+(function(){
+  const address = document.getElementById('address');
+  const goBtn = document.getElementById('goBtn');
+  const viewInner = document.getElementById('viewInner');
+  const overlay = document.getElementById('overlay');
+  const progress = document.getElementById('progress');
+  const msg = document.getElementById('msg');
+  const wispInput = document.getElementById('wispServer');
+  const setWisp = document.getElementById('setWisp');
+
+  let historyStack = [], historyIndex = -1;
+  let wispServer = '';
+
+  function showMsg(t, ms=3000){ msg.textContent = t; msg.style.display='block'; setTimeout(()=>msg.style.display='none', ms); }
+  function showOverlay(v=true){ overlay.style.display = v ? 'flex' : 'none'; }
+  function setProgress(p){ progress.style.width = Math.max(0,Math.min(100,p)) + '%'; }
+
+  function normalizeInput(v){
+    v = (v||'').trim();
+    if(!v) return '';
+    if(/^https?:\/\//i.test(v)) return v;
+    return 'https://' + v;
+  }
+
+  function proxURL(url){
+    if(!wispServer) return url;
+    try{
+      if(url.includes('/proxy?url=')) return url;
+      return wispServer + '/proxy?url=' + encodeURIComponent(new URL(url, document.baseURI).href);
+    }catch(e){ return url; }
+  }
+
+  async function fetchProxyAndRender(url, push=true){
+    if(!url) return showMsg('No URL specified');
+    if(push){ historyStack = historyStack.slice(0, historyIndex + 1); historyStack.push(url); historyIndex = historyStack.length - 1; }
+    setProgress(6); showOverlay(true);
+    try {
+      const res = await fetch(proxURL(url), { headers: { 'X-Euphoria-Client': 'wisp-proxy', 'Accept': 'text/html,*/*;q=0.9' }});
+      if(!res.ok) throw new Error('Proxy error ' + res.status + ' ' + res.statusText);
+      const ct = (res.headers.get('content-type')||'').toLowerCase();
+      if(ct.includes('text/html')){
+        const html = await res.text();
+        setProgress(35);
+        await renderHtml(html, url);
+        setProgress(100);
+        setTimeout(()=> setProgress(0), 220);
+      } else if(ct.includes('application/json') || ct.includes('text/')){
+        const txt = await res.text();
+        viewInner.innerHTML = '<pre>' + escapeHtml(txt) + '</pre>';
+      } else {
+        const blob = await res.blob();
+        const u = URL.createObjectURL(blob);
+        viewInner.innerHTML = '<div style="padding:20px"><a href="' + u + '" target="_blank">Open resource</a></div>';
       }
+    } catch(err) {
+      viewInner.innerHTML = '<div style="padding:18px;color:#900;background:#fee;border-radius:8px"><h3>Error</h3><pre>' + escapeHtml(String(err)) + '</pre></div>';
+      console.error(err);
+    } finally {
+      showOverlay(false);
+    }
+  }
 
-      function getSaved(){
-        return localStorage.getItem('euph_wisp') || '';
-      }
-      function setSaved(v){
-        localStorage.setItem('euph_wisp', v || '');
-      }
+  function escapeHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
-      // load saved
-      (()=>{
-        const s = getSaved();
-        if(s) wispInput.value = s;
-        currentServer.textContent = s || 'local';
-      })();
-
-      saveBtn.addEventListener('click', ()=>{
-        const srv = normalizeServer(wispInput.value);
-        setSaved(srv);
-        wispInput.value = srv;
-        currentServer.textContent = srv || 'local';
-        alert('Wisp server saved: ' + srv);
+  async function renderHtml(htmlText, originUrl){
+    try{
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(htmlText, 'text/html');
+      const incomingHead = doc.head ? Array.from(doc.head.children) : [];
+      incomingHead.forEach(node=>{
+        try { if(!['title','base'].includes(node.tagName.toLowerCase())) document.head.appendChild(document.importNode(node,true)); } catch(e){}
       });
+      viewInner.innerHTML = '';
+      const bodyNodes = doc.body ? Array.from(doc.body.childNodes) : [];
+      bodyNodes.forEach(n => { try { viewInner.appendChild(document.importNode(n,true)); } catch(e){} });
+      address.value = originUrl;
+    }catch(e){ viewInner.innerHTML = '<pre>' + escapeHtml(htmlText.slice(0,20000)) + '</pre>'; }
+  }
 
-      function buildProxyUrl(target){
-        const srv = normalizeServer(getSaved()) || '';
-        // client supports two modes:
-        // 1) If saved server exists, request /proxy?url=... at that server
-        // 2) If not, assume local backend under same origin: /proxy?url=...
-        const base = srv || window.location.origin;
-        try{
-          // if user provided a proxied path already (starts with /proxy or /proxy//)
-          if(/^\/proxy(\/.*)?/.test(target)) {
-            // if target is /proxy//host/... keep as-is but prefix with base
-            if(target.startsWith('/proxy/')) {
-              return base + target;
-            }
-            return base + '/proxy?url=' + encodeURIComponent(target.replace(/^\/proxy\??/,''));
-          }
-          // full URL -> proxy at base
-          const url = new URL(target, window.location.origin).href;
-          return base + '/proxy?url=' + encodeURIComponent(url);
-        }catch(e){
-          // fallback
-          return base + '/proxy?url=' + encodeURIComponent(target);
-        }
-      }
+  document.getElementById('back').addEventListener('click', ()=>{ if(historyIndex>0) fetchProxyAndRender(historyStack[--historyIndex], false); });
+  document.getElementById('forward').addEventListener('click', ()=>{ if(historyIndex < historyStack.length-1) fetchProxyAndRender(historyStack[++historyIndex], false); });
+  document.getElementById('refresh').addEventListener('click', ()=>{ if(historyIndex >= 0) fetchProxyAndRender(historyStack[historyIndex], false); });
+  document.getElementById('home').addEventListener('click', ()=> viewInner.scrollIntoView({behavior:'smooth'}));
+  goBtn.addEventListener('click', ()=> { const v = normalizeInput(address.value); if(!v) showMsg('Enter a URL or search'); else fetchProxyAndRender(v, true); });
+  address.addEventListener('keydown', (e)=>{ if(e.key==='Enter') goBtn.click(); });
 
-      goBtn.addEventListener('click', ()=>{
-        const v = rawInput.value.trim();
-        if(!v){
-          alert('Enter a URL or proxied path');
-          return;
-        }
-        const final = buildProxyUrl(v);
-        frame.src = final;
-      });
+  setWisp.addEventListener('click', ()=>{
+    const u = normalizeInput(wispInput.value);
+    if(!u) return showMsg('Enter Wisp server URL');
+    wispServer = u.replace(/\/$/,'');
+    showMsg('Connected to Wisp server');
+  });
 
-      openNew.addEventListener('click', ()=>{
-        const v = rawInput.value.trim();
-        if(!v) return alert('Enter url');
-        const final = buildProxyUrl(v);
-        window.open(final, '_blank');
-      });
-
-      backBtn.addEventListener('click', ()=>{ try{ frame.contentWindow.history.back(); }catch(e){ console.warn(e); }});
-      forwardBtn.addEventListener('click', ()=>{ try{ frame.contentWindow.history.forward(); }catch(e){ console.warn(e); }});
-      reloadBtn.addEventListener('click', ()=>{ frame.src = frame.src; });
-
-      // keyboard shortcuts
-      rawInput.addEventListener('keydown', (ev)=>{
-        if(ev.key === 'Enter') goBtn.click();
-      });
-
-      // auto-connect sample
-      const q = new URLSearchParams(location.search).get('url');
-      if(q){
-        rawInput.value = q;
-        goBtn.click();
-      }
-
-      // small auto-detect: try detect backend health
-      async function probe(){
-        const srv = normalizeServer(getSaved()) || '';
-        const probeUrl = (srv || window.location.origin) + '/_euph_debug/ping';
-        try{
-          const r = await fetch(probeUrl, {method:'GET', credentials:'include'});
-          if(r.ok) currentServer.textContent = (srv||window.location.origin) + ' ✓';
-          else currentServer.textContent = (srv||window.location.origin) + ' ✗';
-        }catch(e){
-          currentServer.textContent = (srv||window.location.origin) + ' ✗';
-        }
-      }
-      setTimeout(probe, 600);
-    })();
-  </script>
+})();
+</script>
 </body>
 </html>
