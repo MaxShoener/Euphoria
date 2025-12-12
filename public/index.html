@@ -1,281 +1,386 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Euphoria — Wisp Client</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Euphoria — Proxy</title>
+  <style>
+    :root{
+      --bg:#0b0c0e;
+      --panel: rgba(18,18,18,0.46);
+      --control: rgba(255,255,255,0.07);
+      --control2: rgba(255,255,255,0.10);
+      --stroke: rgba(255,255,255,0.10);
+      --accent:#2e7d32;
+      --accent2:#43a047;
+      --muted:#aeb3b7;
+      --warn:#ffb300;
+      --bad:#ef5350;
+      --good:#66bb6a;
+      --shadow: 0 14px 40px rgba(0,0,0,0.55);
+      --radius: 22px;
+    }
+    html,body{height:100%;margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial;background:var(--bg);color:#fff}
+    *{box-sizing:border-box}
+    a{color:inherit}
+    .wrap{min-height:100%;display:flex;align-items:center;justify-content:center;padding:90px 16px 40px}
+    #topbar{
+      position:fixed; top:14px; left:50%; transform:translateX(-50%);
+      width:min(1100px,92%); height:58px;
+      border-radius:999px;
+      background:linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.05));
+      border:1px solid var(--stroke);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      display:flex; align-items:center; justify-content:space-between;
+      padding:10px 14px;
+      z-index:1000;
+    }
+    #navLeft, #navRight{display:flex; gap:10px; align-items:center}
+    .btn{
+      height:38px; min-width:38px;
+      border-radius:999px;
+      border:1px solid var(--stroke);
+      background:rgba(255,255,255,0.08);
+      color:#fff;
+      cursor:pointer;
+      display:inline-flex; align-items:center; justify-content:center;
+      padding:0 14px;
+      transition: transform .08s ease, background .12s ease, border-color .12s ease;
+      user-select:none;
+    }
+    .btn:hover{background:rgba(255,255,255,0.12)}
+    .btn:active{transform:scale(0.98)}
+    .btn:disabled{opacity:.5;cursor:not-allowed}
+    .pill{
+      height:38px;
+      border-radius:999px;
+      border:1px solid var(--stroke);
+      background:rgba(0,0,0,0.18);
+      display:flex; align-items:center;
+      padding:0 14px;
+      color:var(--muted);
+      font-size:13px;
+      overflow:hidden;
+      max-width:52vw;
+      white-space:nowrap;
+      text-overflow:ellipsis;
+    }
+    .logo{
+      font-weight:650;
+      letter-spacing:.3px;
+      color:#fff;
+      display:flex; align-items:center; gap:10px;
+      padding:0 10px 0 6px;
+    }
+    .dot{
+      width:10px;height:10px;border-radius:999px;background:var(--accent);
+      box-shadow: 0 0 0 5px rgba(46,125,50,0.18);
+    }
 
-<style>
-:root{
-  --bg:#0b0c0e;
-  --panel:rgba(18,18,18,0.55);
-  --panel-strong:rgba(18,18,18,0.75);
-  --control:rgba(255,255,255,0.08);
-  --border:rgba(255,255,255,0.12);
-  --accent:#2e7d32;
-  --text:#ffffff;
-  --muted:#aeb3b7;
-}
-
-*{box-sizing:border-box}
-html,body{
-  margin:0;
-  height:100%;
-  font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial;
-  background:var(--bg);
-  color:var(--text);
-}
-
-body{
-  display:flex;
-  flex-direction:column;
-}
-
-/* ================= TOP OVAL NAV ================= */
-
-#topbar{
-  position:fixed;
-  top:14px;
-  left:50%;
-  transform:translateX(-50%);
-  width:min(1100px,92%);
-  height:56px;
-  background:var(--panel);
-  backdrop-filter:blur(18px);
-  border:1px solid var(--border);
-  border-radius:999px;
-  display:flex;
-  align-items:center;
-  padding:0 18px;
-  z-index:1000;
-}
-
-#nav-left,
-#nav-right{
-  display:flex;
-  align-items:center;
-  gap:10px;
-}
-
-#nav-center{
-  flex:1;
-  display:flex;
-  justify-content:center;
-}
-
-.nav-btn{
-  background:var(--control);
-  border:1px solid var(--border);
-  color:var(--text);
-  border-radius:10px;
-  padding:8px 12px;
-  cursor:pointer;
-  font-size:13px;
-}
-.nav-btn:hover{background:rgba(255,255,255,0.14)}
-
-#url-input{
-  width:100%;
-  max-width:520px;
-  background:rgba(0,0,0,0.35);
-  border:1px solid var(--border);
-  border-radius:999px;
-  padding:10px 16px;
-  color:var(--text);
-  font-size:14px;
-  outline:none;
-}
-
-/* ================= MAIN ================= */
-
-main{
-  flex:1;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  padding-top:110px;
-  padding-bottom:40px;
-}
-
-/* ================= HOME SCREEN ================= */
-
-#home{
-  width:min(520px,92%);
-  background:var(--panel-strong);
-  border:1px solid var(--border);
-  border-radius:22px;
-  padding:28px;
-  text-align:center;
-}
-
-#home h1{
-  margin:0 0 8px;
-  font-size:28px;
-}
-
-#home p{
-  margin:0 0 24px;
-  color:var(--muted);
-  font-size:14px;
-}
-
-#wisp-input{
-  width:100%;
-  background:rgba(0,0,0,0.35);
-  border:1px solid var(--border);
-  border-radius:12px;
-  padding:14px;
-  font-size:15px;
-  color:var(--text);
-  outline:none;
-}
-
-#connect-btn{
-  margin-top:18px;
-  width:100%;
-  padding:14px;
-  font-size:15px;
-  background:linear-gradient(135deg,#2e7d32,#1b5e20);
-  border:none;
-  border-radius:12px;
-  color:#fff;
-  cursor:pointer;
-}
-#connect-btn:hover{opacity:.9}
-
-/* ================= VIEW ================= */
-
-#view{
-  display:none;
-  width:100%;
-  height:100%;
-}
-
-/* ================= FOOTER ================= */
-
-footer{
-  text-align:center;
-  font-size:12px;
-  color:var(--muted);
-  padding:12px;
-}
-
-/* ================= HIDDEN ================= */
-
-.hidden{display:none}
-</style>
+    .card{
+      width:min(920px, 100%);
+      background:var(--panel);
+      border:1px solid var(--stroke);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      padding:22px;
+    }
+    .grid{
+      display:grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap:16px;
+    }
+    @media (max-width: 900px){
+      .grid{grid-template-columns:1fr}
+      .pill{max-width:38vw}
+    }
+    .h1{
+      font-size:28px;
+      font-weight:750;
+      margin:0 0 6px;
+      letter-spacing:.2px;
+    }
+    .sub{
+      margin:0 0 18px;
+      color:var(--muted);
+      line-height:1.4;
+      font-size:14px;
+    }
+    .section{
+      background:rgba(0,0,0,0.18);
+      border:1px solid var(--stroke);
+      border-radius:18px;
+      padding:16px;
+    }
+    label{display:block;font-size:12px;color:var(--muted);margin:0 0 6px}
+    input{
+      width:100%;
+      height:44px;
+      border-radius:14px;
+      border:1px solid rgba(255,255,255,0.14);
+      background:rgba(255,255,255,0.06);
+      color:#fff;
+      padding:0 12px;
+      outline:none;
+      font-size:14px;
+    }
+    input:focus{border-color: rgba(67,160,71,0.55); box-shadow: 0 0 0 3px rgba(67,160,71,0.15)}
+    .row{display:flex; gap:10px; align-items:center}
+    .row > *{flex:1}
+    .primary{
+      background:linear-gradient(180deg, rgba(67,160,71,0.95), rgba(46,125,50,0.95));
+      border:1px solid rgba(255,255,255,0.16);
+    }
+    .primary:hover{background:linear-gradient(180deg, rgba(76,175,80,0.98), rgba(46,125,50,0.98))}
+    .mini{
+      font-size:12px;
+      color:var(--muted);
+      margin-top:10px;
+      line-height:1.35;
+    }
+    .status{
+      margin-top:12px;
+      font-size:12px;
+      color:var(--muted);
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+    .chip{
+      border:1px solid var(--stroke);
+      background:rgba(255,255,255,0.06);
+      padding:6px 10px;
+      border-radius:999px;
+      display:inline-flex;
+      gap:8px;
+      align-items:center;
+    }
+    .k{color:#fff}
+    .v{color:var(--muted)}
+    .warn{color:var(--warn)}
+    .bad{color:var(--bad)}
+    .good{color:var(--good)}
+    .sep{height:1px;background:rgba(255,255,255,0.08);margin:14px 0}
+    .help{
+      font-size:12px;color:var(--muted);line-height:1.45;
+    }
+    code{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      background:rgba(0,0,0,0.25);
+      border:1px solid rgba(255,255,255,0.10);
+      border-radius:10px;
+      padding:2px 6px;
+    }
+  </style>
 </head>
-
 <body>
-
-<!-- ================= TOP NAV ================= -->
-
-<div id="topbar" class="hidden">
-  <div id="nav-left">
-    <button class="nav-btn" id="back-btn">◀</button>
-    <button class="nav-btn" id="forward-btn">▶</button>
-    <button class="nav-btn" id="reload-btn">⟳</button>
+  <div id="topbar">
+    <div id="navLeft">
+      <div class="logo"><span class="dot"></span><span>Euphoria</span></div>
+      <button class="btn" id="btnBack" title="Back">←</button>
+      <button class="btn" id="btnFwd" title="Forward">→</button>
+      <button class="btn" id="btnReload" title="Reload">⟳</button>
+      <button class="btn" id="btnHome" title="Home">⌂</button>
+    </div>
+    <div id="navRight">
+      <div class="pill" id="where">Home</div>
+    </div>
   </div>
 
-  <div id="nav-center">
-    <input id="url-input" placeholder="Enter a URL and press Enter"/>
+  <div class="wrap">
+    <div class="card">
+      <h1 class="h1">Home</h1>
+      <p class="sub">Set the <b>Wisp server</b> (proxy base URL) here. Then enter a site or search terms and launch.</p>
+
+      <div class="grid">
+        <div class="section">
+          <label for="wispBase">Wisp server base URL (proxy deployment)</label>
+          <input id="wispBase" spellcheck="false" placeholder="https://your-proxy.example.com" />
+
+          <div class="mini">
+            If blank, it uses <code>this</code> server.<br/>
+            A “Wisp server” here means “any deployed proxy with the same endpoints”: <code>/proxy?url=</code> and <code>/proxy?q=</code>.
+          </div>
+
+          <div class="sep"></div>
+
+          <label for="target">Website or search</label>
+          <input id="target" spellcheck="false" placeholder="xbox.com  •  google.com  •  'best gaming monitor'" />
+
+          <div class="row" style="margin-top:12px">
+            <button class="btn primary" id="btnGo" style="flex:1">Go</button>
+            <button class="btn" id="btnSave" style="flex:0 0 auto">Save</button>
+          </div>
+
+          <div class="status" id="status"></div>
+        </div>
+
+        <div class="section">
+          <div class="help">
+            <div style="font-weight:650;color:#fff;margin-bottom:8px">Tips</div>
+            <ul style="margin:0;padding-left:18px">
+              <li>Type a normal URL (with or without <code>https://</code>).</li>
+              <li>Type words/spaces to search (it will use Google automatically).</li>
+              <li>Top buttons work everywhere: Back/Forward/Reload/Home.</li>
+              <li>If a site breaks login, it may be using anti-bot checks — but this proxy is tuned to work on more sites than the older version.</li>
+            </ul>
+            <div class="sep"></div>
+            <div style="font-weight:650;color:#fff;margin-bottom:8px">Endpoints</div>
+            <div class="mini">
+              <code>/proxy?url=https://example.com</code><br/>
+              <code>/proxy?q=search+terms</code><br/>
+              <code>/proxy/example.com/path</code>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="sep"></div>
+
+      <div class="mini">
+        Current base: <code id="baseHere"></code>
+      </div>
+    </div>
   </div>
 
-  <div id="nav-right">
-    <button class="nav-btn" id="home-btn">Home</button>
-  </div>
-</div>
+  <script>
+    (function(){
+      const $ = (id) => document.getElementById(id);
 
-<!-- ================= MAIN ================= -->
+      const where = $("where");
+      const baseHere = $("baseHere");
 
-<main>
+      const btnBack = $("btnBack");
+      const btnFwd = $("btnFwd");
+      const btnReload = $("btnReload");
+      const btnHome = $("btnHome");
 
-  <!-- HOME -->
-  <div id="home">
-    <h1>Euphoria</h1>
-    <p>Connect to a Wisp server to begin browsing.</p>
-    <input id="wisp-input" placeholder="https://your-wisp-server.example"/>
-    <button id="connect-btn">Connect</button>
-  </div>
+      const wispBase = $("wispBase");
+      const target = $("target");
+      const btnGo = $("btnGo");
+      const btnSave = $("btnSave");
+      const status = $("status");
 
-  <!-- VIEW -->
-  <div id="view"></div>
+      function currentOrigin(){
+        return location.origin;
+      }
 
-</main>
+      function cleanBase(u){
+        const s = (u||"").trim().replace(/\/+$/,"");
+        if(!s) return "";
+        try{
+          const x = new URL(s);
+          return x.origin;
+        }catch(e){
+          // allow user to paste full base with path; normalize to origin
+          try{
+            const x2 = new URL("https://" + s);
+            return x2.origin;
+          }catch(_){
+            return "";
+          }
+        }
+      }
 
-<footer>
-  Euphoria Client — Session-based Wisp Connection
-</footer>
+      function loadCfg(){
+        const saved = localStorage.getItem("euph_wisp_base") || "";
+        wispBase.value = saved;
+      }
 
-<script>
-/* ================= STATE ================= */
+      function saveCfg(){
+        const cleaned = cleanBase(wispBase.value);
+        if(wispBase.value.trim() && !cleaned){
+          setStatus("Invalid Wisp base URL", "bad");
+          return false;
+        }
+        localStorage.setItem("euph_wisp_base", cleaned);
+        wispBase.value = cleaned;
+        setStatus("Saved", "good");
+        return true;
+      }
 
-let wispServer = null;
+      function isLikelySearch(q){
+        const s = (q||"").trim();
+        if(!s) return false;
+        if(/\s/.test(s)) return true;
+        if(!/[.]/.test(s) && !/^https?:\/\//i.test(s)) return true;
+        return false;
+      }
 
-/* ================= ELEMENTS ================= */
+      function buildProxyUrl(base, input){
+        const s = (input||"").trim();
+        const b = base || currentOrigin();
 
-const home = document.getElementById("home");
-const view = document.getElementById("view");
-const topbar = document.getElementById("topbar");
-const urlInput = document.getElementById("url-input");
-const wispInput = document.getElementById("wisp-input");
+        if(!s) return b + "/";
+        if(isLikelySearch(s)){
+          return b + "/proxy?q=" + encodeURIComponent(s);
+        }
 
-/* ================= NAV ACTIONS ================= */
+        // If no scheme, proxy server will normalize; still pass as url=
+        return b + "/proxy?url=" + encodeURIComponent(s);
+      }
 
-document.getElementById("back-btn").onclick = () => history.back();
-document.getElementById("forward-btn").onclick = () => history.forward();
-document.getElementById("reload-btn").onclick = () => location.reload();
+      function setStatus(text, kind){
+        status.innerHTML = "";
+        if(!text) return;
+        const chip = document.createElement("div");
+        chip.className = "chip";
+        const k = document.createElement("span");
+        k.className = "k " + (kind || "");
+        k.textContent = text;
+        chip.appendChild(k);
+        status.appendChild(chip);
+      }
 
-document.getElementById("home-btn").onclick = () => {
-  sessionStorage.removeItem("wisp");
-  location.reload();
-};
+      function refreshTop(){
+        where.textContent = "Home";
+        baseHere.textContent = currentOrigin();
+        btnBack.disabled = !(history.length > 1);
+        btnFwd.disabled = false; // browser doesn't expose easily; keep enabled
+      }
 
-/* ================= CONNECT ================= */
+      btnBack.onclick = () => history.back();
+      btnFwd.onclick = () => history.forward();
+      btnReload.onclick = () => location.reload();
+      btnHome.onclick = () => location.href = "/";
 
-document.getElementById("connect-btn").onclick = () => {
-  const val = wispInput.value.trim();
-  if(!val) return alert("Enter a Wisp server URL");
-  try{
-    new URL(val);
-  }catch{
-    return alert("Invalid URL");
-  }
-  sessionStorage.setItem("wisp", val);
-  init();
-};
+      btnSave.onclick = () => saveCfg();
 
-/* ================= URL BAR ================= */
+      btnGo.onclick = () => {
+        const ok = saveCfg(); // auto-save base before navigate
+        if(!ok && wispBase.value.trim()) return;
 
-urlInput.addEventListener("keydown", e => {
-  if(e.key !== "Enter") return;
-  navigate(urlInput.value.trim());
-});
+        const base = cleanBase(localStorage.getItem("euph_wisp_base") || "");
+        const url = buildProxyUrl(base, target.value);
+        setStatus("Launching…", "warn");
+        location.href = url;
+      };
 
-/* ================= NAVIGATION ================= */
+      target.addEventListener("keydown", (e) => {
+        if(e.key === "Enter"){
+          e.preventDefault();
+          btnGo.click();
+        }
+      });
 
-function navigate(target){
-  if(!target) return;
-  if(!/^https?:\/\//i.test(target)) target = "https://" + target;
-  const proxied = wispServer.replace(/\/+$/,"") + "/proxy?url=" + encodeURIComponent(target);
-  location.href = proxied;
-}
+      // init
+      loadCfg();
+      refreshTop();
 
-/* ================= INIT ================= */
+      // show current saved base in status chips
+      const savedBase = cleanBase(localStorage.getItem("euph_wisp_base") || "");
+      if(savedBase){
+        setStatus("Using Wisp base: " + savedBase, "good");
+      }else{
+        setStatus("Using this server", "warn");
+      }
 
-function init(){
-  const saved = sessionStorage.getItem("wisp");
-  if(!saved) return;
-  wispServer = saved;
-  home.style.display = "none";
-  topbar.classList.remove("hidden");
-  view.style.display = "block";
-}
-
-/* ================= BOOT ================= */
-
-init();
-</script>
-
+    })();
+  </script>
 </body>
 </html>
