@@ -2,165 +2,280 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Euphoria — Wisp Proxy</title>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Euphoria — Wisp Client</title>
+
 <style>
 :root{
-  --bg:#0b0c0e; --panel: rgba(18,18,18,0.46); --control: rgba(255,255,255,0.07);
-  --accent:#2e7d32; --muted:#aeb3b7;
+  --bg:#0b0c0e;
+  --panel:rgba(18,18,18,0.55);
+  --panel-strong:rgba(18,18,18,0.75);
+  --control:rgba(255,255,255,0.08);
+  --border:rgba(255,255,255,0.12);
+  --accent:#2e7d32;
+  --text:#ffffff;
+  --muted:#aeb3b7;
 }
-html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;background:var(--bg);color:#fff}
+
+*{box-sizing:border-box}
+html,body{
+  margin:0;
+  height:100%;
+  font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial;
+  background:var(--bg);
+  color:var(--text);
+}
+
+body{
+  display:flex;
+  flex-direction:column;
+}
+
+/* ================= TOP OVAL NAV ================= */
+
 #topbar{
-  position:fixed; top:14px; left:50%; transform:translateX(-50%);
-  width:min(1100px,92%); height:56px; border-radius:999px;
-  background:var(--panel); display:flex; gap:10px; align-items:center;
-  padding:6px 14px; z-index:2147483647; box-shadow:0 10px 30px rgba(0,0,0,0.5);
-  backdrop-filter: blur(8px) saturate(120%);
+  position:fixed;
+  top:14px;
+  left:50%;
+  transform:translateX(-50%);
+  width:min(1100px,92%);
+  height:56px;
+  background:var(--panel);
+  backdrop-filter:blur(18px);
+  border:1px solid var(--border);
+  border-radius:999px;
+  display:flex;
+  align-items:center;
+  padding:0 18px;
+  z-index:1000;
 }
-.tb-btn{width:44px;height:44px;border-radius:12px;border:0;background:var(--control);color:#fff;font-size:16px;display:grid;place-items:center;cursor:pointer}
-.tb-btn:active{transform:translateY(1px)}
-#address,#wispServer{height:40px;flex:1;border-radius:12px;border:none;padding:8px 12px;background:rgba(0,0,0,0.22);color:#fff;font-size:14px;outline:2px solid transparent}
-#goBtn{min-width:64px;background:var(--accent)}
-#progressWrap{position:fixed;left:12px;right:12px;top:86px;height:4px;border-radius:4px;overflow:hidden;z-index:2200;pointer-events:none}
-#progress{height:100%;width:0;background:linear-gradient(90deg,#4caf50,#2e7d32);transition:width 120ms linear}
-#view{position:fixed;top:102px;left:12px;right:12px;bottom:12px;border-radius:12px;overflow:auto;background:#fff;color:#000;box-shadow:0 8px 24px rgba(0,0,0,0.45)}
-#overlay{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.28);z-index:2300}
-.spinner{width:44px;height:44px;border-radius:50%;border:6px solid rgba(255,255,255,0.14);border-top-color:#4caf50;animation:spin 900ms linear infinite}
-@keyframes spin{to{transform:rotate(360deg)}}
-#msg{position:fixed;left:18px;bottom:18px;color:#fff;background:rgba(0,0,0,0.45);padding:8px 12px;border-radius:10px;font-size:13px;display:none;z-index:2400}
-#viewInner{min-height:100%;padding:18px}
-code { background: rgba(0,0,0,0.05); padding:2px 6px; border-radius:4px; }
-a.euph-link{color:var(--accent);}
-#homeSection{margin-top:24px;color:#444}
-#wispSection{display:flex;gap:8px;margin-top:12px}
-#wispSection input{flex:1}
+
+#nav-left,
+#nav-right{
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+
+#nav-center{
+  flex:1;
+  display:flex;
+  justify-content:center;
+}
+
+.nav-btn{
+  background:var(--control);
+  border:1px solid var(--border);
+  color:var(--text);
+  border-radius:10px;
+  padding:8px 12px;
+  cursor:pointer;
+  font-size:13px;
+}
+.nav-btn:hover{background:rgba(255,255,255,0.14)}
+
+#url-input{
+  width:100%;
+  max-width:520px;
+  background:rgba(0,0,0,0.35);
+  border:1px solid var(--border);
+  border-radius:999px;
+  padding:10px 16px;
+  color:var(--text);
+  font-size:14px;
+  outline:none;
+}
+
+/* ================= MAIN ================= */
+
+main{
+  flex:1;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding-top:110px;
+  padding-bottom:40px;
+}
+
+/* ================= HOME SCREEN ================= */
+
+#home{
+  width:min(520px,92%);
+  background:var(--panel-strong);
+  border:1px solid var(--border);
+  border-radius:22px;
+  padding:28px;
+  text-align:center;
+}
+
+#home h1{
+  margin:0 0 8px;
+  font-size:28px;
+}
+
+#home p{
+  margin:0 0 24px;
+  color:var(--muted);
+  font-size:14px;
+}
+
+#wisp-input{
+  width:100%;
+  background:rgba(0,0,0,0.35);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:14px;
+  font-size:15px;
+  color:var(--text);
+  outline:none;
+}
+
+#connect-btn{
+  margin-top:18px;
+  width:100%;
+  padding:14px;
+  font-size:15px;
+  background:linear-gradient(135deg,#2e7d32,#1b5e20);
+  border:none;
+  border-radius:12px;
+  color:#fff;
+  cursor:pointer;
+}
+#connect-btn:hover{opacity:.9}
+
+/* ================= VIEW ================= */
+
+#view{
+  display:none;
+  width:100%;
+  height:100%;
+}
+
+/* ================= FOOTER ================= */
+
+footer{
+  text-align:center;
+  font-size:12px;
+  color:var(--muted);
+  padding:12px;
+}
+
+/* ================= HIDDEN ================= */
+
+.hidden{display:none}
 </style>
 </head>
+
 <body>
-  <div id="topbar" role="navigation" aria-label="Euphoria controls">
-    <button id="back" class="tb-btn" title="Back">◀</button>
-    <button id="forward" class="tb-btn" title="Forward">▶</button>
-    <button id="refresh" class="tb-btn" title="Refresh">⟳</button>
-    <button id="home" class="tb-btn" title="Home">🏠</button>
-    <input id="address" placeholder="Type a URL (example.com) or search (anything with spaces)"/>
-    <button id="goBtn" class="tb-btn" title="Go">Go</button>
+
+<!-- ================= TOP NAV ================= -->
+
+<div id="topbar" class="hidden">
+  <div id="nav-left">
+    <button class="nav-btn" id="back-btn">◀</button>
+    <button class="nav-btn" id="forward-btn">▶</button>
+    <button class="nav-btn" id="reload-btn">⟳</button>
   </div>
 
-  <div id="progressWrap" aria-hidden="true"><div id="progress"></div></div>
-
-  <div id="view">
-    <div id="overlay"><div class="spinner" aria-hidden="true"></div></div>
-    <div id="viewInner" aria-live="polite">
-      <h2 style="margin-top:0">Euphoria — Wisp Proxy</h2>
-      <div id="homeSection">
-        <p>Enter the Wisp server URL you want to use:</p>
-        <div id="wispSection">
-          <input id="wispServer" placeholder="https://my-wisp-server.com"/>
-          <button id="setWisp" class="tb-btn" style="min-width:64px;background:#1976d2">Connect</button>
-        </div>
-      </div>
-      <p style="color:#444;margin-top:16px">After connecting, type a target URL above and press Go.</p>
-      <p style="color:#777;font-size:13px">Admin: <a class="euph-link" href="/_euph_debug/ping" target="_blank">/_euph_debug/ping</a> • Sessions: <a class="euph-link" href="/_euph_debug/sessions" target="_blank">/_euph_debug/sessions</a></p>
-    </div>
+  <div id="nav-center">
+    <input id="url-input" placeholder="Enter a URL and press Enter"/>
   </div>
 
-  <div id="msg" role="status"></div>
+  <div id="nav-right">
+    <button class="nav-btn" id="home-btn">Home</button>
+  </div>
+</div>
+
+<!-- ================= MAIN ================= -->
+
+<main>
+
+  <!-- HOME -->
+  <div id="home">
+    <h1>Euphoria</h1>
+    <p>Connect to a Wisp server to begin browsing.</p>
+    <input id="wisp-input" placeholder="https://your-wisp-server.example"/>
+    <button id="connect-btn">Connect</button>
+  </div>
+
+  <!-- VIEW -->
+  <div id="view"></div>
+
+</main>
+
+<footer>
+  Euphoria Client — Session-based Wisp Connection
+</footer>
 
 <script>
-(function(){
-  const address = document.getElementById('address');
-  const goBtn = document.getElementById('goBtn');
-  const viewInner = document.getElementById('viewInner');
-  const overlay = document.getElementById('overlay');
-  const progress = document.getElementById('progress');
-  const msg = document.getElementById('msg');
-  const wispInput = document.getElementById('wispServer');
-  const setWisp = document.getElementById('setWisp');
+/* ================= STATE ================= */
 
-  let historyStack = [], historyIndex = -1;
-  let wispServer = '';
+let wispServer = null;
 
-  function showMsg(t, ms=3000){ msg.textContent = t; msg.style.display='block'; setTimeout(()=>msg.style.display='none', ms); }
-  function showOverlay(v=true){ overlay.style.display = v ? 'flex' : 'none'; }
-  function setProgress(p){ progress.style.width = Math.max(0,Math.min(100,p)) + '%'; }
+/* ================= ELEMENTS ================= */
 
-  function normalizeInput(v){
-    v = (v||'').trim();
-    if(!v) return '';
-    if(/^https?:\/\//i.test(v)) return v;
-    return 'https://' + v;
+const home = document.getElementById("home");
+const view = document.getElementById("view");
+const topbar = document.getElementById("topbar");
+const urlInput = document.getElementById("url-input");
+const wispInput = document.getElementById("wisp-input");
+
+/* ================= NAV ACTIONS ================= */
+
+document.getElementById("back-btn").onclick = () => history.back();
+document.getElementById("forward-btn").onclick = () => history.forward();
+document.getElementById("reload-btn").onclick = () => location.reload();
+
+document.getElementById("home-btn").onclick = () => {
+  sessionStorage.removeItem("wisp");
+  location.reload();
+};
+
+/* ================= CONNECT ================= */
+
+document.getElementById("connect-btn").onclick = () => {
+  const val = wispInput.value.trim();
+  if(!val) return alert("Enter a Wisp server URL");
+  try{
+    new URL(val);
+  }catch{
+    return alert("Invalid URL");
   }
+  sessionStorage.setItem("wisp", val);
+  init();
+};
 
-  function proxURL(url){
-    if(!wispServer) return url;
-    try{
-      if(url.includes('/proxy?url=')) return url;
-      return wispServer + '/proxy?url=' + encodeURIComponent(new URL(url, document.baseURI).href);
-    }catch(e){ return url; }
-  }
+/* ================= URL BAR ================= */
 
-  async function fetchProxyAndRender(url, push=true){
-    if(!url) return showMsg('No URL specified');
-    if(push){ historyStack = historyStack.slice(0, historyIndex + 1); historyStack.push(url); historyIndex = historyStack.length - 1; }
-    setProgress(6); showOverlay(true);
-    try {
-      const res = await fetch(proxURL(url), { headers: { 'X-Euphoria-Client': 'wisp-proxy', 'Accept': 'text/html,*/*;q=0.9' }});
-      if(!res.ok) throw new Error('Proxy error ' + res.status + ' ' + res.statusText);
-      const ct = (res.headers.get('content-type')||'').toLowerCase();
-      if(ct.includes('text/html')){
-        const html = await res.text();
-        setProgress(35);
-        await renderHtml(html, url);
-        setProgress(100);
-        setTimeout(()=> setProgress(0), 220);
-      } else if(ct.includes('application/json') || ct.includes('text/')){
-        const txt = await res.text();
-        viewInner.innerHTML = '<pre>' + escapeHtml(txt) + '</pre>';
-      } else {
-        const blob = await res.blob();
-        const u = URL.createObjectURL(blob);
-        viewInner.innerHTML = '<div style="padding:20px"><a href="' + u + '" target="_blank">Open resource</a></div>';
-      }
-    } catch(err) {
-      viewInner.innerHTML = '<div style="padding:18px;color:#900;background:#fee;border-radius:8px"><h3>Error</h3><pre>' + escapeHtml(String(err)) + '</pre></div>';
-      console.error(err);
-    } finally {
-      showOverlay(false);
-    }
-  }
+urlInput.addEventListener("keydown", e => {
+  if(e.key !== "Enter") return;
+  navigate(urlInput.value.trim());
+});
 
-  function escapeHtml(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+/* ================= NAVIGATION ================= */
 
-  async function renderHtml(htmlText, originUrl){
-    try{
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(htmlText, 'text/html');
-      const incomingHead = doc.head ? Array.from(doc.head.children) : [];
-      incomingHead.forEach(node=>{
-        try { if(!['title','base'].includes(node.tagName.toLowerCase())) document.head.appendChild(document.importNode(node,true)); } catch(e){}
-      });
-      viewInner.innerHTML = '';
-      const bodyNodes = doc.body ? Array.from(doc.body.childNodes) : [];
-      bodyNodes.forEach(n => { try { viewInner.appendChild(document.importNode(n,true)); } catch(e){} });
-      address.value = originUrl;
-    }catch(e){ viewInner.innerHTML = '<pre>' + escapeHtml(htmlText.slice(0,20000)) + '</pre>'; }
-  }
+function navigate(target){
+  if(!target) return;
+  if(!/^https?:\/\//i.test(target)) target = "https://" + target;
+  const proxied = wispServer.replace(/\/+$/,"") + "/proxy?url=" + encodeURIComponent(target);
+  location.href = proxied;
+}
 
-  document.getElementById('back').addEventListener('click', ()=>{ if(historyIndex>0) fetchProxyAndRender(historyStack[--historyIndex], false); });
-  document.getElementById('forward').addEventListener('click', ()=>{ if(historyIndex < historyStack.length-1) fetchProxyAndRender(historyStack[++historyIndex], false); });
-  document.getElementById('refresh').addEventListener('click', ()=>{ if(historyIndex >= 0) fetchProxyAndRender(historyStack[historyIndex], false); });
-  document.getElementById('home').addEventListener('click', ()=> viewInner.scrollIntoView({behavior:'smooth'}));
-  goBtn.addEventListener('click', ()=> { const v = normalizeInput(address.value); if(!v) showMsg('Enter a URL or search'); else fetchProxyAndRender(v, true); });
-  address.addEventListener('keydown', (e)=>{ if(e.key==='Enter') goBtn.click(); });
+/* ================= INIT ================= */
 
-  setWisp.addEventListener('click', ()=>{
-    const u = normalizeInput(wispInput.value);
-    if(!u) return showMsg('Enter Wisp server URL');
-    wispServer = u.replace(/\/$/,'');
-    showMsg('Connected to Wisp server');
-  });
+function init(){
+  const saved = sessionStorage.getItem("wisp");
+  if(!saved) return;
+  wispServer = saved;
+  home.style.display = "none";
+  topbar.classList.remove("hidden");
+  view.style.display = "block";
+}
 
-})();
+/* ================= BOOT ================= */
+
+init();
 </script>
+
 </body>
 </html>
