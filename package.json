@@ -1,25 +1,25 @@
 {
-  "name": "euphoria-proxy",
+  "name": "euphoria",
   "version": "2.0.0",
-  "description": "Euphoria v2 - production-grade hybrid proxy with JSDOM rewriting, caching, sessions, ws proxy, rate limiting",
+  "description": "Euphoria v2 - production-grade hybrid proxy",
   "type": "module",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "start:dev": "NODE_ENV=development node --enable-source-maps server.js"
+    "start:debug": "NODE_ENV=development node --enable-source-maps server.js"
   },
   "engines": {
     "node": ">=20"
   },
   "dependencies": {
     "compression": "^1.7.4",
+    "cookie": "^0.6.0",
     "cors": "^2.8.5",
     "express": "^4.18.2",
-    "express-rate-limit": "^6.7.0",
-    "jsdom": "^22.1.0",
-    "lru-cache": "^10.3.0",
+    "express-rate-limit": "^6.8.0",
+    "jsdom": "^22.1.1",
+    "lru-cache": "^10.5.0",
     "morgan": "^1.10.0",
-    "ws": "^8.13.0",
-    "cookie": "^0.6.0"
+    "ws": "^8.13.0"
   }
 }
