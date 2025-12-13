@@ -1,386 +1,330 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Euphoria — Proxy</title>
-  <style>
-    :root{
-      --bg:#0b0c0e;
-      --panel: rgba(18,18,18,0.46);
-      --control: rgba(255,255,255,0.07);
-      --control2: rgba(255,255,255,0.10);
-      --stroke: rgba(255,255,255,0.10);
-      --accent:#2e7d32;
-      --accent2:#43a047;
-      --muted:#aeb3b7;
-      --warn:#ffb300;
-      --bad:#ef5350;
-      --good:#66bb6a;
-      --shadow: 0 14px 40px rgba(0,0,0,0.55);
-      --radius: 22px;
-    }
-    html,body{height:100%;margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial;background:var(--bg);color:#fff}
-    *{box-sizing:border-box}
-    a{color:inherit}
-    .wrap{min-height:100%;display:flex;align-items:center;justify-content:center;padding:90px 16px 40px}
-    #topbar{
-      position:fixed; top:14px; left:50%; transform:translateX(-50%);
-      width:min(1100px,92%); height:58px;
-      border-radius:999px;
-      background:linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.05));
-      border:1px solid var(--stroke);
-      box-shadow: var(--shadow);
-      backdrop-filter: blur(14px);
-      -webkit-backdrop-filter: blur(14px);
-      display:flex; align-items:center; justify-content:space-between;
-      padding:10px 14px;
-      z-index:1000;
-    }
-    #navLeft, #navRight{display:flex; gap:10px; align-items:center}
-    .btn{
-      height:38px; min-width:38px;
-      border-radius:999px;
-      border:1px solid var(--stroke);
-      background:rgba(255,255,255,0.08);
-      color:#fff;
-      cursor:pointer;
-      display:inline-flex; align-items:center; justify-content:center;
-      padding:0 14px;
-      transition: transform .08s ease, background .12s ease, border-color .12s ease;
-      user-select:none;
-    }
-    .btn:hover{background:rgba(255,255,255,0.12)}
-    .btn:active{transform:scale(0.98)}
-    .btn:disabled{opacity:.5;cursor:not-allowed}
-    .pill{
-      height:38px;
-      border-radius:999px;
-      border:1px solid var(--stroke);
-      background:rgba(0,0,0,0.18);
-      display:flex; align-items:center;
-      padding:0 14px;
-      color:var(--muted);
-      font-size:13px;
-      overflow:hidden;
-      max-width:52vw;
-      white-space:nowrap;
-      text-overflow:ellipsis;
-    }
-    .logo{
-      font-weight:650;
-      letter-spacing:.3px;
-      color:#fff;
-      display:flex; align-items:center; gap:10px;
-      padding:0 10px 0 6px;
-    }
-    .dot{
-      width:10px;height:10px;border-radius:999px;background:var(--accent);
-      box-shadow: 0 0 0 5px rgba(46,125,50,0.18);
-    }
-
-    .card{
-      width:min(920px, 100%);
-      background:var(--panel);
-      border:1px solid var(--stroke);
-      border-radius: var(--radius);
-      box-shadow: var(--shadow);
-      backdrop-filter: blur(14px);
-      -webkit-backdrop-filter: blur(14px);
-      padding:22px;
-    }
-    .grid{
-      display:grid;
-      grid-template-columns: 1.15fr 0.85fr;
-      gap:16px;
-    }
-    @media (max-width: 900px){
-      .grid{grid-template-columns:1fr}
-      .pill{max-width:38vw}
-    }
-    .h1{
-      font-size:28px;
-      font-weight:750;
-      margin:0 0 6px;
-      letter-spacing:.2px;
-    }
-    .sub{
-      margin:0 0 18px;
-      color:var(--muted);
-      line-height:1.4;
-      font-size:14px;
-    }
-    .section{
-      background:rgba(0,0,0,0.18);
-      border:1px solid var(--stroke);
-      border-radius:18px;
-      padding:16px;
-    }
-    label{display:block;font-size:12px;color:var(--muted);margin:0 0 6px}
-    input{
-      width:100%;
-      height:44px;
-      border-radius:14px;
-      border:1px solid rgba(255,255,255,0.14);
-      background:rgba(255,255,255,0.06);
-      color:#fff;
-      padding:0 12px;
-      outline:none;
-      font-size:14px;
-    }
-    input:focus{border-color: rgba(67,160,71,0.55); box-shadow: 0 0 0 3px rgba(67,160,71,0.15)}
-    .row{display:flex; gap:10px; align-items:center}
-    .row > *{flex:1}
-    .primary{
-      background:linear-gradient(180deg, rgba(67,160,71,0.95), rgba(46,125,50,0.95));
-      border:1px solid rgba(255,255,255,0.16);
-    }
-    .primary:hover{background:linear-gradient(180deg, rgba(76,175,80,0.98), rgba(46,125,50,0.98))}
-    .mini{
-      font-size:12px;
-      color:var(--muted);
-      margin-top:10px;
-      line-height:1.35;
-    }
-    .status{
-      margin-top:12px;
-      font-size:12px;
-      color:var(--muted);
-      display:flex;
-      gap:10px;
-      align-items:center;
-      flex-wrap:wrap;
-    }
-    .chip{
-      border:1px solid var(--stroke);
-      background:rgba(255,255,255,0.06);
-      padding:6px 10px;
-      border-radius:999px;
-      display:inline-flex;
-      gap:8px;
-      align-items:center;
-    }
-    .k{color:#fff}
-    .v{color:var(--muted)}
-    .warn{color:var(--warn)}
-    .bad{color:var(--bad)}
-    .good{color:var(--good)}
-    .sep{height:1px;background:rgba(255,255,255,0.08);margin:14px 0}
-    .help{
-      font-size:12px;color:var(--muted);line-height:1.45;
-    }
-    code{
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-      background:rgba(0,0,0,0.25);
-      border:1px solid rgba(255,255,255,0.10);
-      border-radius:10px;
-      padding:2px 6px;
-    }
-  </style>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>Euphoria — Hybrid</title>
+<style>
+:root{
+  --bg:#0b0c0e;
+  --fg:#ffffff;
+  --muted:#b5bcc2;
+  --panel:rgba(18,18,18,0.55);
+  --control:rgba(255,255,255,0.08);
+  --control2:rgba(255,255,255,0.12);
+  --accent:#4caf50;
+  --danger:#ef5350;
+}
+[data-theme="light"]{
+  --bg:#f4f6f8;
+  --fg:#101316;
+  --muted:#4b5560;
+  --panel:rgba(255,255,255,0.75);
+  --control:rgba(16,19,22,0.08);
+  --control2:rgba(16,19,22,0.12);
+  --accent:#2e7d32;
+}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--fg);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial}
+#topbar{
+  position:fixed;top:14px;left:50%;transform:translateX(-50%);
+  width:min(1120px,92%);height:58px;
+  background:var(--panel);
+  border-radius:999px;
+  backdrop-filter:blur(14px);
+  -webkit-backdrop-filter:blur(14px);
+  display:flex;align-items:center;gap:10px;
+  padding:0 14px;
+  z-index:50;
+  box-shadow:0 10px 34px rgba(0,0,0,.25);
+}
+.btn{
+  border:0;
+  background:var(--control);
+  color:var(--fg);
+  height:38px;
+  padding:0 14px;
+  border-radius:999px;
+  cursor:pointer;
+  font-size:14px;
+}
+.btn:hover{background:var(--control2)}
+.btn:active{transform:translateY(1px)}
+#url{
+  flex:1;
+  height:38px;
+  border-radius:999px;
+  border:0;
+  outline:none;
+  background:transparent;
+  color:var(--fg);
+  font-size:15px;
+  padding:0 8px;
+}
+.pill{
+  display:inline-flex;align-items:center;gap:8px;
+  background:var(--control);
+  border-radius:999px;
+  height:38px;padding:0 12px;
+  font-size:13px;color:var(--muted);
+}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--accent)}
+.dot.off{background:var(--danger)}
+#wrap{position:absolute;inset:0}
+#home{
+  position:absolute;inset:0;
+  display:flex;align-items:center;justify-content:center;
+  padding-top:74px;
+}
+.card{
+  width:min(720px,92%);
+  background:var(--panel);
+  border-radius:24px;
+  padding:26px 22px;
+  box-shadow:0 14px 44px rgba(0,0,0,.28);
+}
+h1{margin:0 0 6px 0;font-size:28px}
+p{margin:0 0 18px 0;color:var(--muted);line-height:1.45}
+#homeInput{
+  width:100%;
+  height:48px;
+  border-radius:999px;
+  border:0;
+  outline:none;
+  background:var(--control);
+  color:var(--fg);
+  font-size:16px;
+  padding:0 18px;
+}
+.row{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap}
+.small{font-size:12px;color:var(--muted)}
+kbd{
+  font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;
+  background:var(--control);
+  border-radius:6px;
+  padding:2px 6px;
+  font-size:12px;color:var(--fg)
+}
+#frame{
+  position:absolute;inset:0;
+  border:0;
+  width:100%;height:100%;
+}
+#settings{
+  position:fixed;top:80px;left:50%;transform:translateX(-50%);
+  width:min(520px,92%);
+  background:var(--panel);
+  border-radius:20px;
+  padding:16px;
+  display:none;
+  z-index:60;
+  box-shadow:0 14px 44px rgba(0,0,0,.28);
+}
+.setRow{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:10px 0}
+.toggle{
+  display:inline-flex;align-items:center;gap:10px;
+  background:var(--control);
+  padding:8px 12px;border-radius:999px;
+}
+select{
+  background:var(--control);
+  color:var(--fg);
+  border:0;
+  border-radius:999px;
+  padding:8px 12px;
+}
+</style>
 </head>
 <body>
+
+<div id="wrap">
   <div id="topbar">
-    <div id="navLeft">
-      <div class="logo"><span class="dot"></span><span>Euphoria</span></div>
-      <button class="btn" id="btnBack" title="Back">←</button>
-      <button class="btn" id="btnFwd" title="Forward">→</button>
-      <button class="btn" id="btnReload" title="Reload">⟳</button>
-      <button class="btn" id="btnHome" title="Home">⌂</button>
+    <button class="btn" id="backBtn" title="Back">←</button>
+    <button class="btn" id="fwdBtn" title="Forward">→</button>
+    <button class="btn" id="reloadBtn" title="Reload">⟳</button>
+    <button class="btn" id="homeBtn" title="Home">Home</button>
+
+    <input id="url" placeholder="Search or enter address"/>
+
+    <button class="btn" id="goBtn">Go</button>
+    <div class="pill" id="modePill" title="Mode">
+      <span class="dot" id="modeDot"></span>
+      <span id="modeLabel">Rewrite</span>
     </div>
-    <div id="navRight">
-      <div class="pill" id="where">Home</div>
+    <button class="btn" id="settingsBtn" title="Settings">⚙</button>
+  </div>
+
+  <div id="settings">
+    <div class="setRow">
+      <div>
+        <div style="font-weight:600">Default mode</div>
+        <div class="small">Rewrite is faster; Scramjet is better for complex sites.</div>
+      </div>
+      <select id="defaultMode">
+        <option value="rewrite">Rewrite</option>
+        <option value="scramjet">Scramjet</option>
+      </select>
+    </div>
+    <div class="setRow">
+      <div>
+        <div style="font-weight:600">Theme</div>
+        <div class="small">Light/dark UI.</div>
+      </div>
+      <select id="theme">
+        <option value="dark">Dark</option>
+        <option value="light">Light</option>
+      </select>
+    </div>
+    <div class="setRow">
+      <div class="small">Tip: Press <kbd>/</kbd> to focus the bar, <kbd>Enter</kbd> to go.</div>
+      <button class="btn" id="closeSettings">Close</button>
     </div>
   </div>
 
-  <div class="wrap">
+  <div id="home">
     <div class="card">
-      <h1 class="h1">Home</h1>
-      <p class="sub">Set the <b>Wisp server</b> (proxy base URL) here. Then enter a site or search terms and launch.</p>
-
-      <div class="grid">
-        <div class="section">
-          <label for="wispBase">Wisp server base URL (proxy deployment)</label>
-          <input id="wispBase" spellcheck="false" placeholder="https://your-proxy.example.com" />
-
-          <div class="mini">
-            If blank, it uses <code>this</code> server.<br/>
-            A “Wisp server” here means “any deployed proxy with the same endpoints”: <code>/proxy?url=</code> and <code>/proxy?q=</code>.
-          </div>
-
-          <div class="sep"></div>
-
-          <label for="target">Website or search</label>
-          <input id="target" spellcheck="false" placeholder="xbox.com  •  google.com  •  'best gaming monitor'" />
-
-          <div class="row" style="margin-top:12px">
-            <button class="btn primary" id="btnGo" style="flex:1">Go</button>
-            <button class="btn" id="btnSave" style="flex:0 0 auto">Save</button>
-          </div>
-
-          <div class="status" id="status"></div>
-        </div>
-
-        <div class="section">
-          <div class="help">
-            <div style="font-weight:650;color:#fff;margin-bottom:8px">Tips</div>
-            <ul style="margin:0;padding-left:18px">
-              <li>Type a normal URL (with or without <code>https://</code>).</li>
-              <li>Type words/spaces to search (it will use Google automatically).</li>
-              <li>Top buttons work everywhere: Back/Forward/Reload/Home.</li>
-              <li>If a site breaks login, it may be using anti-bot checks — but this proxy is tuned to work on more sites than the older version.</li>
-            </ul>
-            <div class="sep"></div>
-            <div style="font-weight:650;color:#fff;margin-bottom:8px">Endpoints</div>
-            <div class="mini">
-              <code>/proxy?url=https://example.com</code><br/>
-              <code>/proxy?q=search+terms</code><br/>
-              <code>/proxy/example.com/path</code>
-            </div>
-          </div>
-        </div>
+      <h1>Euphoria</h1>
+      <p>Search or open a site. If a site’s UI doesn’t load properly, switch to <b>Scramjet</b>.</p>
+      <input id="homeInput" placeholder="Search Google or enter a URL"/>
+      <div class="row">
+        <button class="btn" id="quickGoogle">Google</button>
+        <button class="btn" id="quickXbox">Xbox</button>
+        <button class="btn" id="quickDiscord">Discord</button>
+        <button class="btn" id="quickYT">YouTube</button>
       </div>
-
-      <div class="sep"></div>
-
-      <div class="mini">
-        Current base: <code id="baseHere"></code>
+      <div style="margin-top:12px" class="small">
+        Modes: <b>Rewrite</b> (fast) vs <b>Scramjet</b> (compat).
       </div>
     </div>
   </div>
 
-  <script>
-    (function(){
-      const $ = (id) => document.getElementById(id);
+  <iframe id="frame" referrerpolicy="no-referrer"></iframe>
+</div>
 
-      const where = $("where");
-      const baseHere = $("baseHere");
+<script>
+(() => {
+  const frame = document.getElementById("frame");
+  const home = document.getElementById("home");
+  const urlBar = document.getElementById("url");
+  const homeInput = document.getElementById("homeInput");
 
-      const btnBack = $("btnBack");
-      const btnFwd = $("btnFwd");
-      const btnReload = $("btnReload");
-      const btnHome = $("btnHome");
+  const modeDot = document.getElementById("modeDot");
+  const modeLabel = document.getElementById("modeLabel");
+  const modePill = document.getElementById("modePill");
 
-      const wispBase = $("wispBase");
-      const target = $("target");
-      const btnGo = $("btnGo");
-      const btnSave = $("btnSave");
-      const status = $("status");
+  const settings = document.getElementById("settings");
+  const settingsBtn = document.getElementById("settingsBtn");
+  const closeSettings = document.getElementById("closeSettings");
+  const defaultMode = document.getElementById("defaultMode");
+  const theme = document.getElementById("theme");
 
-      function currentOrigin(){
-        return location.origin;
-      }
+  const backBtn = document.getElementById("backBtn");
+  const fwdBtn = document.getElementById("fwdBtn");
+  const reloadBtn = document.getElementById("reloadBtn");
+  const homeBtn = document.getElementById("homeBtn");
+  const goBtn = document.getElementById("goBtn");
 
-      function cleanBase(u){
-        const s = (u||"").trim().replace(/\/+$/,"");
-        if(!s) return "";
-        try{
-          const x = new URL(s);
-          return x.origin;
-        }catch(e){
-          // allow user to paste full base with path; normalize to origin
-          try{
-            const x2 = new URL("https://" + s);
-            return x2.origin;
-          }catch(_){
-            return "";
-          }
-        }
-      }
+  let mode = localStorage.getItem("euph_mode") || "rewrite";
+  let th = localStorage.getItem("euph_theme") || "dark";
 
-      function loadCfg(){
-        const saved = localStorage.getItem("euph_wisp_base") || "";
-        wispBase.value = saved;
-      }
+  function applyTheme() {
+    document.documentElement.setAttribute("data-theme", th);
+    theme.value = th;
+  }
+  function applyModeUI() {
+    const sj = mode === "scramjet";
+    modeDot.className = "dot" + (sj ? "" : "");
+    modeDot.style.background = sj ? "var(--accent)" : "var(--accent)";
+    modeLabel.textContent = sj ? "Scramjet" : "Rewrite";
+    defaultMode.value = mode;
+  }
 
-      function saveCfg(){
-        const cleaned = cleanBase(wispBase.value);
-        if(wispBase.value.trim() && !cleaned){
-          setStatus("Invalid Wisp base URL", "bad");
-          return false;
-        }
-        localStorage.setItem("euph_wisp_base", cleaned);
-        wispBase.value = cleaned;
-        setStatus("Saved", "good");
-        return true;
-      }
+  function normalize(v) {
+    v = (v || "").trim();
+    if (!v) return null;
+    if (/^https?:\/\//i.test(v)) return v;
+    if (!v.includes(".") || v.includes(" ")) {
+      return "https://www.google.com/search?q=" + encodeURIComponent(v);
+    }
+    return "https://" + v;
+  }
 
-      function isLikelySearch(q){
-        const s = (q||"").trim();
-        if(!s) return false;
-        if(/\s/.test(s)) return true;
-        if(!/[.]/.test(s) && !/^https?:\/\//i.test(s)) return true;
-        return false;
-      }
+  function buildProxyUrl(target) {
+    const u = normalize(target);
+    if (!u) return null;
+    if (mode === "scramjet") return "/sj?url=" + encodeURIComponent(u);
+    return "/proxy?url=" + encodeURIComponent(u);
+  }
 
-      function buildProxyUrl(base, input){
-        const s = (input||"").trim();
-        const b = base || currentOrigin();
+  function navigate(target) {
+    const p = buildProxyUrl(target);
+    if (!p) return;
+    frame.src = p;
+    home.style.display = "none";
+    urlBar.value = normalize(target) || target;
+  }
 
-        if(!s) return b + "/";
-        if(isLikelySearch(s)){
-          return b + "/proxy?q=" + encodeURIComponent(s);
-        }
+  function showHome() {
+    frame.src = "about:blank";
+    home.style.display = "flex";
+  }
 
-        // If no scheme, proxy server will normalize; still pass as url=
-        return b + "/proxy?url=" + encodeURIComponent(s);
-      }
+  // Controls
+  backBtn.onclick = () => { try { frame.contentWindow.history.back(); } catch {} };
+  fwdBtn.onclick = () => { try { frame.contentWindow.history.forward(); } catch {} };
+  reloadBtn.onclick = () => { try { frame.contentWindow.location.reload(); } catch { frame.src = frame.src; } };
+  homeBtn.onclick = showHome;
+  goBtn.onclick = () => navigate(urlBar.value);
 
-      function setStatus(text, kind){
-        status.innerHTML = "";
-        if(!text) return;
-        const chip = document.createElement("div");
-        chip.className = "chip";
-        const k = document.createElement("span");
-        k.className = "k " + (kind || "");
-        k.textContent = text;
-        chip.appendChild(k);
-        status.appendChild(chip);
-      }
+  urlBar.addEventListener("keydown", (e) => { if (e.key === "Enter") navigate(urlBar.value); });
+  homeInput.addEventListener("keydown", (e) => { if (e.key === "Enter") navigate(homeInput.value); });
 
-      function refreshTop(){
-        where.textContent = "Home";
-        baseHere.textContent = currentOrigin();
-        btnBack.disabled = !(history.length > 1);
-        btnFwd.disabled = false; // browser doesn't expose easily; keep enabled
-      }
+  // Mode toggle
+  modePill.onclick = () => {
+    mode = (mode === "rewrite") ? "scramjet" : "rewrite";
+    localStorage.setItem("euph_mode", mode);
+    applyModeUI();
+    if (frame.src && frame.src !== "about:blank") {
+      const current = urlBar.value || "";
+      if (current) navigate(current);
+    }
+  };
 
-      btnBack.onclick = () => history.back();
-      btnFwd.onclick = () => history.forward();
-      btnReload.onclick = () => location.reload();
-      btnHome.onclick = () => location.href = "/";
+  // Settings
+  settingsBtn.onclick = () => settings.style.display = (settings.style.display === "block" ? "none" : "block");
+  closeSettings.onclick = () => settings.style.display = "none";
 
-      btnSave.onclick = () => saveCfg();
+  defaultMode.onchange = () => {
+    mode = defaultMode.value;
+    localStorage.setItem("euph_mode", mode);
+    applyModeUI();
+  };
 
-      btnGo.onclick = () => {
-        const ok = saveCfg(); // auto-save base before navigate
-        if(!ok && wispBase.value.trim()) return;
+  theme.onchange = () => {
+    th = theme.value;
+    localStorage.setItem("euph_theme", th);
+    applyTheme();
+  };
 
-        const base = cleanBase(localStorage.getItem("euph_wisp_base") || "");
-        const url = buildProxyUrl(base, target.value);
-        setStatus("Launching…", "warn");
-        location.href = url;
-      };
+  // Quick links
+  document.getElementById("quickGoogle").onclick = () => navigate("google.com");
+  document.getElementById("quickXbox").onclick = () => { mode = "scramjet"; localStorage.setItem("euph_mode", mode); applyModeUI(); navigate("xbox.com"); };
+  document.getElementById("quickDiscord").onclick = () => { mode = "scramjet"; localStorage.setItem("euph_mode", mode); applyModeUI(); navigate("discord.com"); };
+  document.getElementById("quickYT").onclick = () => navigate("youtube.com");
 
-      target.addEventListener("keydown", (e) => {
-        if(e.key === "Enter"){
-          e.preventDefault();
-          btnGo.click();
-        }
-      });
+  // Keyboard shortcut
+  window.addEventListener("keydown", (e) => {
+    if (e.key === "/" && document.activeElement !== urlBar && document.activeElement !== homeInput) {
+      e.preventDefault();
+      urlBar.focus();
+    }
+    if (e.key === "Escape") settings.style.display = "none";
+  });
 
-      // init
-      loadCfg();
-      refreshTop();
+  // Init
+  applyTheme();
+  applyModeUI();
+})();
+</script>
 
-      // show current saved base in status chips
-      const savedBase = cleanBase(localStorage.getItem("euph_wisp_base") || "");
-      if(savedBase){
-        setStatus("Using Wisp base: " + savedBase, "good");
-      }else{
-        setStatus("Using this server", "warn");
-      }
-
-    })();
-  </script>
 </body>
 </html>
