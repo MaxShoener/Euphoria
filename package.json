@@ -1,22 +1,22 @@
 {
   "name": "euphoria",
-  "version": "4.0.0",
-  "description": "Production hybrid proxy (Euphoria v4)",
-  "main": "server.js",
+  "version": "3.0.0",
+  "description": "Euphoria hybrid proxy (legacy rewrite + Scramjet)",
   "type": "module",
+  "main": "server.js",
+  "engines": { "node": ">=20" },
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "NODE_ENV=development node server.js"
   },
   "dependencies": {
+    "@mercuryworkshop/scramjet": "^1.0.0",
     "compression": "^1.7.4",
-    "cookie": "^0.6.0",
     "cors": "^2.8.5",
     "express": "^4.21.1",
     "express-rate-limit": "^7.1.0",
     "jsdom": "^24.0.0",
     "lru-cache": "^10.3.1",
-    "morgan": "^1.10.0",
-    "set-cookie-parser": "^2.7.1",
-    "ws": "^8.18.0"
+    "morgan": "^1.10.0"
   }
 }
