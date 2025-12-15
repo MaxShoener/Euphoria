@@ -46,7 +46,7 @@ const __dirname = path.dirname(__filename);
 /* Config                                        */
 /* ───────────────────────────────────────────── */
 
-const PORT = Number(process.env.PORT || 3000);
+const PORT = Number(process.env.PORT || 8000);
 const ENABLE_DISK_CACHE = process.env.ENABLE_DISK_CACHE !== "0";
 const CACHE_DIR = path.join(__dirname, "cache");
 const PUBLIC_DIR = path.join(__dirname, "public");
