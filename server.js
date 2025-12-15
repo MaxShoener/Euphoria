@@ -1307,7 +1307,7 @@ function getRequestPublicOrigin(req) {
   return DEPLOYMENT_ORIGIN;
 }
 
-function makeProxyUrl(targetAbs, req) {
+function makeProxyUrlStrict(targetAbs, req) {
   const origin = getRequestPublicOrigin(req);
   return `${origin}/proxy?url=${encodeURIComponent(String(targetAbs))}`;
 }
