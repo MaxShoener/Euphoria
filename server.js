@@ -1357,8 +1357,6 @@ function handleRedirectStrict(upstreamRes, req, res, requestTarget) {
 /* Decompression Helpers (gzip/deflate/br)       */
 /* ───────────────────────────────────────────── */
 
-import zlib from "zlib";
-
 function maybeDecompress(bodyBuf, headers) {
   const enc = String(headers?.get?.("content-encoding") || "").toLowerCase().trim();
   if (!enc) return bodyBuf;
