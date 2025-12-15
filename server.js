@@ -1335,7 +1335,7 @@ function handleRedirect(upstreamRes, req, res, requestTarget) {
     }
 
     // Trap redirect back into proxy
-    const prox = makeProxyUrl(abs, req);
+    const prox = makeProxyUrlStrict(abs, req);
 
     // Do NOT pass upstream Location; set ours
     try {
