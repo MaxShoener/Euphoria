@@ -692,8 +692,15 @@ function setupWsProxy(server, getOriginFn) {
 
   server.on("upgrade", (request, socket, head) => {
     try {
-      const url = new URL(request.url, getOriginFn({ headers: request.headers, protocol: "http", host: request.headers.host }));
+      const origin = getOriginFn({
+        headers: request.headers,
+        protocol: "http",
+        host: request.headers.host
+      });
+
+      const url = new URL(request.url, origin);
       if (url.pathname !== "/_wsproxy") return;
+
       const target = url.searchParams.get("url");
       if (!target) {
         socket.write("HTTP/1.1 400 Bad Request\r\n\r\n");
@@ -701,36 +708,33 @@ function setupWsProxy(server, getOriginFn) {
         return;
       }
 
-      wssProxy.handleUpgrade(request, socket, head, (ws) => {
-        let outbound;
-        try {
-          // global WebSocket is NOT defined in Node; must import from ws.
-          // We'll create outbound using ws's WebSocket constructor:
-          // eslint-disable-next-line no-undef
-        } catch {}
-
-        const WebSocket = (await import("ws")).default; // dynamic to avoid import cycles in some envs
-        outbound = new WebSocket(target, {
+      wssProxy.handleUpgrade(request, socket, head, (clientWs) => {
+        const upstreamWs = new WebSocket(target, {
           headers: {
-            origin: request.headers.origin || getOriginFn({ headers: request.headers, protocol: "http", host: request.headers.host }),
-            "user-agent": USER_AGENT_DEFAULT,
-          },
+            origin: request.headers.origin || origin,
+            "user-agent": USER_AGENT_DEFAULT
+          }
         });
 
-        outbound.on("open", () => {
-          ws.on("message", (msg) => { try { outbound.send(msg); } catch {} });
-          outbound.on("message", (msg) => { try { ws.send(msg); } catch {} });
+        upstreamWs.on("open", () => {
+          clientWs.on("message", (msg) => {
+            try { upstreamWs.send(msg); } catch {}
+          });
 
-          const closeBoth = () => {
-            try { ws.close(); } catch {}
-            try { outbound.close(); } catch {}
-          };
-          ws.on("close", closeBoth);
-          outbound.on("close", closeBoth);
+          upstreamWs.on("message", (msg) => {
+            try { clientWs.send(msg); } catch {}
+          });
         });
 
-        outbound.on("error", () => { try { ws.close(); } catch {} });
-        ws.on("error", () => { try { outbound.close(); } catch {} });
+        const closeBoth = () => {
+          try { clientWs.close(); } catch {}
+          try { upstreamWs.close(); } catch {}
+        };
+
+        clientWs.on("close", closeBoth);
+        upstreamWs.on("close", closeBoth);
+        clientWs.on("error", closeBoth);
+        upstreamWs.on("error", closeBoth);
       });
     } catch {
       try { socket.destroy(); } catch {}
