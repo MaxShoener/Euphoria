@@ -1548,7 +1548,7 @@ function rewriteHtmlWithBaseAndUrls(html, baseUrl, req) {
   return out;
 }
 
-async function processHtmlResponseStrict(upstreamRes, upstreamBodyBuf, req, baseUrl) {
+async function processHtmlResponse(upstreamRes, upstreamBodyBuf, req, baseUrl) {
   // Decompress if needed (buttons/images often fail when content-encoding mismatched)
   const dec = maybeDecompress(upstreamBodyBuf, upstreamRes.headers);
 
@@ -1619,14 +1619,6 @@ async function processHtmlResponseStrict(upstreamRes, upstreamBodyBuf, req, base
 /* ───────────────────────────────────────────── */
 /* Small but critical defaults for “real browser” */
 /* ───────────────────────────────────────────── */
-
-// These flags should exist earlier; if not, define minimal defaults here:
-const FEATURE_FLAGS = globalThis.FEATURE_FLAGS || {
-  STRICT_SAME_ORIGIN_COOKIES: true,
-  DISABLE_SERVICE_WORKERS: true,
-  ENABLE_DISK_CACHE: true,
-};
-globalThis.FEATURE_FLAGS = FEATURE_FLAGS;
 
 // Make caching “feel faster” while keeping auth safer
 function isAuthyHost(host) {
