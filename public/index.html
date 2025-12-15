@@ -1,505 +1,1532 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Euphoria — Proxy</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="color-scheme" content="dark light" />
+  <title>Euphoria</title>
   <style>
     :root{
-      --bg:#0b0c0e;
-      --panel: rgba(18,18,18,0.46);
-      --panel2: rgba(255,255,255,0.06);
-      --stroke: rgba(255,255,255,0.10);
-      --text:#ffffff;
-      --muted:#aeb3b7;
-      --accent:#2e7d32;
-      --accent2:#4caf50;
-      --bad:#e53935;
-      --warn:#f9a825;
-      --shadow: 0 20px 60px rgba(0,0,0,0.45);
-      --blur: 18px;
-      --radius: 22px;
-    }
-    [data-theme="light"]{
-      --bg:#f6f7f9;
-      --panel: rgba(255,255,255,0.72);
-      --panel2: rgba(0,0,0,0.05);
-      --stroke: rgba(0,0,0,0.10);
-      --text:#0b0c0e;
-      --muted:#58606b;
-      --shadow: 0 20px 60px rgba(0,0,0,0.18);
-    }
-    html,body{height:100%;margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial;background:var(--bg);color:var(--text)}
-    *{box-sizing:border-box}
-    a{color:inherit}
-    .bg-glow{
-      position:fixed; inset:-20%;
-      background:
-        radial-gradient(closest-side at 20% 30%, rgba(76,175,80,0.20), transparent 55%),
-        radial-gradient(closest-side at 80% 40%, rgba(46,125,50,0.18), transparent 55%),
-        radial-gradient(closest-side at 50% 80%, rgba(255,255,255,0.06), transparent 60%);
-      filter: blur(40px);
-      opacity:.9;
-      pointer-events:none;
+      --bg0:#0b0f1a;
+      --bg1:#0e1424;
+      --card: rgba(255,255,255,0.06);
+      --card2: rgba(255,255,255,0.10);
+      --stroke: rgba(255,255,255,0.14);
+      --stroke2: rgba(255,255,255,0.22);
+      --text:#eaf0ff;
+      --muted: rgba(234,240,255,0.68);
+      --muted2: rgba(234,240,255,0.55);
+      --shadow: 0 18px 60px rgba(0,0,0,0.55);
+      --shadow2: 0 10px 30px rgba(0,0,0,0.45);
+      --radius: 18px;
+      --radius2: 14px;
+      --topbarH: 74px;
+      --accent: #7aa7ff;
+      --accent2: #7ef0ff;
+      --danger: #ff6b6b;
+      --ok: #61d18d;
+      --warn: #ffd36a;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
     }
 
-    /* Top oval */
-    #topbar{
-      position:fixed;
-      top:14px;
-      left:50%;
-      transform:translateX(-50%);
-      width:min(1100px,92%);
-      height:64px;
+    [data-theme="light"]{
+      --bg0:#f4f7ff;
+      --bg1:#eef3ff;
+      --card: rgba(0,0,0,0.05);
+      --card2: rgba(0,0,0,0.07);
+      --stroke: rgba(0,0,0,0.12);
+      --stroke2: rgba(0,0,0,0.18);
+      --text:#091021;
+      --muted: rgba(9,16,33,0.70);
+      --muted2: rgba(9,16,33,0.58);
+      --shadow: 0 18px 60px rgba(0,0,0,0.18);
+      --shadow2: 0 10px 30px rgba(0,0,0,0.14);
+      --accent:#2b67ff;
+      --accent2:#00b3d6;
+      --danger:#db2c2c;
+      --ok:#0f9d58;
+      --warn:#d09a00;
+    }
+
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      font-family: var(--sans);
+      color: var(--text);
+      background:
+        radial-gradient(1200px 800px at 12% 10%, rgba(122,167,255,0.18), transparent 55%),
+        radial-gradient(900px 900px at 92% 20%, rgba(126,240,255,0.12), transparent 60%),
+        radial-gradient(900px 700px at 60% 100%, rgba(255,211,106,0.10), transparent 60%),
+        linear-gradient(180deg, var(--bg0), var(--bg1));
+      overflow:hidden;
+    }
+
+    a{ color:inherit; }
+    button, input{
+      font: inherit;
+      color: inherit;
+    }
+
+    .app{
+      height:100%;
+      display:flex;
+      flex-direction:column;
+      align-items:stretch;
+    }
+
+    .topbar-wrap{
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      padding: 14px 16px 10px 16px;
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+    }
+
+    .topbar{
+      height: var(--topbarH);
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 999px; /* translucent oval */
+      background: linear-gradient(180deg, rgba(255,255,255,0.12), rgba(255,255,255,0.06));
+      border: 1px solid var(--stroke);
+      box-shadow: var(--shadow2);
+    }
+
+    .navbtn{
+      width: 44px;
+      height: 44px;
+      border-radius: 999px;
+      border: 1px solid var(--stroke);
+      background: rgba(0,0,0,0.14);
+      display:grid;
+      place-items:center;
+      cursor:pointer;
+      transition: transform .08s ease, background .12s ease, border-color .12s ease, opacity .12s ease;
+      user-select:none;
+    }
+    [data-theme="light"] .navbtn{ background: rgba(255,255,255,0.50); }
+    .navbtn:active{ transform: translateY(1px) scale(0.98); }
+    .navbtn:hover{ border-color: var(--stroke2); }
+    .navbtn[disabled]{ opacity:0.45; cursor:not-allowed; }
+
+    .icon{
+      width: 18px; height: 18px;
+      fill: currentColor;
+      opacity: 0.95;
+    }
+
+    .omnibox{
+      flex: 1;
+      height: 44px;
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      padding: 0 14px;
+      border-radius: 999px;
+      border: 1px solid var(--stroke);
+      background: rgba(0,0,0,0.18);
+      min-width: 120px;
+    }
+    [data-theme="light"] .omnibox{ background: rgba(255,255,255,0.55); }
+
+    .omnibox input{
+      flex:1;
+      border:none;
+      outline:none;
+      background: transparent;
+      color: var(--text);
+      font-size: 14px;
+      letter-spacing: 0.1px;
+    }
+
+    .pill{
+      display:flex;
+      align-items:center;
+      gap: 8px;
+      padding: 7px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--stroke);
+      background: rgba(0,0,0,0.12);
+      cursor:pointer;
+      user-select:none;
+      transition: background .12s ease, border-color .12s ease;
+    }
+    [data-theme="light"] .pill{ background: rgba(255,255,255,0.45); }
+    .pill:hover{ border-color: var(--stroke2); }
+    .pill small{ color: var(--muted); font-size: 12px; }
+
+    .badge{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding: 4px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      border: 1px solid var(--stroke);
+      background: rgba(0,0,0,0.18);
+      color: var(--muted);
+    }
+    [data-theme="light"] .badge{ background: rgba(255,255,255,0.55); }
+
+    .dot{
+      width: 8px; height: 8px; border-radius: 999px;
+      background: var(--warn);
+      box-shadow: 0 0 0 4px rgba(255,211,106,0.12);
+    }
+    .dot.ok{ background: var(--ok); box-shadow: 0 0 0 4px rgba(97,209,141,0.16); }
+    .dot.bad{ background: var(--danger); box-shadow: 0 0 0 4px rgba(255,107,107,0.14); }
+
+    .main{
+      flex:1;
+      min-height:0;
+      display:flex;
+      padding: 8px 12px 14px 12px;
+      gap: 12px;
+    }
+
+    .pane{
+      flex:1;
+      min-width:0;
+      border-radius: var(--radius);
+      border: 1px solid var(--stroke);
+      background: rgba(255,255,255,0.05);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+      position: relative;
+    }
+
+    .view{
+      position:absolute;
+      inset:0;
+      overflow:auto;
+      -webkit-overflow-scrolling: touch;
+      background: rgba(0,0,0,0.10);
+    }
+    [data-theme="light"] .view{ background: rgba(255,255,255,0.35); }
+
+    .home{
+      padding: 18px;
+      max-width: 980px;
+      margin: 0 auto;
+    }
+
+    .hero{
+      display:flex;
+      flex-direction:column;
+      gap: 10px;
+      padding: 18px;
+      border-radius: var(--radius);
+      border: 1px solid var(--stroke);
+      background: linear-gradient(180deg, rgba(122,167,255,0.14), rgba(255,255,255,0.05));
+      box-shadow: var(--shadow2);
+    }
+
+    .hero h1{
+      margin: 0;
+      font-size: 22px;
+      letter-spacing: 0.2px;
+    }
+    .hero p{
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.35;
+      font-size: 14px;
+    }
+
+    .grid{
+      display:grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    @media (max-width: 980px){
+      .grid{ grid-template-columns: 1fr; }
+    }
+
+    .card{
+      padding: 14px;
+      border-radius: var(--radius);
+      border: 1px solid var(--stroke);
+      background: rgba(255,255,255,0.05);
+    }
+
+    .card h2{
+      margin: 0 0 10px 0;
+      font-size: 14px;
+      letter-spacing: 0.2px;
+      color: var(--muted);
+      font-weight: 650;
+      text-transform: uppercase;
+    }
+
+    .row{
+      display:flex;
+      gap: 10px;
+      align-items:center;
+      flex-wrap: wrap;
+    }
+
+    .field{
+      flex: 1;
+      min-width: 240px;
+      display:flex;
+      flex-direction:column;
+      gap: 6px;
+    }
+
+    .field label{
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .field input, .field select, .field textarea{
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--stroke);
+      background: rgba(0,0,0,0.14);
+      outline: none;
+      color: var(--text);
+    }
+    [data-theme="light"] .field input,
+    [data-theme="light"] .field select,
+    [data-theme="light"] .field textarea{
+      background: rgba(255,255,255,0.55);
+    }
+
+    .btn{
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--stroke);
+      background: rgba(0,0,0,0.14);
+      cursor:pointer;
+      transition: transform .08s ease, border-color .12s ease, background .12s ease;
+      user-select:none;
+    }
+    [data-theme="light"] .btn{ background: rgba(255,255,255,0.55); }
+    .btn:hover{ border-color: var(--stroke2); }
+    .btn:active{ transform: translateY(1px) scale(0.99); }
+
+    .btn.primary{
+      border-color: rgba(122,167,255,0.55);
+      background: linear-gradient(180deg, rgba(122,167,255,0.18), rgba(0,0,0,0.14));
+    }
+    [data-theme="light"] .btn.primary{
+      background: linear-gradient(180deg, rgba(43,103,255,0.18), rgba(255,255,255,0.55));
+    }
+
+    .btn.danger{
+      border-color: rgba(255,107,107,0.55);
+      background: rgba(255,107,107,0.10);
+    }
+
+    .muted{
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .kvs{
+      display:grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px 10px;
+      align-items:center;
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 8px;
+    }
+
+    .hr{
+      height: 1px;
+      background: var(--stroke);
+      margin: 12px 0;
+    }
+
+    .statusline{
       display:flex;
       align-items:center;
       justify-content:space-between;
-      padding:10px 14px;
-      border-radius:999px;
-      background:var(--panel);
-      border:1px solid var(--stroke);
-      backdrop-filter: blur(var(--blur));
-      box-shadow: var(--shadow);
-      z-index:50;
+      gap: 10px;
+      padding: 10px 12px;
+      border-top: 1px solid var(--stroke);
+      background: rgba(0,0,0,0.12);
     }
-    .brand{
-      display:flex; align-items:center; gap:10px;
-      padding-left:4px;
-      user-select:none;
+    [data-theme="light"] .statusline{ background: rgba(255,255,255,0.45); }
+
+    .statusline .left{
+      display:flex;
+      align-items:center;
+      gap: 10px;
+      min-width:0;
     }
-    .logo{
-      width:34px;height:34px;border-radius:10px;
-      background:linear-gradient(135deg, rgba(76,175,80,0.9), rgba(46,125,50,0.9));
-      box-shadow:0 8px 20px rgba(46,125,50,0.25);
+    .statusline .right{
+      display:flex;
+      align-items:center;
+      gap: 8px;
     }
-    .brand h1{
-      margin:0;
-      font-size:14px;
-      letter-spacing:.6px;
-      text-transform:uppercase;
-    }
-    .brand .sub{
-      display:block;
-      font-size:11px;
-      color:var(--muted);
-      margin-top:2px;
-      letter-spacing:.2px;
-      text-transform:none;
+    .statusline .url{
+      max-width: 58vw;
+      overflow:hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted2);
     }
 
-    .nav{
-      display:flex; align-items:center; gap:8px;
+    .toast-wrap{
+      position: fixed;
+      left: 12px;
+      bottom: 12px;
+      display:flex;
+      flex-direction:column;
+      gap: 10px;
+      z-index: 100;
+      pointer-events:none;
     }
-    .btn{
-      border:1px solid var(--stroke);
-      background:var(--panel2);
-      color:var(--text);
-      padding:9px 12px;
-      border-radius:999px;
+    .toast{
+      pointer-events:auto;
+      max-width: min(520px, calc(100vw - 24px));
+      padding: 10px 12px;
+      border-radius: 14px;
+      border: 1px solid var(--stroke);
+      background: rgba(0,0,0,0.32);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      box-shadow: var(--shadow2);
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap: 10px;
+      animation: pop .16s ease-out;
+    }
+    [data-theme="light"] .toast{ background: rgba(255,255,255,0.75); }
+    @keyframes pop{
+      from{ transform: translateY(8px); opacity:0; }
+      to{ transform: translateY(0); opacity:1; }
+    }
+    .toast b{ font-size: 13px; }
+    .toast p{ margin: 2px 0 0 0; color: var(--muted); font-size: 12px; line-height: 1.25; }
+    .toast button{
+      border: 1px solid var(--stroke);
+      background: rgba(255,255,255,0.05);
+      border-radius: 10px;
       cursor:pointer;
-      font-weight:600;
-      font-size:12px;
-      letter-spacing:.2px;
-      transition:transform .08s ease, background .2s ease, border-color .2s ease;
-      user-select:none;
-      -webkit-tap-highlight-color: transparent;
-    }
-    .btn:hover{ transform: translateY(-1px); border-color: rgba(76,175,80,0.40); }
-    .btn:active{ transform: translateY(0px) scale(.98); }
-    .btn.primary{
-      background:linear-gradient(135deg, rgba(76,175,80,0.95), rgba(46,125,50,0.95));
-      border-color: rgba(255,255,255,0.12);
-    }
-    .btn.bad{
-      background:rgba(229,57,53,0.12);
-      border-color: rgba(229,57,53,0.35);
+      padding: 6px 8px;
+      color: inherit;
     }
 
-    /* Layout */
-    #wrap{
-      width:min(1100px,92%);
-      margin:0 auto;
-      padding-top:98px;
-      padding-bottom:42px;
+    .modal-back{
+      position: fixed;
+      inset:0;
+      background: rgba(0,0,0,0.45);
+      display:none;
+      align-items:center;
+      justify-content:center;
+      z-index: 120;
+      padding: 18px;
     }
-    .panel{
-      background:var(--panel);
-      border:1px solid var(--stroke);
-      border-radius:var(--radius);
+    .modal-back.show{ display:flex; }
+
+    .modal{
+      width: min(920px, 100%);
+      max-height: min(86vh, 900px);
+      overflow:auto;
+      border-radius: 20px;
+      border: 1px solid var(--stroke);
+      background: rgba(0,0,0,0.50);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
       box-shadow: var(--shadow);
-      backdrop-filter: blur(var(--blur));
-      padding:18px;
-      margin-bottom:14px;
+      padding: 14px;
     }
-    .grid{
-      display:grid;
-      grid-template-columns: 1.2fr .8fr;
-      gap:14px;
-    }
-    @media (max-width: 900px){
-      .grid{ grid-template-columns: 1fr; }
-    }
-    .title{
-      margin:0 0 8px 0;
-      font-size:16px;
-      letter-spacing:.2px;
-    }
-    .muted{ color:var(--muted); font-size:12px; line-height:1.45; }
-    .row{
-      display:flex;
-      gap:10px;
-      align-items:center;
-      margin-top:12px;
-      flex-wrap:wrap;
-    }
-    .field{
-      flex:1;
-      min-width:220px;
+    [data-theme="light"] .modal{ background: rgba(255,255,255,0.80); }
+
+    .modal-head{
       display:flex;
       align-items:center;
-      gap:10px;
-      padding:10px 12px;
-      background:var(--panel2);
-      border:1px solid var(--stroke);
-      border-radius:14px;
+      justify-content:space-between;
+      gap: 10px;
+      padding: 6px 6px 10px 6px;
     }
-    .field input{
-      width:100%;
-      border:0;
-      outline:0;
-      background:transparent;
-      color:var(--text);
-      font-size:14px;
+    .modal-head h3{
+      margin:0;
+      font-size: 15px;
+      letter-spacing: 0.2px;
     }
-    .chip{
-      font-size:11px;
-      padding:6px 10px;
-      border-radius:999px;
-      border:1px solid var(--stroke);
-      background:rgba(255,255,255,0.05);
-      color:var(--muted);
-      user-select:none;
+    .modal-close{
+      width: 42px; height: 42px;
+      border-radius: 14px;
+      border: 1px solid var(--stroke);
+      background: rgba(0,0,0,0.12);
+      cursor:pointer;
     }
-    .sep{ height:1px; background:var(--stroke); margin:12px 0; }
+    [data-theme="light"] .modal-close{ background: rgba(255,255,255,0.55); }
 
     .tabs{
-      display:flex; gap:8px; flex-wrap:wrap;
+      display:flex;
+      gap: 8px;
+      padding: 0 6px 10px 6px;
+      flex-wrap: wrap;
     }
     .tab{
-      padding:8px 12px;
-      border-radius:999px;
-      background:var(--panel2);
-      border:1px solid var(--stroke);
+      padding: 8px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--stroke);
+      background: rgba(0,0,0,0.10);
       cursor:pointer;
-      font-weight:700;
-      font-size:12px;
-      color:var(--muted);
+      user-select:none;
+      font-size: 13px;
+      color: var(--muted);
     }
+    [data-theme="light"] .tab{ background: rgba(255,255,255,0.55); }
     .tab.active{
-      color:var(--text);
-      border-color: rgba(76,175,80,0.45);
-      background: rgba(76,175,80,0.12);
+      color: var(--text);
+      border-color: rgba(122,167,255,0.55);
+      background: rgba(122,167,255,0.12);
     }
 
-    .toast{
-      position:fixed;
-      left:50%;
-      transform:translateX(-50%);
-      bottom:18px;
-      background:rgba(0,0,0,0.55);
-      border:1px solid rgba(255,255,255,0.18);
-      color:#fff;
-      padding:10px 12px;
-      border-radius:999px;
-      backdrop-filter: blur(14px);
-      box-shadow:0 16px 50px rgba(0,0,0,0.4);
-      opacity:0;
-      pointer-events:none;
-      transition:opacity .18s ease, transform .18s ease;
-      z-index:100;
-      font-size:12px;
-      max-width:min(520px,92%);
-      white-space:nowrap;
-      overflow:hidden;
-      text-overflow:ellipsis;
-    }
-    .toast.show{
-      opacity:1;
-      transform:translateX(-50%) translateY(-2px);
+    .modal-body{
+      padding: 6px;
     }
 
-    /* “Proxy” view */
-    .proxybar{
+    .small{
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+
+    .codebox{
+      width: 100%;
+      min-height: 180px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      border: 1px solid var(--stroke);
+      background: rgba(0,0,0,0.18);
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--text);
+      outline:none;
+      resize: vertical;
+    }
+    [data-theme="light"] .codebox{ background: rgba(255,255,255,0.55); }
+
+    .hint{
       display:flex;
-      gap:10px;
-      align-items:center;
-      flex-wrap:wrap;
+      gap: 8px;
+      align-items:flex-start;
+      padding: 10px 12px;
+      border-radius: 14px;
+      border: 1px solid var(--stroke);
+      background: rgba(255,255,255,0.05);
     }
-    .proxybar .field{ min-width:260px; }
-    .right{
-      display:flex; gap:8px; flex-wrap:wrap;
+    .hint .i{
+      width: 18px; height:18px;
+      border-radius: 999px;
+      display:grid;
+      place-items:center;
+      border: 1px solid var(--stroke);
+      color: var(--muted);
+      font-size: 12px;
+      flex: none;
+      margin-top: 1px;
     }
-    .mini{
-      font-size:11px;
-      padding:7px 10px;
+
+    .footnote{
+      padding: 12px 18px 22px 18px;
+      color: var(--muted2);
+      font-size: 12px;
+      line-height: 1.35;
     }
   </style>
 </head>
+
 <body>
-  <div class="bg-glow"></div>
+  <div class="app" id="app" data-theme="dark">
 
-  <div id="topbar">
-    <div class="brand">
-      <div class="logo"></div>
-      <div>
-        <h1>Euphoria</h1>
-        <span class="sub">Hybrid Proxy + Wisp Selector</span>
+    <div class="topbar-wrap">
+      <div class="topbar">
+
+        <button class="navbtn" id="btnBack" title="Back" disabled>
+          <svg class="icon" viewBox="0 0 24 24"><path d="M15.5 5.5 9 12l6.5 6.5-1.4 1.4L6.2 12l7.9-7.9z"/></svg>
+        </button>
+
+        <button class="navbtn" id="btnFwd" title="Forward" disabled>
+          <svg class="icon" viewBox="0 0 24 24"><path d="m8.5 18.5 6.5-6.5-6.5-6.5 1.4-1.4 7.9 7.9-7.9 7.9z"/></svg>
+        </button>
+
+        <button class="navbtn" id="btnHome" title="Home">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M12 3 3 10v11h6v-7h6v7h6V10z"/></svg>
+        </button>
+
+        <button class="navbtn" id="btnReload" title="Reload">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M17.7 6.3A8 8 0 1 0 20 12h-2a6 6 0 1 1-1.76-4.24L14 10h7V3z"/></svg>
+        </button>
+
+        <div class="omnibox" title="Enter a URL or search">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M10 2a8 8 0 1 0 4.9 14.3l4.4 4.4 1.4-1.4-4.4-4.4A8 8 0 0 0 10 2zm0 2a6 6 0 1 1 0 12 6 6 0 0 1 0-12z"/></svg>
+          <input id="omnibox" autocomplete="off" spellcheck="false" placeholder="Search or enter URL" />
+          <button class="pill" id="btnGo" title="Go">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M4 12h14l-5-5 1.4-1.4L22.8 12l-8.4 6.4L13 17l5-5H4z"/></svg>
+            <small>Go</small>
+          </button>
+        </div>
+
+        <button class="pill" id="btnSettings" title="Settings">
+          <svg class="icon" viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58-1.92-3.32-2.39.96a7.3 7.3 0 0 0-1.63-.94l-.36-2.54H9.13l-.36 2.54c-.58.24-1.12.55-1.63.94l-2.39-.96-1.92 3.32 2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94L2.83 14.52l1.92 3.32 2.39-.96c.51.39 1.05.7 1.63.94l.36 2.54h5.74l.36-2.54c.58-.24 1.12-.55 1.63-.94l2.39.96 1.92-3.32-2.03-1.58zM12 15.5A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5z"/></svg>
+          <small>Settings</small>
+        </button>
+
+        <span class="badge" id="wispBadge" title="Wisp status">
+          <span class="dot" id="wispDot"></span>
+          <span id="wispText">Wisp: disconnected</span>
+        </span>
+
       </div>
     </div>
-    <div class="nav">
-      <button class="btn" id="navHome">Home</button>
-      <button class="btn" id="navProxy">Proxy</button>
-      <button class="btn" id="navSettings">Settings</button>
-      <button class="btn primary" id="navLaunch">Launch</button>
-    </div>
-  </div>
 
-  <div id="wrap">
-
-    <div class="panel">
-      <div class="tabs">
-        <div class="tab active" data-tab="home">Home</div>
-        <div class="tab" data-tab="proxy">Proxy</div>
-        <div class="tab" data-tab="settings">Settings</div>
-      </div>
-      <div class="sep"></div>
-
-      <!-- HOME -->
-      <section id="tab-home">
-        <h2 class="title">Wisp Server</h2>
-        <div class="muted">
-          Put any deployed Wisp server URL here. This UI only stores it and can pass it to compatible frontends.
-          Your backend proxy still works independently via <span class="chip">/proxy</span>.
-        </div>
-        <div class="row">
-          <div class="field">
-            <span class="chip">wisp://</span>
-            <input id="wispUrl" placeholder="https://your-wisp.example.com" autocomplete="off"/>
-          </div>
-          <button class="btn primary" id="saveWisp">Save</button>
-          <button class="btn" id="clearWisp">Clear</button>
-        </div>
-        <div class="row">
-          <span class="chip" id="wispStatus">No Wisp server set</span>
-        </div>
-      </section>
-
-      <!-- PROXY -->
-      <section id="tab-proxy" style="display:none">
-        <h2 class="title">Browse</h2>
-        <div class="muted">
-          Type a URL or search query. The backend will handle <span class="chip">/proxy?url=</span> and <span class="chip">/proxy?q=</span>.
-        </div>
-
-        <div class="row proxybar">
-          <div class="field">
-            <span class="chip">Go</span>
-            <input id="addr" placeholder="google.com or “xbox login”" autocomplete="off"/>
+    <div class="main">
+      <div class="pane">
+        <div class="view" id="view"></div>
+        <div class="statusline">
+          <div class="left">
+            <span class="badge" id="engineBadge" title="Engine in use">Engine: Proxy</span>
+            <span class="url" id="statusUrl">Home</span>
           </div>
           <div class="right">
-            <button class="btn primary" id="goBtn">Go</button>
-            <button class="btn mini" id="modeBtn">Mode: Auto</button>
-            <button class="btn mini" id="openNew">New Tab</button>
+            <button class="btn" id="btnCopyUrl" title="Copy current URL">Copy</button>
+            <button class="btn danger" id="btnStop" title="Stop loading">Stop</button>
           </div>
         </div>
-
-        <div class="row">
-          <span class="chip" id="modeHint">Auto chooses Proxy/Scramjet (if enabled server-side)</span>
-        </div>
-      </section>
-
-      <!-- SETTINGS -->
-      <section id="tab-settings" style="display:none">
-        <h2 class="title">Settings</h2>
-        <div class="muted">These settings affect the UI and how links are built.</div>
-
-        <div class="row">
-          <button class="btn" id="toggleTheme">Toggle Light/Dark</button>
-          <button class="btn" id="copyOrigin">Copy Site Origin</button>
-          <button class="btn bad" id="resetUi">Reset UI Storage</button>
-        </div>
-
-        <div class="sep"></div>
-        <div class="muted">
-          Tip: On Koyeb, your deployed origin is detected automatically. Redirects should not go to localhost anymore.
-        </div>
-      </section>
-
-    </div>
-
-    <div class="panel">
-      <h2 class="title">Quick Links</h2>
-      <div class="muted">These use your deployed backend origin automatically.</div>
-      <div class="row">
-        <button class="btn" data-quick="google.com">Google</button>
-        <button class="btn" data-quick="xbox.com">Xbox</button>
-        <button class="btn" data-quick="account.microsoft.com">Microsoft Account</button>
-        <button class="btn" data-quick="github.com">GitHub</button>
       </div>
     </div>
 
+    <div class="toast-wrap" id="toasts"></div>
+
+    <div class="modal-back" id="modalBack" aria-hidden="true">
+      <div class="modal" role="dialog" aria-modal="true" aria-label="Settings">
+        <div class="modal-head">
+          <h3>Settings</h3>
+          <button class="modal-close" id="modalClose" title="Close">
+            <svg class="icon" viewBox="0 0 24 24"><path d="M18.3 5.7 12 12l6.3 6.3-1.4 1.4L10.6 13.4 4.3 19.7 2.9 18.3 9.2 12 2.9 5.7 4.3 4.3l6.3 6.3 6.3-6.3z"/></svg>
+          </button>
+        </div>
+
+        <div class="tabs" id="tabs">
+          <div class="tab active" data-tab="tab-connection">Connection</div>
+          <div class="tab" data-tab="tab-appearance">Appearance</div>
+          <div class="tab" data-tab="tab-session">Session</div>
+          <div class="tab" data-tab="tab-advanced">Advanced</div>
+        </div>
+
+        <div class="modal-body">
+
+          <div id="tab-connection">
+            <div class="hint">
+              <div class="i">i</div>
+              <div class="small">
+                Home is where you set your Wisp server. This UI lets you point the frontend at <b>any deployed Wisp server</b>.
+                Backend support comes from the server you deploy. If Wisp is down, browsing can still work via /proxy.
+              </div>
+            </div>
+
+            <div class="hr"></div>
+
+            <div class="card">
+              <h2>Wisp server</h2>
+
+              <div class="row">
+                <div class="field">
+                  <label for="wispUrl">Wisp URL (ws:// or wss://)</label>
+                  <input id="wispUrl" placeholder="wss://your-wisp.example/ws" />
+                </div>
+
+                <div class="field" style="min-width:170px;flex:0.55;">
+                  <label for="wispAuto">Auto-connect</label>
+                  <select id="wispAuto">
+                    <option value="1">Enabled</option>
+                    <option value="0">Disabled</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="row" style="margin-top:10px;">
+                <button class="btn primary" id="btnWispConnect">Connect</button>
+                <button class="btn" id="btnWispDisconnect">Disconnect</button>
+                <button class="btn" id="btnWispTest">Test</button>
+              </div>
+
+              <div class="kvs" style="margin-top:10px;">
+                <div>State</div><div id="wispState">disconnected</div>
+                <div>Last error</div><div id="wispErr">—</div>
+                <div>Selected URL</div><div id="wispSel">—</div>
+              </div>
+
+            </div>
+
+            <div class="hr"></div>
+
+            <div class="card">
+              <h2>Search behavior</h2>
+              <div class="row">
+                <div class="field">
+                  <label for="searchEngine">Search engine</label>
+                  <select id="searchEngine">
+                    <option value="https://www.google.com/search?q=">Google</option>
+                    <option value="https://duckduckgo.com/?q=">DuckDuckGo</option>
+                    <option value="https://www.bing.com/search?q=">Bing</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="openMode">Open mode</label>
+                  <select id="openMode">
+                    <option value="proxy">Proxy (recommended)</option>
+                    <option value="direct">Direct (not recommended)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="small" style="margin-top:10px;">
+                If you type plain words (no dots), Euphoria will treat it as a search query.
+              </div>
+            </div>
+          </div>
+
+          <div id="tab-appearance" style="display:none;">
+            <div class="card">
+              <h2>Theme</h2>
+              <div class="row">
+                <button class="btn" id="btnThemeDark">Dark</button>
+                <button class="btn" id="btnThemeLight">Light</button>
+              </div>
+              <div class="small" style="margin-top:10px;">
+                Theme is saved in your browser.
+              </div>
+            </div>
+
+            <div class="hr"></div>
+
+            <div class="card">
+              <h2>UI</h2>
+              <div class="row">
+                <div class="field">
+                  <label for="uiScale">UI scale</label>
+                  <select id="uiScale">
+                    <option value="1">100%</option>
+                    <option value="1.05">105%</option>
+                    <option value="1.1">110%</option>
+                    <option value="1.15">115%</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="reduceMotion">Reduce motion</label>
+                  <select id="reduceMotion">
+                    <option value="0">Off</option>
+                    <option value="1">On</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div id="tab-session" style="display:none;">
+            <div class="card">
+              <h2>Export / import</h2>
+              <div class="small">
+                Export saves your client-side settings + basic history list.
+                Import restores them. This does not include remote cookies unless your backend supports it.
+              </div>
+
+              <div class="row" style="margin-top:10px;">
+                <button class="btn primary" id="btnExport">Export</button>
+                <button class="btn" id="btnImport">Import</button>
+                <button class="btn danger" id="btnReset">Reset</button>
+              </div>
+
+              <div class="hr"></div>
+
+              <label class="small" for="sessionBox">Session JSON</label>
+              <textarea class="codebox" id="sessionBox" spellcheck="false" placeholder="{ ... }"></textarea>
+
+              <div class="small" style="margin-top:10px;">
+                Tip: you can copy this into a file to keep a backup.
+              </div>
+            </div>
+          </div>
+
+          <div id="tab-advanced" style="display:none;">
+            <div class="card">
+              <h2>Engine</h2>
+              <div class="row">
+                <div class="field">
+                  <label for="engineMode">Engine mode</label>
+                  <select id="engineMode">
+                    <option value="proxy">Proxy (fast)</option>
+                    <option value="scramjet">Scramjet (compat)</option>
+                    <option value="chromium">Chromium (if available)</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="safeMode">Safe mode</label>
+                  <select id="safeMode">
+                    <option value="0">Off</option>
+                    <option value="1">On (less aggressive)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="small" style="margin-top:10px;">
+                Chromium mode requires backend support and usually won’t work on free tiers.
+                Scramjet mode also requires backend routes. Proxy mode uses /proxy.
+              </div>
+            </div>
+
+            <div class="hr"></div>
+
+            <div class="card">
+              <h2>Diagnostics</h2>
+              <div class="row">
+                <button class="btn" id="btnPingBackend">Ping backend</button>
+                <button class="btn" id="btnClearLocal">Clear local storage</button>
+              </div>
+              <div class="kvs">
+                <div>Backend</div><div id="diagBackend">—</div>
+                <div>Engine</div><div id="diagEngine">—</div>
+                <div>Theme</div><div id="diagTheme">—</div>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <div class="footnote">
+      <b>Notes:</b> Some sites (Google login, Xbox login) may require advanced backend support to fully work
+      due to modern anti-bot + CSP + service worker behavior. The backend you deploy determines compatibility.
+    </div>
   </div>
 
-  <div class="toast" id="toast">Saved</div>
-
   <script>
-    const $ = (id) => document.getElementById(id);
-    const tabs = [...document.querySelectorAll('.tab')];
+    (function(){
+      const $ = (id)=>document.getElementById(id);
 
-    function showToast(msg){
-      const t = $('toast');
-      t.textContent = msg;
-      t.classList.add('show');
-      clearTimeout(showToast._to);
-      showToast._to = setTimeout(()=>t.classList.remove('show'), 1600);
-    }
+      const app = $("app");
+      const view = $("view");
 
-    function setTab(name){
-      tabs.forEach(x => x.classList.toggle('active', x.dataset.tab === name));
-      $('tab-home').style.display = name === 'home' ? '' : 'none';
-      $('tab-proxy').style.display = name === 'proxy' ? '' : 'none';
-      $('tab-settings').style.display = name === 'settings' ? '' : 'none';
-      localStorage.setItem('euph_tab', name);
-    }
+      const btnBack = $("btnBack");
+      const btnFwd = $("btnFwd");
+      const btnHome = $("btnHome");
+      const btnReload = $("btnReload");
+      const btnGo = $("btnGo");
+      const btnSettings = $("btnSettings");
+      const btnCopyUrl = $("btnCopyUrl");
+      const btnStop = $("btnStop");
 
-    function getOrigin(){
-      return location.origin;
-    }
+      const omnibox = $("omnibox");
+      const statusUrl = $("statusUrl");
+      const engineBadge = $("engineBadge");
 
-    function loadPrefs(){
-      const theme = localStorage.getItem('euph_theme') || 'dark';
-      document.documentElement.dataset.theme = theme === 'light' ? 'light' : 'dark';
+      const modalBack = $("modalBack");
+      const modalClose = $("modalClose");
 
-      const wisp = localStorage.getItem('euph_wisp') || '';
-      $('wispUrl').value = wisp;
-      $('wispStatus').textContent = wisp ? ('Wisp: ' + wisp) : 'No Wisp server set';
+      const wispBadge = $("wispBadge");
+      const wispDot = $("wispDot");
+      const wispText = $("wispText");
 
-      setTab(localStorage.getItem('euph_tab') || 'home');
-    }
+      const wispUrl = $("wispUrl");
+      const wispAuto = $("wispAuto");
+      const btnWispConnect = $("btnWispConnect");
+      const btnWispDisconnect = $("btnWispDisconnect");
+      const btnWispTest = $("btnWispTest");
+      const wispState = $("wispState");
+      const wispErr = $("wispErr");
+      const wispSel = $("wispSel");
 
-    function buildProxyUrl(input, forceMode){
-      const origin = getOrigin();
-      const trimmed = (input || '').trim();
-      if(!trimmed) return null;
+      const searchEngine = $("searchEngine");
+      const openMode = $("openMode");
 
-      // if it looks like a url, pass as url
-      const looksUrl = /^(https?:\/\/|[a-z0-9.-]+\.[a-z]{2,}|localhost(:\d+)?)(\/|$)/i.test(trimmed);
-      if(looksUrl){
-        const url = trimmed.startsWith('http') ? trimmed : 'https://' + trimmed;
-        if(forceMode === 'scramjet') return origin + '/sj/' + encodeURIComponent(url);
-        return origin + '/proxy?url=' + encodeURIComponent(url);
-      }
+      const btnThemeDark = $("btnThemeDark");
+      const btnThemeLight = $("btnThemeLight");
+      const uiScale = $("uiScale");
+      const reduceMotion = $("reduceMotion");
 
-      // search query
-      if(forceMode === 'scramjet'){
-        const g = 'https://www.google.com/search?q=' + encodeURIComponent(trimmed);
-        return origin + '/sj/' + encodeURIComponent(g);
-      }
-      return origin + '/proxy?q=' + encodeURIComponent(trimmed);
-    }
+      const btnExport = $("btnExport");
+      const btnImport = $("btnImport");
+      const btnReset = $("btnReset");
+      const sessionBox = $("sessionBox");
 
-    // nav buttons
-    $('navHome').onclick = () => setTab('home');
-    $('navProxy').onclick = () => setTab('proxy');
-    $('navSettings').onclick = () => setTab('settings');
-    $('navLaunch').onclick = () => setTab('proxy');
+      const engineMode = $("engineMode");
+      const safeMode = $("safeMode");
 
-    // wisp
-    $('saveWisp').onclick = () => {
-      const v = $('wispUrl').value.trim();
-      localStorage.setItem('euph_wisp', v);
-      $('wispStatus').textContent = v ? ('Wisp: ' + v) : 'No Wisp server set';
-      showToast(v ? 'Wisp saved' : 'Wisp cleared');
-    };
-    $('clearWisp').onclick = () => {
-      localStorage.removeItem('euph_wisp');
-      $('wispUrl').value = '';
-      $('wispStatus').textContent = 'No Wisp server set';
-      showToast('Wisp cleared');
-    };
+      const btnPingBackend = $("btnPingBackend");
+      const btnClearLocal = $("btnClearLocal");
+      const diagBackend = $("diagBackend");
+      const diagEngine = $("diagEngine");
+      const diagTheme = $("diagTheme");
 
-    // theme
-    $('toggleTheme').onclick = () => {
-      const cur = document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
-      const next = cur === 'light' ? 'dark' : 'light';
-      document.documentElement.dataset.theme = next;
-      localStorage.setItem('euph_theme', next);
-      showToast('Theme: ' + next);
-    };
+      const toasts = $("toasts");
+      const tabs = $("tabs");
 
-    $('copyOrigin').onclick = async () => {
-      try{
-        await navigator.clipboard.writeText(getOrigin());
-        showToast('Copied origin');
-      }catch{
-        showToast('Copy failed');
-      }
-    };
-
-    $('resetUi').onclick = () => {
-      localStorage.removeItem('euph_tab');
-      localStorage.removeItem('euph_theme');
-      localStorage.removeItem('euph_wisp');
-      showToast('UI reset');
-      setTimeout(()=>location.reload(), 300);
-    };
-
-    // mode toggle (Auto -> Proxy -> Scramjet)
-    const modes = ['auto','proxy','scramjet'];
-    function getMode(){ return localStorage.getItem('euph_mode') || 'auto'; }
-    function setMode(m){
-      localStorage.setItem('euph_mode', m);
-      $('modeBtn').textContent = 'Mode: ' + (m[0].toUpperCase()+m.slice(1));
-      $('modeHint').textContent =
-        m === 'auto' ? 'Auto chooses Proxy/Scramjet (if enabled server-side)' :
-        m === 'proxy' ? 'Force classic proxy mode (/proxy)' :
-        'Force scramjet mode (/sj/)';
-    }
-    $('modeBtn').onclick = () => {
-      const cur = getMode();
-      const idx = modes.indexOf(cur);
-      const next = modes[(idx+1) % modes.length];
-      setMode(next);
-      showToast('Mode: ' + next);
-    };
-
-    function go(openNew){
-      const m = getMode();
-      const force = m === 'proxy' ? 'proxy' : (m === 'scramjet' ? 'scramjet' : null);
-      const u = buildProxyUrl($('addr').value, force === 'scramjet' ? 'scramjet' : null);
-      if(!u){ showToast('Enter a URL or query'); return; }
-      if(openNew) window.open(u, '_blank', 'noopener');
-      else location.href = u;
-    }
-
-    $('goBtn').onclick = () => go(false);
-    $('openNew').onclick = () => go(true);
-    $('addr').addEventListener('keydown', (e)=>{ if(e.key === 'Enter') go(false); });
-
-    // quick links
-    document.querySelectorAll('[data-quick]').forEach(btn=>{
-      btn.onclick = () => {
-        $('addr').value = btn.dataset.quick;
-        setTab('proxy');
-        go(false);
+      const STATE = {
+        current: null,
+        loading: false,
+        abort: null,
+        back: [],
+        forward: [],
+        wisp: { ws: null, state:"disconnected", lastErr:null },
+        settings: {
+          wispUrl: "",
+          wispAuto: "1",
+          searchEngine: "https://www.google.com/search?q=",
+          openMode: "proxy",
+          theme: "dark",
+          uiScale: "1",
+          reduceMotion: "0",
+          engineMode: "proxy",
+          safeMode: "0"
+        },
+        history: []
       };
-    });
 
-    // tabs click
-    tabs.forEach(t => t.onclick = () => setTab(t.dataset.tab));
+      function toast(title, body, ms=3200){
+        const el = document.createElement("div");
+        el.className = "toast";
+        el.innerHTML = `
+          <div style="min-width:0;">
+            <b>${escapeHtml(title)}</b>
+            <p>${escapeHtml(body || "")}</p>
+          </div>
+          <button title="Dismiss">OK</button>
+        `;
+        const btn = el.querySelector("button");
+        btn.addEventListener("click", ()=> el.remove());
+        toasts.appendChild(el);
+        setTimeout(()=> { try{ el.remove(); }catch(e){} }, ms);
+      }
 
-    loadPrefs();
-    setMode(getMode());
+      function escapeHtml(s){
+        return String(s ?? "")
+          .replaceAll("&","&amp;")
+          .replaceAll("<","&lt;")
+          .replaceAll(">","&gt;")
+          .replaceAll('"',"&quot;")
+          .replaceAll("'","&#039;");
+      }
+
+      function save(){
+        try{
+          localStorage.setItem("euphoria.settings", JSON.stringify({
+            settings: STATE.settings,
+            history: STATE.history.slice(-60)
+          }));
+        }catch(e){}
+      }
+
+      function load(){
+        try{
+          const raw = localStorage.getItem("euphoria.settings");
+          if(!raw) return;
+          const obj = JSON.parse(raw);
+          if(obj && obj.settings) Object.assign(STATE.settings, obj.settings);
+          if(obj && Array.isArray(obj.history)) STATE.history = obj.history.slice(-60);
+        }catch(e){}
+      }
+
+      function applySettings(){
+        app.setAttribute("data-theme", STATE.settings.theme === "light" ? "light" : "dark");
+        document.documentElement.style.zoom = String(STATE.settings.uiScale || "1");
+        if(STATE.settings.reduceMotion === "1"){
+          document.documentElement.style.scrollBehavior = "auto";
+        }
+        wispUrl.value = STATE.settings.wispUrl || "";
+        wispAuto.value = STATE.settings.wispAuto || "1";
+        searchEngine.value = STATE.settings.searchEngine || "https://www.google.com/search?q=";
+        openMode.value = STATE.settings.openMode || "proxy";
+        uiScale.value = STATE.settings.uiScale || "1";
+        reduceMotion.value = STATE.settings.reduceMotion || "0";
+        engineMode.value = STATE.settings.engineMode || "proxy";
+        safeMode.value = STATE.settings.safeMode || "0";
+
+        engineBadge.textContent = "Engine: " + (STATE.settings.engineMode || "proxy");
+        diagEngine.textContent = STATE.settings.engineMode || "proxy";
+        diagTheme.textContent = STATE.settings.theme || "dark";
+      }
+
+      function setNavButtons(){
+        btnBack.disabled = STATE.back.length === 0;
+        btnFwd.disabled = STATE.forward.length === 0;
+        btnStop.disabled = !STATE.loading;
+      }
+
+      function openModal(){
+        modalBack.classList.add("show");
+        modalBack.setAttribute("aria-hidden","false");
+        renderDiag();
+      }
+
+      function closeModal(){
+        modalBack.classList.remove("show");
+        modalBack.setAttribute("aria-hidden","true");
+      }
+
+      function setWispBadge(state, err){
+        const s = state || "disconnected";
+        wispState.textContent = s;
+        wispSel.textContent = STATE.settings.wispUrl || "—";
+        wispErr.textContent = err ? String(err) : "—";
+
+        let dotCls = "dot";
+        let text = "Wisp: " + s;
+        if(s === "connected"){ dotCls = "dot ok"; }
+        else if(s === "error"){ dotCls = "dot bad"; }
+        wispDot.className = dotCls;
+        wispText.textContent = text;
+      }
+
+      function wispDisconnect(){
+        try{
+          if(STATE.wisp.ws){
+            STATE.wisp.ws.onopen = null;
+            STATE.wisp.ws.onclose = null;
+            STATE.wisp.ws.onerror = null;
+            STATE.wisp.ws.onmessage = null;
+            STATE.wisp.ws.close();
+          }
+        }catch(e){}
+        STATE.wisp.ws = null;
+        STATE.wisp.state = "disconnected";
+        setWispBadge("disconnected");
+      }
+
+      function wispConnect(){
+        const url = (STATE.settings.wispUrl || "").trim();
+        if(!url){
+          toast("Wisp", "Enter a Wisp URL first.");
+          return;
+        }
+        wispDisconnect();
+        try{
+          const ws = new WebSocket(url);
+          STATE.wisp.ws = ws;
+          STATE.wisp.state = "connecting";
+          setWispBadge("connecting");
+
+          ws.onopen = ()=>{
+            STATE.wisp.state = "connected";
+            setWispBadge("connected");
+            toast("Wisp", "Connected.");
+          };
+          ws.onclose = ()=>{
+            STATE.wisp.state = "disconnected";
+            setWispBadge("disconnected");
+          };
+          ws.onerror = (e)=>{
+            STATE.wisp.state = "error";
+            setWispBadge("error", "WebSocket error");
+          };
+          ws.onmessage = (ev)=>{
+            const t = String(ev.data || "");
+            if(t.toLowerCase().includes("pong")){
+              toast("Wisp", "Pong received.");
+            }
+          };
+        }catch(e){
+          STATE.wisp.state = "error";
+          setWispBadge("error", e && e.message ? e.message : String(e));
+        }
+      }
+
+      function wispTestPing(){
+        try{
+          const ws = STATE.wisp.ws;
+          if(!ws || ws.readyState !== 1){
+            toast("Wisp", "Not connected.");
+            return;
+          }
+          ws.send(JSON.stringify({ cmd:"ping", ts: Date.now() }));
+          toast("Wisp", "Ping sent.");
+        }catch(e){
+          toast("Wisp", "Ping failed: " + (e && e.message ? e.message : String(e)));
+        }
+      }
+
+      function normalizeInputToUrlOrSearch(input){
+        const s = String(input || "").trim();
+        if(!s) return null;
+
+        const hasScheme = /^https?:\/\//i.test(s);
+        const looksLikeDomain = /[.]/.test(s) && !/\s/.test(s);
+        const isLocal = /^localhost(?::\d+)?/i.test(s);
+
+        if(hasScheme) return s;
+        if(looksLikeDomain || isLocal) return "https://" + s;
+
+        const base = STATE.settings.searchEngine || "https://www.google.com/search?q=";
+        return base + encodeURIComponent(s);
+      }
+
+      async function renderHome(){
+        STATE.current = null;
+        STATE.loading = false;
+        setNavButtons();
+        statusUrl.textContent = "Home";
+        omnibox.value = "";
+
+        const html = `
+          <div class="home">
+            <div class="hero">
+              <h1>Euphoria</h1>
+              <p>
+                Set your Wisp server below, then browse using the address bar.
+                If you type plain text, it will search automatically.
+              </p>
+            </div>
+
+            <div class="grid">
+              <div class="card">
+                <h2>Start</h2>
+
+                <div class="row">
+                  <div class="field">
+                    <label>Wisp URL (ws:// or wss://)</label>
+                    <input id="homeWisp" placeholder="wss://your-wisp.example/ws" value="${escapeHtml(STATE.settings.wispUrl || "")}">
+                  </div>
+                  <div class="field" style="min-width:170px;flex:0.55;">
+                    <label>Auto-connect</label>
+                    <select id="homeWispAuto">
+                      <option value="1">Enabled</option>
+                      <option value="0">Disabled</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="row" style="margin-top:10px;">
+                  <button class="btn primary" id="homeSave">Save</button>
+                  <button class="btn" id="homeConnect">Connect</button>
+                  <button class="btn" id="homeSettings">Settings</button>
+                </div>
+
+                <div class="hr"></div>
+
+                <div class="row">
+                  <div class="field">
+                    <label>Try a URL</label>
+                    <input id="homeUrl" placeholder="https://example.com">
+                  </div>
+                  <button class="btn primary" id="homeGo">Go</button>
+                </div>
+
+                <div class="small" style="margin-top:10px;">
+                  Tip: Some sites won’t fully work without backend support (CSP, SW, OAuth).
+                  Proxy is best-effort.
+                </div>
+
+              </div>
+
+              <div class="card">
+                <h2>Current</h2>
+                <div class="kvs">
+                  <div>Engine</div><div>${escapeHtml(STATE.settings.engineMode || "proxy")}</div>
+                  <div>Theme</div><div>${escapeHtml(STATE.settings.theme || "dark")}</div>
+                  <div>Open mode</div><div>${escapeHtml(STATE.settings.openMode || "proxy")}</div>
+                  <div>Search</div><div>${escapeHtml((STATE.settings.searchEngine || "").slice(0,28) + "...")}</div>
+                </div>
+
+                <div class="hr"></div>
+
+                <div class="hint">
+                  <div class="i">!</div>
+                  <div class="small">
+                    If redirects “escape” the app, the backend must rewrite them.
+                    The next server.js will fix that by forcing same-origin proxy redirects.
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          </div>
+        `;
+
+        view.innerHTML = html;
+
+        const hw = view.querySelector("#homeWisp");
+        const hwa = view.querySelector("#homeWispAuto");
+        const hs = view.querySelector("#homeSave");
+        const hc = view.querySelector("#homeConnect");
+        const hset = view.querySelector("#homeSettings");
+        const hu = view.querySelector("#homeUrl");
+        const hg = view.querySelector("#homeGo");
+
+        if(hwa) hwa.value = STATE.settings.wispAuto || "1";
+
+        hs && hs.addEventListener("click", ()=>{
+          STATE.settings.wispUrl = (hw.value || "").trim();
+          STATE.settings.wispAuto = (hwa.value || "1");
+          save();
+          applySettings();
+          toast("Saved", "Wisp settings saved.");
+        });
+
+        hc && hc.addEventListener("click", ()=>{
+          STATE.settings.wispUrl = (hw.value || "").trim();
+          STATE.settings.wispAuto = (hwa.value || "1");
+          save();
+          applySettings();
+          wispConnect();
+        });
+
+        hset && hset.addEventListener("click", openModal);
+
+        hg && hg.addEventListener("click", ()=>{
+          const u = normalizeInputToUrlOrSearch(hu.value || "");
+          if(!u) return;
+          navigate(u, { push:true });
+        });
+
+        hw && hw.addEventListener("keydown", (e)=>{ if(e.key==="Enter"){ hs.click(); } });
+        hu && hu.addEventListener("keydown", (e)=>{ if(e.key==="Enter"){ hg.click(); } });
+      }
+
+      function buildProxyUrl(url){
+        const base = location.origin;
+        return base + "/proxy?url=" + encodeURIComponent(url);
+      }
+
+      async function navigate(url, opts){
+        const o = opts || {};
+        const normalized = normalizeInputToUrlOrSearch(url);
+        if(!normalized) return;
+
+        if(STATE.current && o.push){
+          STATE.back.push(STATE.current);
+          if(STATE.back.length > 40) STATE.back.shift();
+          STATE.forward = [];
+        }
+
+        STATE.current = normalized;
+        setNavButtons();
+
+        omnibox.value = normalized;
+        statusUrl.textContent = normalized;
+
+        const mode = STATE.settings.openMode || "proxy";
+        const engine = STATE.settings.engineMode || "proxy";
+        engineBadge.textContent = "Engine: " + engine;
+
+        STATE.loading = true;
+        setNavButtons();
+
+        const finalUrl = (mode === "direct")
+          ? normalized
+          : buildProxyUrl(normalized);
+
+        try{
+          if(STATE.abort) try{ STATE.abort.abort(); }catch(e){}
+          STATE.abort = new AbortController();
+
+          const res = await fetch(finalUrl, {
+            method: "GET",
+            credentials: "include",
+            signal: STATE.abort.signal,
+            headers: {
+              "x-euphoria-client": "ui",
+              "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+            }
+          });
+
+          if(!res.ok){
+            throw new Error("HTTP " + res.status);
+          }
+
+          const ct = (res.headers.get("content-type") || "").toLowerCase();
+          if(!ct.includes("text/html")){
+            const blob = await res.blob();
+            const obj = URL.createObjectURL(blob);
+            view.innerHTML = `
+              <div class="home">
+                <div class="hero">
+                  <h1>Opened asset</h1>
+                  <p class="muted">Non-HTML content loaded. Opening in a new tab is recommended.</p>
+                </div>
+                <div class="card" style="margin-top:12px;">
+                  <div class="row">
+                    <a class="btn primary" href="${obj}" target="_blank" rel="noopener">Open</a>
+                    <button class="btn" id="copyAsset">Copy URL</button>
+                  </div>
+                </div>
+              </div>
+            `;
+            const c = view.querySelector("#copyAsset");
+            c && c.addEventListener("click", async ()=>{
+              try{ await navigator.clipboard.writeText(normalized); toast("Copied", "URL copied."); }catch(e){ toast("Copy failed", String(e)); }
+            });
+            STATE.loading = false;
+            setNavButtons();
+            return;
+          }
+
+          const html = await res.text();
+
+          // IMPORTANT: We DO NOT use iframes.
+          // We render the proxied HTML directly into the view.
+          // Backend must rewrite links/scripts/styles so clicks stay inside /proxy.
+          view.innerHTML = html;
+
+          // Basic client-side click guard for accidental escapes
+          guardEscapes();
+
+          // Track history list (client-side)
+          pushHistory(normalized);
+
+          STATE.loading = false;
+          setNavButtons();
+        }catch(e){
+          STATE.loading = false;
+          setNavButtons();
+          const msg = (e && e.message) ? e.message : String(e);
+          view.innerHTML = `
+            <div class="home">
+              <div class="hero">
+                <h1>Load failed</h1>
+                <p class="muted">${escapeHtml(msg)}</p>
+              </div>
+              <div class="card" style="margin-top:12px;">
+                <h2>Tips</h2>
+                <div class="small">
+                  If this is a complex site (Google login / Xbox), the backend must handle redirects, cookies, CSP, service workers, and fetch/XHR rewriting.
+                  The next server.js update is where those fixes happen.
+                </div>
+              </div>
+            </div>
+          `;
+          toast("Load failed", msg);
+        }
+      }
+
+      function guardEscapes(){
+        try{
+          // Prevent top-level navigations via normal <a> click if backend missed rewriting.
+          const anchors = view.querySelectorAll("a[href]");
+          anchors.forEach(a=>{
+            a.addEventListener("click", (ev)=>{
+              try{
+                const href = a.getAttribute("href");
+                if(!href) return;
+                if(href.startsWith("#")) return;
+                if(href.startsWith("javascript:")) return;
+                if(href.startsWith("mailto:") || href.startsWith("tel:")) return;
+
+                // If already proxied, let it work normally.
+                if(href.includes("/proxy?url=")) return;
+
+                // Otherwise force navigate through our omnibox pipeline
+                ev.preventDefault();
+                const abs = new URL(href, STATE.current || location.href).href;
+                navigate(abs, { push:true });
+              }catch(e){}
+            }, { passive:false });
+          });
+
+          // Forms: force submit action through our pipeline
+          const forms = view.querySelectorAll("form[action]");
+          forms.forEach(f=>{
+            f.addEventListener("submit", (ev)=>{
+              try{
+                const act = f.getAttribute("action");
+                if(!act) return;
+                if(act.includes("/proxy?url=")) return;
+                ev.preventDefault();
+                const abs = new URL(act, STATE.current || location.href).href;
+                // Let backend handle method/body; we just navigate to action (best-effort)
+                navigate(abs, { push:true });
+              }catch(e){}
+            }, { passive:false });
+          });
+        }catch(e){}
+      }
+
+      function pushHistory(url){
+        try{
+          const item = { url, t: Date.now() };
+          STATE.history.unshift(item);
+          STATE.history = STATE.history.slice(0, 60);
+          save();
+        }catch(e){}
+      }
+
+      function renderDiag(){
+        diagBackend.textContent = location.origin;
+        diagEngine.textContent = STATE.settings.engineMode || "proxy";
+        diagTheme.textContent = STATE.settings.theme || "dark";
+      }
+
+      function switchTab(tabId){
+        const kids = Array.from(tabs.querySelectorAll(".tab"));
+        kids.forEach(k=>{
+          k.classList.toggle("active", k.getAttribute("data-tab") === tabId);
+        });
+        ["tab-connection","tab-appearance","tab-session","tab-advanced"].forEach(id=>{
+          const el = $(id);
+          if(el) el.style.display = (id === tabId) ? "block" : "none";
+        });
+      }
+
+      async function pingBackend(){
+        try{
+          const res = await fetch("/_euph_debug/ping", { cache:"no-store" });
+          if(!res.ok) throw new Error("HTTP " + res.status);
+          const j = await res.json();
+          toast("Backend", "pong " + (j && j.ts ? new Date(j.ts).toLocaleTimeString() : ""));
+        }catch(e){
+          toast("Backend", "Ping failed: " + (e && e.message ? e.message : String(e)));
+        }
+      }
+
+      function exportSession(){
+        const payload = {
+          v: 1,
+          exportedAt: new Date().toISOString(),
+          settings: STATE.settings,
+          history: STATE.history
+        };
+        const txt = JSON.stringify(payload, null, 2);
+        sessionBox.value = txt;
+        toast("Exported", "Session JSON generated.");
+        save();
+      }
+
+      function importSession(){
+        const txt = String(sessionBox.value || "").trim();
+        if(!txt){
+          toast("Import", "Paste session JSON first.");
+          return;
+        }
+        try{
+          const obj = JSON.parse(txt);
+          if(obj && obj.settings) Object.assign(STATE.settings, obj.settings);
+          if(obj && Array.isArray(obj.history)) STATE.history = obj.history.slice(-60);
+          save();
+          applySettings();
+          toast("Imported", "Session restored.");
+        }catch(e){
+          toast("Import failed", e && e.message ? e.message : String(e));
+        }
+      }
+
+      function resetAll(){
+        if(!confirm("Reset local settings?")) return;
+        try{ localStorage.removeItem("euphoria.settings"); }catch(e){}
+        location.reload();
+      }
+
+      function stopLoading(){
+        try{
+          if(STATE.abort) STATE.abort.abort();
+        }catch(e){}
+        STATE.loading = false;
+        setNavButtons();
+        toast("Stopped", "Loading aborted.");
+      }
+
+      async function copyCurrentUrl(){
+        const u = STATE.current || "";
+        if(!u){ toast("Copy", "Nothing to copy."); return; }
+        try{
+          await navigator.clipboard.writeText(u);
+          toast("Copied", "URL copied to clipboard.");
+        }catch(e){
+          toast("Copy failed", e && e.message ? e.message : String(e));
+        }
+      }
+
+      // events
+      btnSettings.addEventListener("click", openModal);
+      modalClose.addEventListener("click", closeModal);
+      modalBack.addEventListener("click", (e)=>{ if(e.target === modalBack) closeModal(); });
+
+      tabs.addEventListener("click", (e)=>{
+        const t = e.target.closest(".tab");
+        if(!t) return;
+        switchTab(t.getAttribute("data-tab"));
+      });
+
+      btnThemeDark.addEventListener("click", ()=>{ STATE.settings.theme="dark"; save(); applySettings(); toast("Theme", "Dark mode."); });
+      btnThemeLight.addEventListener("click", ()=>{ STATE.settings.theme="light"; save(); applySettings(); toast("Theme", "Light mode."); });
+
+      uiScale.addEventListener("change", ()=>{ STATE.settings.uiScale = uiScale.value; save(); applySettings(); });
+      reduceMotion.addEventListener("change", ()=>{ STATE.settings.reduceMotion = reduceMotion.value; save(); applySettings(); });
+
+      wispUrl.addEventListener("change", ()=>{ STATE.settings.wispUrl = wispUrl.value.trim(); save(); applySettings(); });
+      wispAuto.addEventListener("change", ()=>{ STATE.settings.wispAuto = wispAuto.value; save(); applySettings(); });
+
+      btnWispConnect.addEventListener("click", ()=>{ STATE.settings.wispUrl = wispUrl.value.trim(); save(); applySettings(); wispConnect(); });
+      btnWispDisconnect.addEventListener("click", wispDisconnect);
+      btnWispTest.addEventListener("click", wispTestPing);
+
+      searchEngine.addEventListener("change", ()=>{ STATE.settings.searchEngine = searchEngine.value; save(); applySettings(); });
+      openMode.addEventListener("change", ()=>{ STATE.settings.openMode = openMode.value; save(); applySettings(); });
+
+      engineMode.addEventListener("change", ()=>{ STATE.settings.engineMode = engineMode.value; save(); applySettings(); });
+      safeMode.addEventListener("change", ()=>{ STATE.settings.safeMode = safeMode.value; save(); applySettings(); });
+
+      btnPingBackend.addEventListener("click", pingBackend);
+      btnClearLocal.addEventListener("click", ()=>{
+        if(!confirm("Clear local storage?")) return;
+        try{ localStorage.clear(); }catch(e){}
+        toast("Cleared", "Local storage cleared. Reloading…");
+        setTimeout(()=>location.reload(), 500);
+      });
+
+      btnExport.addEventListener("click", exportSession);
+      btnImport.addEventListener("click", importSession);
+      btnReset.addEventListener("click", resetAll);
+
+      btnHome.addEventListener("click", ()=> renderHome());
+      btnReload.addEventListener("click", ()=> { if(STATE.current) navigate(STATE.current, { push:false }); else renderHome(); });
+      btnStop.addEventListener("click", stopLoading);
+
+      btnBack.addEventListener("click", ()=>{
+        if(!STATE.back.length) return;
+        const prev = STATE.back.pop();
+        if(STATE.current) STATE.forward.push(STATE.current);
+        navigate(prev, { push:false });
+      });
+
+      btnFwd.addEventListener("click", ()=>{
+        if(!STATE.forward.length) return;
+        const next = STATE.forward.pop();
+        if(STATE.current) STATE.back.push(STATE.current);
+        navigate(next, { push:false });
+      });
+
+      btnGo.addEventListener("click", ()=> navigate(omnibox.value, { push:true }));
+      omnibox.addEventListener("keydown", (e)=>{ if(e.key === "Enter") navigate(omnibox.value, { push:true }); });
+
+      btnCopyUrl.addEventListener("click", copyCurrentUrl);
+
+      // init
+      load();
+      applySettings();
+      setWispBadge("disconnected");
+
+      // auto wisp
+      if(STATE.settings.wispAuto === "1" && (STATE.settings.wispUrl || "").trim()){
+        setTimeout(()=> wispConnect(), 250);
+      }
+
+      // start on home
+      renderHome();
+
+    })();
   </script>
 </body>
 </html>
