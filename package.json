@@ -1,23 +1,24 @@
 {
-  "name": "euphoria-scramjet",
-  "version": "3.0.0",
+  "name": "euphoria-scramjet-hybrid",
+  "version": "2.3.0",
   "private": true,
   "type": "module",
-  "engines": {
-    "node": ">=20"
-  },
+  "main": "server.js",
+  "engines": { "node": ">=20" },
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "node server.js"
   },
   "dependencies": {
+    "@mercuryworkshop/scramjet": "^1.0.0",
     "compression": "^1.7.4",
+    "cookie": "^0.6.0",
     "cors": "^2.8.5",
     "express": "^4.19.2",
-    "express-rate-limit": "^7.3.0",
+    "express-rate-limit": "^7.4.1",
     "jsdom": "^22.1.0",
-    "lru-cache": "^10.4.3",
+    "lru-cache": "^11.0.2",
     "morgan": "^1.10.0",
-    "ws": "^8.18.0",
-    "@mercuryworkshop/scramjet": "^1.0.0"
+    "ws": "^8.18.0"
   }
 }
