@@ -1,8 +1,6 @@
-// server.js
-// Euphoria v3 - "browser-like" proxy: aggressive HTML/CSS/JS rewriting + client runtime hooks.
-// Node 20+, single-file deployment.
-//
-// SECTION: Imports
+/* ───────────────────────────────────────────── */
+/* Imports                                       */
+/* ───────────────────────────────────────────── */
 
 import express from "express";
 import compression from "compression";
@@ -11,46 +9,64 @@ import cors from "cors";
 import fs from "fs";
 import fsPromises from "fs/promises";
 import path from "path";
-import { fileURLToPath } from "url";
-import { JSDOM } from "jsdom";
-import { WebSocketServer } from "ws";
-import { EventEmitter } from "events";
-import rateLimit from "express-rate-limit";
-import { LRUCache } from "lru-cache";
 import http from "http";
 import https from "https";
+import crypto from "crypto";
 import zlib from "zlib";
+import { pipeline } from "stream";
+import { promisify } from "util";
+import { fileURLToPath } from "url";
+import { JSDOM } from "jsdom";
+import rateLimit from "express-rate-limit";
+import { LRUCache } from "lru-cache";
+import { WebSocketServer } from "ws";
+import { EventEmitter } from "events";
+
+// Scramjet CommonJS-safe import (no named export assumptions)
+import scramjetPkg from "@mercuryworkshop/scramjet";
+const ScramjetFactory =
+  scramjetPkg?.createScramjetServer ||
+  scramjetPkg?.createServer ||
+  scramjetPkg?.default?.createScramjetServer ||
+  scramjetPkg?.default?.createServer ||
+  null;
+
+const pipe = promisify(pipeline);
+
+/* ───────────────────────────────────────────── */
+/* Globals                                       */
+/* ───────────────────────────────────────────── */
 
 EventEmitter.defaultMaxListeners = 300;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// SECTION: Config
+/* ───────────────────────────────────────────── */
+/* Config                                        */
+/* ───────────────────────────────────────────── */
 
-const PORT = parseInt(process.env.PORT || "3000", 10);
-const CACHE_DIR = path.join(__dirname, "cache");
+const PORT = Number(process.env.PORT || 3000);
 const ENABLE_DISK_CACHE = process.env.ENABLE_DISK_CACHE !== "0";
-const CACHE_TTL_MS = parseInt(process.env.CACHE_TTL_MS || String(1000 * 60 * 10), 10); // 10 min
-const FETCH_TIMEOUT_MS = parseInt(process.env.FETCH_TIMEOUT_MS || "35000", 10);
-const USER_AGENT_DEFAULT =
+const CACHE_DIR = path.join(__dirname, "cache");
+const PUBLIC_DIR = path.join(__dirname, "public");
+
+const DEFAULT_UA =
   process.env.USER_AGENT_DEFAULT ||
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36";
 
-const MAX_MEM_CACHE_BYTES = parseInt(process.env.MAX_MEM_CACHE_BYTES || String(128 * 1024 * 1024), 10); // 128MB
-const MAX_ASSET_CACHE_BYTES = parseInt(process.env.MAX_ASSET_CACHE_BYTES || String(2 * 1024 * 1024), 10); // 2MB per asset
-const MAX_HTML_CACHE_BYTES = parseInt(process.env.MAX_HTML_CACHE_BYTES || String(2 * 1024 * 1024), 10); // 2MB per html
-const PER_HOST_CACHE_CONTROLS = {}; // { "example.com": { disable: true, ttlMs: 60000 } }
+const FETCH_TIMEOUT_MS = Number(process.env.FETCH_TIMEOUT_MS || 30000);
+const MAX_BODY_BYTES = Number(process.env.MAX_BODY_BYTES || 20 * 1024 * 1024); // 20MB
+const MAX_HTML_CACHE_BYTES = Number(process.env.MAX_HTML_CACHE_BYTES || 900 * 1024); // 900KB
+const MAX_ASSET_CACHE_BYTES = Number(process.env.MAX_ASSET_CACHE_BYTES || 4 * 1024 * 1024); // 4MB
+const CACHE_TTL_MS = Number(process.env.CACHE_TTL_MS || 10 * 60 * 1000); // 10 min
+const CACHE_TTL_ASSET_MS = Number(process.env.CACHE_TTL_ASSET_MS || 60 * 60 * 1000); // 1 hour
+const MEM_CACHE_ITEMS = Number(process.env.MEM_CACHE_ITEMS || 4096);
 
-const SESSION_NAME = "euphoria_sid";
-const SESSION_TTL_MS = parseInt(process.env.SESSION_TTL_MS || String(1000 * 60 * 60 * 8), 10); // 8h
 const ADMIN_TOKEN = process.env.EUPH_ADMIN_TOKEN || "";
+const TRUST_PROXY = true;
 
-if (ENABLE_DISK_CACHE) await fsPromises.mkdir(CACHE_DIR, { recursive: true }).catch(() => {});
-
-// SECTION: Constants
-
-const DROP_HEADERS = new Set([
+const DROP_RESPONSE_HEADERS = new Set([
   "content-security-policy",
   "content-security-policy-report-only",
   "x-frame-options",
@@ -58,10 +74,9 @@ const DROP_HEADERS = new Set([
   "cross-origin-embedder-policy",
   "cross-origin-resource-policy",
   "permissions-policy",
-  "strict-transport-security", // optional; can cause odd loops in proxy contexts
 ]);
 
-const HOP_BY_HOP = new Set([
+const HOP_BY_HOP_HEADERS = new Set([
   "connection",
   "keep-alive",
   "proxy-authenticate",
@@ -72,1000 +87,1557 @@ const HOP_BY_HOP = new Set([
   "upgrade",
 ]);
 
-const ASSET_EXTENSIONS = [
-  ".wasm", ".js", ".mjs", ".css",
-  ".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".ico", ".avif",
-  ".ttf", ".otf", ".woff", ".woff2", ".eot",
-  ".json", ".map",
-  ".mp4", ".webm", ".mp3", ".m4a", ".ogg",
-  ".pdf",
+const BINARY_EXTENSIONS = [
+  ".wasm", ".js", ".mjs", ".css", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".ico",
+  ".ttf", ".otf", ".woff", ".woff2", ".eot", ".json", ".map", ".mp4", ".webm", ".mp3", ".m4a",
+  ".pdf", ".zip", ".rar", ".7z", ".avi", ".mov", ".mkv",
 ];
 
-const SPECIAL_FILES = ["service-worker.js", "sw.js", "worker.js", "manifest.json"];
+const SPECIAL_FILES = [
+  "service-worker.js", "sw.js", "worker.js", "manifest.json",
+];
 
-// SECTION: App
+const HARD_SITES = [
+  /accounts\.google\.com/i,
+  /login\.live\.com/i,
+  /login\.microsoftonline\.com/i,
+  /microsoft\.com/i,
+  /xbox\.com/i,
+  /xsts\.auth\.xboxlive\.com/i,
+  /user\.auth\.xboxlive\.com/i,
+];
+
+const FEATURE_FLAGS = {
+  ENABLE_SCRAMJET: process.env.ENABLE_SCRAMJET !== "0",
+  ENABLE_HTML_REWRITE: process.env.ENABLE_HTML_REWRITE !== "0",
+  ENABLE_JS_REWRITE: process.env.ENABLE_JS_REWRITE !== "0",
+  ENABLE_SW_PATCH: process.env.ENABLE_SW_PATCH !== "0",
+  STRICT_COOKIE_ORIGIN: process.env.STRICT_COOKIE_ORIGIN !== "0",
+  ENABLE_WS_TUNNEL: process.env.ENABLE_WS_TUNNEL !== "0",
+  ENABLE_RANGE: process.env.ENABLE_RANGE !== "0",
+  ENABLE_BROTLI: process.env.ENABLE_BROTLI !== "0",
+};
+
+function log(...args) {
+  if (process.env.QUIET_LOGS === "1") return;
+  console.log(...args);
+}
+
+/* ───────────────────────────────────────────── */
+/* Init                                          */
+/* ───────────────────────────────────────────── */
+
+if (ENABLE_DISK_CACHE) {
+  await fsPromises.mkdir(CACHE_DIR, { recursive: true }).catch(() => {});
+}
 
 const app = express();
-app.set("trust proxy", true);
+app.set("trust proxy", TRUST_PROXY);
+
 app.use(cors({ origin: true, credentials: true }));
 app.use(morgan("tiny"));
-app.use(compression({ threshold: 1024 }));
-app.use(express.urlencoded({ extended: false }));
+app.use(compression());
 app.use(express.json({ limit: "2mb" }));
-app.use(express.static(path.join(__dirname, "public"), { index: false }));
+app.use(express.urlencoded({ extended: false }));
 
-const globalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: parseInt(process.env.RATE_LIMIT_GLOBAL || "900", 10),
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: "Too many requests, slow down.",
-});
-app.use(globalLimiter);
+app.use(express.static(PUBLIC_DIR, { index: false }));
 
-// SECTION: Memory Cache (byte-sized)
+app.use(
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: Number(process.env.RATE_LIMIT_GLOBAL || 900),
+    standardHeaders: true,
+    legacyHeaders: false,
+  })
+);
+
+/* ───────────────────────────────────────────── */
+/* Public Origin Resolver                        */
+/* ───────────────────────────────────────────── */
+
+function getPublicOrigin(req) {
+  const xfProto = (req.headers["x-forwarded-proto"] || "").toString().split(",")[0].trim();
+  const xfHost = (req.headers["x-forwarded-host"] || "").toString().split(",")[0].trim();
+  const host = (xfHost || req.headers.host || "").toString().split(",")[0].trim();
+  const proto = (xfProto || (req.socket.encrypted ? "https" : "http")).trim();
+  if (!host) return "";
+  return `${proto}://${host}`;
+}
+
+function normalizeTarget(raw) {
+  if (!raw) return null;
+  let s = String(raw).trim();
+  if (!s) return null;
+  if (!/^https?:\/\//i.test(s)) s = "https://" + s;
+  try {
+    return new URL(s).href;
+  } catch {
+    return null;
+  }
+}
+
+function makeProxyUrl(absUrl, req) {
+  try {
+    const origin = getPublicOrigin(req);
+    return `${origin}/proxy?url=${encodeURIComponent(new URL(absUrl).href)}`;
+  } catch {
+    return absUrl;
+  }
+}
+
+/* ───────────────────────────────────────────── */
+/* Cache                                         */
+/* ───────────────────────────────────────────── */
 
 const MEM_CACHE = new LRUCache({
-  maxSize: MAX_MEM_CACHE_BYTES,
+  max: MEM_CACHE_ITEMS,
   ttl: CACHE_TTL_MS,
-  sizeCalculation: (val) => {
-    try {
-      if (!val) return 1;
-      if (typeof val === "string") return Buffer.byteLength(val, "utf8");
-      if (Buffer.isBuffer(val)) return val.length;
-      if (val.body && typeof val.body === "string") return val.body.length;
-      return Buffer.byteLength(JSON.stringify(val), "utf8");
-    } catch {
-      return 1024;
-    }
-  },
 });
 
-// SECTION: Disk Cache
+function cacheKey(s) {
+  return Buffer.from(s).toString("base64url");
+}
 
-function now() { return Date.now(); }
-function cacheKey(s) { return Buffer.from(s).toString("base64url"); }
-
-async function diskGet(key, ttlMs) {
+async function diskGet(key) {
   if (!ENABLE_DISK_CACHE) return null;
   try {
-    const fname = path.join(CACHE_DIR, cacheKey(key));
-    if (!fs.existsSync(fname)) return null;
-    const raw = await fsPromises.readFile(fname, "utf8");
+    const f = path.join(CACHE_DIR, cacheKey(key));
+    if (!fs.existsSync(f)) return null;
+    const raw = await fsPromises.readFile(f, "utf8");
     const obj = JSON.parse(raw);
-    const ttl = typeof ttlMs === "number" ? ttlMs : CACHE_TTL_MS;
-    if ((now() - obj.t) < ttl) return obj.v;
-    try { await fsPromises.unlink(fname); } catch {}
-  } catch {}
-  return null;
+    if (!obj || typeof obj !== "object") return null;
+    if (nowMs() - obj.t > (obj.ttl || CACHE_TTL_MS)) return null;
+    return obj.v;
+  } catch {
+    return null;
+  }
 }
 
-async function diskSet(key, val) {
+async function diskSet(key, value, ttl = CACHE_TTL_MS) {
   if (!ENABLE_DISK_CACHE) return;
   try {
-    const fname = path.join(CACHE_DIR, cacheKey(key));
-    await fsPromises.writeFile(fname, JSON.stringify({ v: val, t: now() }), "utf8").catch(() => {});
+    const f = path.join(CACHE_DIR, cacheKey(key));
+    await fsPromises.writeFile(f, JSON.stringify({ v: value, t: nowMs(), ttl }), "utf8");
   } catch {}
 }
 
-// SECTION: Sessions (cookie jar)
+function nowMs() {
+  return Date.now();
+}
 
+/* ───────────────────────────────────────────── */
+/* Sessions + Strict Cookie Jars                 */
+/* ───────────────────────────────────────────── */
+
+const SESSION_COOKIE = "euphoria_sid";
 const SESSIONS = new Map();
-function makeSid() { return Math.random().toString(36).slice(2) + Date.now().toString(36); }
 
-function createSession(req) {
-  const sid = makeSid();
-  const payload = {
-    cookies: new Map(),       // cookieName -> value
-    cookieAttrs: new Map(),   // cookieName -> { domain, path, secure, httpOnly, sameSite, expires }
-    last: now(),
-    ua: USER_AGENT_DEFAULT,
-    ip: req.ip || req.socket?.remoteAddress || null,
-  };
-  SESSIONS.set(sid, payload);
-  return { sid, payload };
+function newSid() {
+  return crypto.randomBytes(16).toString("hex") + Date.now().toString(36);
 }
 
 function parseCookieHeader(header = "") {
   const out = {};
-  header.split(";").forEach((p) => {
-    const idx = p.indexOf("=");
-    if (idx === -1) return;
-    const k = p.slice(0, idx).trim();
-    const v = p.slice(idx + 1).trim();
-    if (k) out[k] = v;
-  });
+  header
+    .split(";")
+    .map(v => v.trim())
+    .filter(Boolean)
+    .forEach(pair => {
+      const idx = pair.indexOf("=");
+      if (idx === -1) return;
+      const k = pair.slice(0, idx).trim();
+      const v = pair.slice(idx + 1).trim();
+      if (k) out[k] = v;
+    });
   return out;
 }
 
-function getSessionFromReq(req) {
-  const parsed = parseCookieHeader(req.headers.cookie || "");
-  const sid = parsed[SESSION_NAME] || req.headers["x-euphoria-session"];
-  if (!sid || !SESSIONS.has(sid)) return createSession(req);
-  const payload = SESSIONS.get(sid);
-  payload.last = now();
-  payload.ip = payload.ip || req.ip || null;
-  return { sid, payload };
-}
-
-function setSessionCookieHeader(res, sid) {
-  const cookieStr = `${SESSION_NAME}=${sid}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${Math.floor(SESSION_TTL_MS / 1000)}`;
+function setCookieHeader(res, sid) {
+  const ck = `${SESSION_COOKIE}=${sid}; Path=/; SameSite=Lax; HttpOnly`;
   const prev = res.getHeader("Set-Cookie");
-  if (!prev) res.setHeader("Set-Cookie", cookieStr);
-  else if (Array.isArray(prev)) res.setHeader("Set-Cookie", [...prev, cookieStr]);
-  else res.setHeader("Set-Cookie", [prev, cookieStr]);
+  if (!prev) res.setHeader("Set-Cookie", ck);
+  else if (Array.isArray(prev)) res.setHeader("Set-Cookie", [...prev, ck]);
+  else res.setHeader("Set-Cookie", [prev, ck]);
 }
 
-function parseSetCookieLine(line) {
-  const parts = line.split(";").map((s) => s.trim());
-  const [kv, ...attrs] = parts;
-  const idx = kv.indexOf("=");
-  if (idx === -1) return null;
-  const name = kv.slice(0, idx).trim();
-  const value = kv.slice(idx + 1).trim();
-  const out = { name, value, domain: null, path: "/", secure: false, httpOnly: false, sameSite: null, expires: null };
-  for (const a of attrs) {
-    const [ak, av] = a.split("=").map((s) => s.trim());
-    const lk = (ak || "").toLowerCase();
-    if (lk === "domain") out.domain = (av || "").toLowerCase();
-    else if (lk === "path") out.path = av || "/";
-    else if (lk === "secure") out.secure = true;
-    else if (lk === "httponly") out.httpOnly = true;
-    else if (lk === "samesite") out.sameSite = (av || "").toLowerCase();
-    else if (lk === "expires") out.expires = av || null;
-    else if (lk === "max-age") { /* ignore; we keep in-memory */ }
+function getSession(req, res) {
+  const cookies = parseCookieHeader(req.headers.cookie || "");
+  let sid = cookies[SESSION_COOKIE] || req.headers["x-euphoria-session"];
+  if (!sid || !SESSIONS.has(sid)) {
+    sid = newSid();
+    SESSIONS.set(sid, {
+      created: nowMs(),
+      last: nowMs(),
+      // strict cookie storage:
+      // origin -> Map(name -> { value, attrs })
+      jars: new Map(),
+      // optional per-origin local storage / session storage snapshots
+      storage: new Map(),
+      ua: DEFAULT_UA,
+      ip: req.ip || req.socket.remoteAddress || null,
+    });
+    setCookieHeader(res, sid);
   }
-  return out;
+  const s = SESSIONS.get(sid);
+  s.last = nowMs();
+  s.ip = req.ip || s.ip;
+  return { sid, s };
 }
 
-function storeSetCookies(setCookies = [], sessionPayload, responseUrl) {
-  let host = null;
-  try { host = new URL(responseUrl).hostname.toLowerCase(); } catch {}
+function getJar(session, origin) {
+  if (!session.jars.has(origin)) session.jars.set(origin, new Map());
+  return session.jars.get(origin);
+}
+
+function serializeCookieJarForRequest(session, origin, urlObj) {
+  // Strict same-origin: only send cookies for exact origin.
+  // Optional: path matching and secure enforcement.
+  const jar = getJar(session, origin);
+  const pairs = [];
+  const reqPath = urlObj.pathname || "/";
+  const isHttps = urlObj.protocol === "https:";
+  const now = nowMs();
+
+  for (const [name, c] of jar.entries()) {
+    if (!c || typeof c !== "object") continue;
+    if (c.expiresAt && now > c.expiresAt) continue;
+    if (c.path && !reqPath.startsWith(c.path)) continue;
+    if (c.secure && !isHttps) continue;
+    // SameSite is enforced by browser; we emulate strict-origin by origin partition above.
+    pairs.push(`${name}=${c.value}`);
+  }
+  return pairs.join("; ");
+}
+
+function parseSetCookie(setCookieValue) {
+  // returns { name, value, attrs }
+  const parts = String(setCookieValue).split(";").map(p => p.trim());
+  const first = parts.shift() || "";
+  const idx = first.indexOf("=");
+  if (idx === -1) return null;
+  const name = first.slice(0, idx).trim();
+  const value = first.slice(idx + 1).trim();
+  const attrs = {};
+  for (const p of parts) {
+    const [kRaw, ...rest] = p.split("=");
+    const k = (kRaw || "").trim().toLowerCase();
+    const v = rest.join("=").trim();
+    if (!k) continue;
+    if (k === "path") attrs.path = v || "/";
+    else if (k === "domain") attrs.domain = v || "";
+    else if (k === "secure") attrs.secure = true;
+    else if (k === "httponly") attrs.httpOnly = true;
+    else if (k === "samesite") attrs.sameSite = v || "";
+    else if (k === "max-age") {
+      const sec = Number(v);
+      if (!Number.isNaN(sec)) attrs.maxAge = sec;
+    } else if (k === "expires") {
+      const ts = Date.parse(v);
+      if (!Number.isNaN(ts)) attrs.expires = ts;
+    } else {
+      attrs[k] = v || true;
+    }
+  }
+  return { name, value, attrs };
+}
+
+function storeSetCookies(session, origin, setCookies) {
+  const jar = getJar(session, origin);
+  const baseNow = nowMs();
   for (const sc of setCookies) {
-    const parsed = parseSetCookieLine(sc);
-    if (!parsed || !parsed.name) continue;
-    sessionPayload.cookies.set(parsed.name, parsed.value);
-    sessionPayload.cookieAttrs.set(parsed.name, {
-      domain: parsed.domain || host,
-      path: parsed.path || "/",
-      secure: parsed.secure,
-      httpOnly: parsed.httpOnly,
-      sameSite: parsed.sameSite,
-      expires: parsed.expires,
+    const parsed = parseSetCookie(sc);
+    if (!parsed) continue;
+
+    const { name, value, attrs } = parsed;
+
+    // strict-origin partitioning: ignore Domain attribute for cross-site access
+    // but keep Path/Secure/Expiry for correct sending behavior
+    let expiresAt = null;
+    if (attrs.maxAge != null) expiresAt = baseNow + attrs.maxAge * 1000;
+    else if (attrs.expires != null) expiresAt = attrs.expires;
+
+    jar.set(name, {
+      value,
+      path: attrs.path || "/",
+      secure: !!attrs.secure,
+      httpOnly: !!attrs.httpOnly,
+      sameSite: attrs.sameSite || "",
+      expiresAt,
     });
   }
 }
 
-function cookieMatches(urlStr, attrs) {
+setInterval(() => {
+  const cutoff = nowMs() - 24 * 60 * 60 * 1000;
+  for (const [sid, s] of SESSIONS.entries()) {
+    if (!s || s.last < cutoff) SESSIONS.delete(sid);
+  }
+}, 30 * 60 * 1000);
+
+/* ───────────────────────────────────────────── */
+/* Admin Auth                                    */
+/* ───────────────────────────────────────────── */
+
+function requireAdmin(req, res, next) {
+  if (ADMIN_TOKEN && req.headers.authorization === `Bearer ${ADMIN_TOKEN}`) return next();
+  if (!ADMIN_TOKEN && (req.ip === "127.0.0.1" || req.ip === "::1")) return next();
+  return res.status(403).json({ error: "forbidden" });
+}
+
+/* ───────────────────────────────────────────── */
+/* Content Helpers                               */
+/* ───────────────────────────────────────────── */
+
+function isProbablyAssetUrl(urlStr) {
   try {
     const u = new URL(urlStr);
-    const host = u.hostname.toLowerCase();
-    const pathn = u.pathname || "/";
-    const dom = (attrs.domain || host).toLowerCase();
-    const domainOk = dom.startsWith(".")
-      ? (host === dom.slice(1) || host.endsWith(dom))
-      : (host === dom || host.endsWith("." + dom));
-    const pathOk = pathn.startsWith(attrs.path || "/");
-    return domainOk && pathOk;
+    const p = (u.pathname || "").toLowerCase();
+    if (SPECIAL_FILES.some(sf => p.endsWith("/" + sf) || p.endsWith(sf))) return true;
+    if (BINARY_EXTENSIONS.some(ext => p.endsWith(ext))) return true;
+    return false;
+  } catch {
+    const lower = String(urlStr).toLowerCase();
+    if (SPECIAL_FILES.some(sf => lower.endsWith("/" + sf) || lower.endsWith(sf))) return true;
+    if (BINARY_EXTENSIONS.some(ext => lower.endsWith(ext))) return true;
+    return false;
+  }
+}
+
+function stripSecurityHeaders(headers) {
+  const out = {};
+  for (const [k, v] of Object.entries(headers)) {
+    const lk = k.toLowerCase();
+    if (DROP_RESPONSE_HEADERS.has(lk)) continue;
+    if (HOP_BY_HOP_HEADERS.has(lk)) continue;
+    out[k] = v;
+  }
+  return out;
+}
+
+function safeSetHeaders(res, headersObj) {
+  for (const [k, v] of Object.entries(headersObj || {})) {
+    try {
+      if (v == null) continue;
+      res.setHeader(k, v);
+    } catch {}
+  }
+}
+
+/* ───────────────────────────────────────────── */
+/* Fetch Engine (no undici dependency)           */
+/* ───────────────────────────────────────────── */
+
+const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 128 });
+const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 128 });
+
+async function fetchWithTimeout(url, opts = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const u = new URL(url);
+    const agent = u.protocol === "https:" ? httpsAgent : httpAgent;
+
+    // Node 20 fetch supports "dispatcher" in undici, but we avoid undici import.
+    // It also supports "agent" in some environments; Koyeb Node tends to accept it.
+    const res = await fetch(url, {
+      ...opts,
+      signal: controller.signal,
+      // @ts-ignore
+      agent,
+      redirect: "manual",
+    });
+
+    return res;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/* ───────────────────────────────────────────── */
+/* Decompression / Buffering                     */
+/* ───────────────────────────────────────────── */
+
+async function readUpstreamBody(res, limitBytes = MAX_BODY_BYTES) {
+  const ab = await res.arrayBuffer();
+  const buf = Buffer.from(ab);
+  if (buf.length > limitBytes) throw new Error("body_too_large");
+  return buf;
+}
+
+function tryDecompress(buf, encoding) {
+  const enc = (encoding || "").toLowerCase();
+  try {
+    if (enc.includes("br") && FEATURE_FLAGS.ENABLE_BROTLI) return zlib.brotliDecompressSync(buf);
+    if (enc.includes("gzip")) return zlib.gunzipSync(buf);
+    if (enc.includes("deflate")) return zlib.inflateSync(buf);
+  } catch {}
+  return buf;
+}
+
+/* ───────────────────────────────────────────── */
+/* Rewrite - URL                                 */
+/* ───────────────────────────────────────────── */
+
+function shouldSkipRewriting(value) {
+  if (!value) return true;
+  const v = String(value);
+  if (/^(data:|blob:|about:|javascript:|mailto:|tel:|#)/i.test(v)) return true;
+  if (v.includes("/proxy?url=")) return true;
+  if (v.includes("/sj?url=") || v.includes("/sj/")) return true;
+  return false;
+}
+
+function toAbsoluteMaybe(urlLike, base) {
+  try {
+    return new URL(urlLike, base).href;
+  } catch {
+    return null;
+  }
+}
+
+/* ───────────────────────────────────────────── */
+/* Rewrite Engine – HTML / DOM                   */
+/* ───────────────────────────────────────────── */
+
+function rewriteHtml(html, baseUrl, req) {
+  if (!FEATURE_FLAGS.ENABLE_HTML_REWRITE) return html;
+
+  let dom;
+  try {
+    dom = new JSDOM(html, { url: baseUrl, contentType: "text/html" });
+  } catch {
+    return html;
+  }
+
+  const document = dom.window.document;
+  const origin = getPublicOrigin(req);
+
+  // Ensure <base>
+  if (!document.querySelector("base")) {
+    const head = document.querySelector("head");
+    if (head) {
+      const b = document.createElement("base");
+      b.setAttribute("href", baseUrl);
+      head.insertBefore(b, head.firstChild);
+    }
+  }
+
+  function rewriteAttr(el, attr) {
+    try {
+      const val = el.getAttribute(attr);
+      if (shouldSkipRewriting(val)) return;
+      const abs = toAbsoluteMaybe(val, baseUrl);
+      if (!abs) return;
+      el.setAttribute(attr, makeProxyUrl(abs, req));
+    } catch {}
+  }
+
+  // Links
+  document.querySelectorAll("a[href]").forEach(a => {
+    rewriteAttr(a, "href");
+    a.removeAttribute("target");
+  });
+
+  // Forms
+  document.querySelectorAll("form[action]").forEach(f => {
+    rewriteAttr(f, "action");
+  });
+
+  // Media / script / iframe / link
+  ["img", "script", "iframe", "audio", "video", "source", "track"].forEach(tag => {
+    document.querySelectorAll(tag).forEach(el => {
+      rewriteAttr(el, "src");
+    });
+  });
+
+  document.querySelectorAll("link[href]").forEach(el => {
+    rewriteAttr(el, "href");
+  });
+
+  // srcset (critical for complex images)
+  document.querySelectorAll("[srcset]").forEach(el => {
+    try {
+      const srcset = el.getAttribute("srcset");
+      if (!srcset) return;
+      const out = srcset
+        .split(",")
+        .map(part => {
+          const [u, size] = part.trim().split(/\s+/, 2);
+          if (shouldSkipRewriting(u)) return part;
+          const abs = toAbsoluteMaybe(u, baseUrl);
+          if (!abs) return part;
+          return makeProxyUrl(abs, req) + (size ? " " + size : "");
+        })
+        .join(", ");
+      el.setAttribute("srcset", out);
+    } catch {}
+  });
+
+  // Inline styles url(...)
+  document.querySelectorAll("[style]").forEach(el => {
+    try {
+      const s = el.getAttribute("style");
+      if (!s) return;
+      const out = s.replace(/url\((['"]?)(.*?)\1\)/gi, (m, q, u) => {
+        if (shouldSkipRewriting(u)) return m;
+        const abs = toAbsoluteMaybe(u, baseUrl);
+        if (!abs) return m;
+        return `url("${makeProxyUrl(abs, req)}")`;
+      });
+      el.setAttribute("style", out);
+    } catch {}
+  });
+
+  // <style> blocks
+  document.querySelectorAll("style").forEach(st => {
+    try {
+      let css = st.textContent || "";
+      css = css.replace(/url\((['"]?)(.*?)\1\)/gi, (m, q, u) => {
+        if (shouldSkipRewriting(u)) return m;
+        const abs = toAbsoluteMaybe(u, baseUrl);
+        if (!abs) return m;
+        return `url("${makeProxyUrl(abs, req)}")`;
+      });
+      st.textContent = css;
+    } catch {}
+  });
+
+  // Meta refresh
+  document.querySelectorAll("meta[http-equiv]").forEach(m => {
+    try {
+      if ((m.getAttribute("http-equiv") || "").toLowerCase() !== "refresh") return;
+      const c = m.getAttribute("content") || "";
+      const match = c.match(/url=(.+)$/i);
+      if (!match) return;
+      const abs = toAbsoluteMaybe(match[1], baseUrl);
+      if (!abs) return;
+      m.setAttribute("content", c.replace(match[1], makeProxyUrl(abs, req)));
+    } catch {}
+  });
+
+  return dom.serialize();
+}
+
+/* ───────────────────────────────────────────── */
+/* Rewrite Engine – JavaScript                   */
+/* ───────────────────────────────────────────── */
+
+function rewriteInlineJs(code, baseUrl, req) {
+  if (!FEATURE_FLAGS.ENABLE_JS_REWRITE) return code;
+
+  const proxyFn = u => makeProxyUrl(u, req);
+
+  try {
+    // fetch()
+    code = code.replace(/fetch\(\s*(['"])([^'"]+)\1/g, (m, q, u) => {
+      if (shouldSkipRewriting(u)) return m;
+      const abs = toAbsoluteMaybe(u, baseUrl);
+      if (!abs) return m;
+      return `fetch("${proxyFn(abs)}"`;
+    });
+
+    // XMLHttpRequest.open
+    code = code.replace(/\.open\(\s*(['"])(GET|POST|PUT|DELETE|PATCH|HEAD|OPTIONS)?\1\s*,\s*(['"])([^'"]+)\3/gi,
+      (m, q1, method, q2, u) => {
+        if (shouldSkipRewriting(u)) return m;
+        const abs = toAbsoluteMaybe(u, baseUrl);
+        if (!abs) return m;
+        return `.open("${method || "GET"}","${proxyFn(abs)}"`;
+      }
+    );
+
+    // Hardcoded paths "/api/..."
+    code = code.replace(/(['"])(\/[^'"]+?)\1/g, (m, q, u) => {
+      if (shouldSkipRewriting(u)) return m;
+      const abs = toAbsoluteMaybe(u, baseUrl);
+      if (!abs) return m;
+      return `"${proxyFn(abs)}"`;
+    });
+
+    return code;
+  } catch {
+    return code;
+  }
+}
+
+/* ───────────────────────────────────────────── */
+/* Client-Side Patch Injection                   */
+/* ───────────────────────────────────────────── */
+
+function injectClientPatch(html, baseUrl, req) {
+  const marker = "/*__EUPHORIA_CLIENT__*/";
+  if (html.includes(marker)) return html;
+
+  const origin = getPublicOrigin(req);
+
+  const patch = `
+<script>
+${marker}
+(function(){
+  const ORIGIN = ${JSON.stringify(origin)};
+  function prox(u){
+    try{
+      if(!u) return u;
+      if(u.includes('/proxy?url=')) return u;
+      if(/^(data:|blob:|about:|javascript:)/i.test(u)) return u;
+      return ORIGIN + '/proxy?url=' + encodeURIComponent(new URL(u, document.baseURI).href);
+    }catch(e){ return u; }
+  }
+
+  const _fetch = window.fetch;
+  window.fetch = function(r, i){
+    try{
+      if(typeof r === 'string') r = prox(r);
+      else if(r && r.url) r = new Request(prox(r.url), r);
+    }catch(e){}
+    return _fetch(r, i);
+  };
+
+  const XHR = window.XMLHttpRequest;
+  window.XMLHttpRequest = function(){
+    const x = new XHR();
+    const open = x.open;
+    x.open = function(m, u){
+      try{ u = prox(u); }catch(e){}
+      return open.apply(this, arguments);
+    };
+    return x;
+  };
+
+  const open = window.open;
+  window.open = function(u){
+    return open.call(window, prox(u));
+  };
+})();
+</script>
+`;
+
+  return html.replace(/<\/body>/i, patch + "</body>");
+}
+
+/* ───────────────────────────────────────────── */
+/* Response Processing                           */
+/* ───────────────────────────────────────────── */
+
+async function processHtmlResponse(resUp, rawBuf, req, targetUrl) {
+  const encoding = resUp.headers.get("content-encoding");
+  let buf = tryDecompress(rawBuf, encoding);
+  let html = buf.toString("utf8");
+
+  html = rewriteHtml(html, targetUrl, req);
+  html = injectClientPatch(html, targetUrl, req);
+
+  // Rewrite inline scripts AFTER injection
+  try {
+    const dom = new JSDOM(html, { url: targetUrl });
+    dom.window.document.querySelectorAll("script:not([src])").forEach(s => {
+      const code = s.textContent || "";
+      if (!code.trim()) return;
+      s.textContent = rewriteInlineJs(code, targetUrl, req);
+    });
+    html = dom.serialize();
+  } catch {}
+
+  return Buffer.from(html, "utf8");
+}
+
+/* ───────────────────────────────────────────── */
+/* Redirect Handling                             */
+/* ───────────────────────────────────────────── */
+
+function handleRedirect(resUp, req, res, targetUrl) {
+  const loc = resUp.headers.get("location");
+  if (!loc) return false;
+  let abs;
+  try {
+    abs = new URL(loc, targetUrl).href;
+  } catch {
+    return false;
+  }
+  res.status(resUp.status);
+  res.setHeader("Location", makeProxyUrl(abs, req));
+  res.end();
+  return true;
+}
+
+/* ───────────────────────────────────────────── */
+/* Google Search Fallback                        */
+/* ───────────────────────────────────────────── */
+
+function googleSearchToUrl(q) {
+  if (!q) return null;
+  return "https://www.google.com/search?q=" + encodeURIComponent(q);
+}
+
+/* ───────────────────────────────────────────── */
+/* Cookie Jar – Strict Same-Origin Emulation     */
+/* ───────────────────────────────────────────── */
+
+function normalizeHost(h) {
+  return String(h || "").trim().toLowerCase();
+}
+
+function normalizePath(p) {
+  if (!p || typeof p !== "string") return "/";
+  return p.startsWith("/") ? p : "/" + p;
+}
+
+// Very small RFC6265-ish parser (good enough for most sites).
+function parseSetCookie(setCookieValue) {
+  // Returns: { name, value, domain, path, expiresAt, secure, httpOnly, sameSite }
+  try {
+    const parts = String(setCookieValue).split(";").map(s => s.trim());
+    const [nv, ...attrs] = parts;
+    const eq = nv.indexOf("=");
+    if (eq < 1) return null;
+    const name = nv.slice(0, eq).trim();
+    const value = nv.slice(eq + 1).trim();
+
+    const out = {
+      name,
+      value,
+      domain: null,
+      path: null,
+      expiresAt: null,
+      secure: false,
+      httpOnly: false,
+      sameSite: null,
+    };
+
+    for (const a of attrs) {
+      const [kRaw, vRaw] = a.split("=").map(x => x && x.trim());
+      const k = (kRaw || "").toLowerCase();
+      const v = vRaw || "";
+      if (k === "domain") out.domain = normalizeHost(v.replace(/^\./, ""));
+      else if (k === "path") out.path = normalizePath(v);
+      else if (k === "expires") {
+        const t = Date.parse(v);
+        if (!Number.isNaN(t)) out.expiresAt = t;
+      } else if (k === "max-age") {
+        const sec = parseInt(v, 10);
+        if (!Number.isNaN(sec)) out.expiresAt = Date.now() + sec * 1000;
+      } else if (k === "secure") out.secure = true;
+      else if (k === "httponly") out.httpOnly = true;
+      else if (k === "samesite") out.sameSite = v;
+      else if (kRaw && kRaw.toLowerCase() === "secure") out.secure = true;
+      else if (kRaw && kRaw.toLowerCase() === "httponly") out.httpOnly = true;
+    }
+
+    if (!out.path) out.path = "/";
+    return out;
+  } catch {
+    return null;
+  }
+}
+
+function domainMatches(cookieDomain, reqHost) {
+  if (!cookieDomain) return false;
+  const cd = normalizeHost(cookieDomain);
+  const rh = normalizeHost(reqHost);
+  if (rh === cd) return true;
+  return rh.endsWith("." + cd);
+}
+
+function pathMatches(cookiePath, reqPath) {
+  const cp = normalizePath(cookiePath || "/");
+  const rp = normalizePath(reqPath || "/");
+  if (rp === cp) return true;
+  if (rp.startsWith(cp)) return true;
+  return false;
+}
+
+// Session cookie jar structure:
+// session.payload.cookies = Map<originKey, Map<cookieName, cookieObj>>
+// originKey = `${protocol}//${host}`
+function ensureOriginJar(sessionPayload, originKey) {
+  if (!sessionPayload.cookieJar) sessionPayload.cookieJar = new Map();
+  if (!sessionPayload.cookieJar.has(originKey)) sessionPayload.cookieJar.set(originKey, new Map());
+  return sessionPayload.cookieJar.get(originKey);
+}
+
+// Strict same-origin: only store/send for exact originKey, and only if domain matches exact host.
+function storeSetCookiesStrict(sessionPayload, originUrl, setCookieValues) {
+  if (!FEATURE_FLAGS.STRICT_SAME_ORIGIN_COOKIES) return;
+  let origin;
+  try { origin = new URL(originUrl); } catch { return; }
+  const originKey = `${origin.protocol}//${origin.host}`;
+  const jar = ensureOriginJar(sessionPayload, originKey);
+
+  for (const sc of setCookieValues || []) {
+    const parsed = parseSetCookie(sc);
+    if (!parsed) continue;
+
+    // Enforce strictness: domain must be exact host (no wider cookie domains)
+    const host = normalizeHost(origin.hostname);
+    const dom = parsed.domain ? normalizeHost(parsed.domain) : host;
+    if (dom !== host) continue;
+
+    // If secure cookie but origin is http, drop it.
+    if (parsed.secure && origin.protocol !== "https:") continue;
+
+    // Expiration cleanup
+    if (parsed.expiresAt && parsed.expiresAt <= Date.now()) {
+      jar.delete(parsed.name);
+      continue;
+    }
+
+    jar.set(parsed.name, {
+      ...parsed,
+      domain: host,
+      path: parsed.path || "/",
+      setAt: Date.now(),
+    });
+  }
+}
+
+function buildCookieHeaderStrict(sessionPayload, targetUrl) {
+  if (!FEATURE_FLAGS.STRICT_SAME_ORIGIN_COOKIES) return "";
+  let u;
+  try { u = new URL(targetUrl); } catch { return ""; }
+  const originKey = `${u.protocol}//${u.host}`;
+  const jar = sessionPayload.cookieJar?.get(originKey);
+  if (!jar) return "";
+
+  const host = normalizeHost(u.hostname);
+  const path = normalizePath(u.pathname || "/");
+  const nowTs = Date.now();
+
+  const pairs = [];
+  for (const [name, c] of jar.entries()) {
+    if (c.expiresAt && c.expiresAt <= nowTs) {
+      jar.delete(name);
+      continue;
+    }
+    if (c.secure && u.protocol !== "https:") continue;
+    if (!domainMatches(c.domain, host)) continue;
+    if (!pathMatches(c.path, path)) continue;
+    pairs.push(`${name}=${c.value}`);
+  }
+  return pairs.join("; ");
+}
+
+/* ───────────────────────────────────────────── */
+/* URL Parsing & Routing Helpers                 */
+/* ───────────────────────────────────────────── */
+
+function looksLikeUrlish(input) {
+  if (!input) return false;
+  const s = String(input).trim();
+  if (!s) return false;
+  if (/^https?:\/\//i.test(s)) return true;
+  if (/^[a-z0-9.-]+\.[a-z]{2,}([/].*)?$/i.test(s)) return true; // example.com/path
+  return false;
+}
+
+function normalizeToHttpUrl(input) {
+  const s = String(input || "").trim();
+  if (!s) return null;
+  if (/^https?:\/\//i.test(s)) return s;
+  if (looksLikeUrlish(s)) return "https://" + s;
+  return null;
+}
+
+function getTargetFromRequest(req) {
+  // supports:
+  // 1) /proxy?url=...
+  // 2) /proxy/<encoded>
+  // 3) /proxy/:host/*   (you requested this style)
+  // 4) Google search shorthand: /proxy?q=hello
+  const qUrl = req.query?.url;
+  const qQ = req.query?.q;
+
+  if (qQ && !qUrl) return googleSearchToUrl(qQ);
+
+  if (qUrl) return normalizeToHttpUrl(qUrl);
+
+  // /proxy/<something>
+  if (req.path && req.path.startsWith("/proxy/")) {
+    const rest = req.path.replace(/^\/proxy\//, "");
+    if (!rest) return null;
+
+    // /proxy/:host/* style:
+    // If it looks like host/path and no scheme, prefix scheme.
+    // Also accept percent-encoding.
+    let decoded = rest;
+    try { decoded = decodeURIComponent(rest); } catch {}
+    const maybe = normalizeToHttpUrl(decoded);
+    if (maybe) return maybe;
+
+    // If they used /proxy/https://example.com (already decoded badly), normalize:
+    if (/^https?:\/\//i.test(decoded)) return decoded;
+
+    // As final fallback, treat it as path under referer target
+    return null;
+  }
+
+  return null;
+}
+
+function isHtmlContentType(ct) {
+  const s = String(ct || "").toLowerCase();
+  return s.includes("text/html") || s.includes("application/xhtml+xml");
+}
+
+function shouldTreatAsAsset(ct) {
+  const s = String(ct || "").toLowerCase();
+  if (isHtmlContentType(s)) return false;
+  return true;
+}
+
+function copyUpstreamHeadersToClient(resUp, resDown) {
+  try {
+    for (const [k, v] of resUp.headers.entries()) {
+      const lk = k.toLowerCase();
+      if (DROP_HEADERS.has(lk)) continue;
+      // Prevent upstream from setting a broken origin in redirects; we handle redirects ourselves.
+      if (lk === "location") continue;
+      // Avoid content-encoding mismatches after we decompress/rewrite.
+      if (lk === "content-encoding") continue;
+      // We'll compute content-length ourselves if we transform.
+      if (lk === "content-length") continue;
+      try { resDown.setHeader(k, v); } catch {}
+    }
+  } catch {}
+}
+
+/* ───────────────────────────────────────────── */
+/* Asset Streaming (Range / Large Media)         */
+/* ───────────────────────────────────────────── */
+
+async function streamUpstreamToClient(resUp, resDown) {
+  // Node fetch body is a web stream; convert to node stream if available.
+  // Best-effort: buffer if stream conversion not available.
+  const body = resUp.body;
+
+  if (!body) {
+    resDown.end();
+    return;
+  }
+
+  // In Node 20, resUp.body is a ReadableStream.
+  if (typeof body.getReader === "function") {
+    const reader = body.getReader();
+    const pump = async () => {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        if (value) resDown.write(Buffer.from(value));
+      }
+      resDown.end();
+    };
+    await pump();
+    return;
+  }
+
+  // fallback
+  const arr = await resUp.arrayBuffer();
+  resDown.end(Buffer.from(arr));
+}
+
+/* ───────────────────────────────────────────── */
+/* Proxy Endpoint (Main)                         */
+/* ───────────────────────────────────────────── */
+
+app.get("/proxy", async (req, res) => {
+  // Google shorthand: /proxy?q=hello
+  let target = getTargetFromRequest(req);
+  if (!target) {
+    return res
+      .status(400)
+      .send("Missing url (use /proxy?url=https://example.com) or /proxy?q=search");
+  }
+
+  // Special: if user passes a raw query in url= (not urlish), treat as google search
+  if (!looksLikeUrlish(target) && req.query?.url) {
+    target = googleSearchToUrl(String(req.query.url || ""));
+  }
+  if (!target) return res.status(400).send("Missing url (use /proxy?url=https://example.com)");
+
+  const session = getSessionFromReq(req);
+  try { setSessionCookieHeader(res, session.sid); } catch {}
+
+  // caching keys
+  const cacheKeyBase = target;
+  const accept = String(req.headers.accept || "").toLowerCase();
+  const wantsHtml = accept.includes("text/html") || req.query.force_html === "1";
+
+  const key = wantsHtml ? `${cacheKeyBase}::html` : `${cacheKeyBase}::asset`;
+
+  // Cache only GET without Range
+  const hasRange = !!req.headers.range;
+  const cacheAllowed = req.method === "GET" && !hasRange;
+
+  if (cacheAllowed) {
+    const mem = MEM_CACHE.get(key);
+    if (mem) {
+      if (mem.__type === "html") {
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        return res.end(mem.body);
+      }
+      if (mem.__type === "asset") {
+        if (mem.headers) {
+          for (const [k, v] of Object.entries(mem.headers)) {
+            try { res.setHeader(k, v); } catch {}
+          }
+        }
+        return res.end(Buffer.from(mem.bodyB64, "base64"));
+      }
+    }
+
+    const disk = await diskGet(key);
+    if (disk) {
+      if (disk.__type === "html") {
+        res.setHeader("Content-Type", "text/html; charset=utf-8");
+        return res.end(disk.body);
+      }
+      if (disk.__type === "asset") {
+        if (disk.headers) {
+          for (const [k, v] of Object.entries(disk.headers)) {
+            try { res.setHeader(k, v); } catch {}
+          }
+        }
+        return res.end(Buffer.from(disk.bodyB64, "base64"));
+      }
+    }
+  }
+
+  // Build upstream request headers
+  const hdrs = {};
+  try {
+    hdrs["user-agent"] = session.payload.ua || USER_AGENT_DEFAULT;
+    hdrs["accept"] = req.headers.accept || "*/*";
+    hdrs["accept-language"] = req.headers["accept-language"] || "en-US,en;q=0.9";
+    hdrs["accept-encoding"] = "gzip, deflate, br";
+
+    // Range support (fixes complex images/media in many CDNs)
+    if (req.headers.range) hdrs["range"] = req.headers.range;
+
+    // Strict same-origin cookies
+    const cookieHeader = buildCookieHeaderStrict(session.payload, target);
+    if (cookieHeader) hdrs["cookie"] = cookieHeader;
+
+    // Referer/Origin: use upstream origin when possible
+    if (req.headers.referer) hdrs["referer"] = req.headers.referer;
+    try { hdrs["origin"] = new URL(target).origin; } catch {}
+  } catch {}
+
+  // Upstream fetch
+  let up;
+  try {
+    up = await upstreamFetch(target, {
+      method: "GET",
+      headers: hdrs,
+      redirect: "manual",
+    });
+  } catch (e) {
+    // Many “Failed to fetch” sites need better redirect/cookie flow; chunk4 adds hardening.
+    return res.status(502).send("Euphoria: failed to fetch target: " + String(e?.message || e));
+  }
+
+  // Cookies from upstream -> store strictly for this origin
+  try {
+    const raw = up.headers.get("set-cookie");
+    if (raw) {
+      // Some runtimes join multiple set-cookie; split conservatively.
+      const setCookies = String(raw).split(/,(?=[^ ;]+=)/g);
+      storeSetCookiesStrict(session.payload, up.url || target, setCookies);
+    }
+  } catch {}
+
+  // Redirect trapping (keeps you inside /proxy)
+  if ([301, 302, 303, 307, 308].includes(up.status)) {
+    if (handleRedirect(up, req, res, target)) return;
+  }
+
+  // Copy headers (minus CSP/COOP/COEP/etc)
+  copyUpstreamHeadersToClient(up, res);
+
+  const ct = up.headers.get("content-type") || "";
+  const isHtml = isHtmlContentType(ct) || wantsHtml;
+
+  // HTML path: buffer + rewrite
+  if (isHtml) {
+    let rawBuf;
+    try {
+      rawBuf = Buffer.from(await up.arrayBuffer());
+    } catch (e) {
+      return res.status(502).send("Euphoria: failed to read HTML: " + String(e?.message || e));
+    }
+
+    // Transform
+    let outBuf = rawBuf;
+    try {
+      outBuf = await processHtmlResponse(up, rawBuf, req, up.url || target);
+    } catch {}
+
+    res.status(up.status || 200);
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Cache-Control", "no-store"); // safer for auth-heavy sites
+
+    // Cache HTML only if small and allowed
+    if (cacheAllowed && FEATURE_FLAGS.ENABLE_DISK_CACHE && outBuf.length < 600 * 1024) {
+      try {
+        const payload = { __type: "html", body: outBuf.toString("utf8") };
+        MEM_CACHE.set(key, payload);
+        diskSet(key, payload).catch(() => {});
+      } catch {}
+    }
+
+    return res.end(outBuf);
+  }
+
+  // Asset path: stream large, buffer small for cache
+  res.status(up.status || 200);
+
+  // Ensure content-type set
+  if (ct) {
+    try { res.setHeader("Content-Type", ct); } catch {}
+  }
+
+  // If range request, do not cache, just stream
+  if (hasRange) {
+    return streamUpstreamToClient(up, res);
+  }
+
+  // Try buffer to cache for smaller assets
+  let buf;
+  try {
+    const arr = await up.arrayBuffer();
+    buf = Buffer.from(arr);
+  } catch {
+    return streamUpstreamToClient(up, res);
+  }
+
+  // Cache small assets
+  if (cacheAllowed && buf.length <= ASSET_CACHE_THRESHOLD) {
+    try {
+      const headersObj = {};
+      for (const [k, v] of up.headers.entries()) {
+        const lk = k.toLowerCase();
+        if (DROP_HEADERS.has(lk)) continue;
+        if (lk === "content-encoding") continue;
+        if (lk === "content-length") continue;
+        headersObj[k] = v;
+      }
+      const payload = {
+        __type: "asset",
+        headers: headersObj,
+        bodyB64: buf.toString("base64"),
+      };
+      MEM_CACHE.set(key, payload);
+      diskSet(key, payload).catch(() => {});
+    } catch {}
+  }
+
+  return res.end(buf);
+});
+
+/* ───────────────────────────────────────────── */
+/* /proxy/:host/* Style Support                  */
+/* ───────────────────────────────────────────── */
+
+app.get(/^\/proxy\/([^/]+)\/(.*)$/i, async (req, res, next) => {
+  // This handler normalizes /proxy/:host/* into /proxy?url=https://host/*
+  // so your frontend can use clean paths.
+  try {
+    const host = req.params?.[0] || "";
+    const rest = req.params?.[1] || "";
+    if (!host) return next();
+
+    const combined = `${host}/${rest}`;
+    const url = normalizeToHttpUrl(combined);
+    if (!url) return next();
+
+    // rewrite req.url by redirecting internally
+    const q = encodeURIComponent(url);
+    return res.redirect(302, `/proxy?url=${q}`);
+  } catch {
+    return next();
+  }
+});
+
+/* ───────────────────────────────────────────── */
+/* Fallback Asset Path (Keeps Buttons Working)   */
+/* ───────────────────────────────────────────── */
+
+app.use(async (req, res, next) => {
+  // If a site requests /_next/static/... etc, it may “escape” our /proxy path.
+  // Attempt to reconstruct target from referer (?url=...).
+  try {
+    const p = req.path || "/";
+    if (
+      p.startsWith("/proxy") ||
+      p.startsWith("/_euph_ws") ||
+      p.startsWith("/_wsproxy") ||
+      p.startsWith("/_euph_debug") ||
+      p.startsWith("/static") ||
+      p.startsWith("/public")
+    ) return next();
+
+    const ref = req.headers.referer || req.headers.referrer || "";
+    const m = String(ref).match(/[?&]url=([^&]+)/);
+    if (!m) return next();
+
+    let base;
+    try { base = decodeURIComponent(m[1]); } catch { return next(); }
+    if (!base) return next();
+
+    const baseOrigin = new URL(base).origin;
+    const attempt = new URL(req.originalUrl, baseOrigin).href;
+
+    // Proxy it by bouncing through /proxy
+    return res.redirect(302, makeProxyUrl(attempt, req));
+  } catch {
+    return next();
+  }
+});
+
+/* ───────────────────────────────────────────── */
+/* Derived Origin / Proxy URL Builder            */
+/* ───────────────────────────────────────────── */
+
+function getRequestPublicOrigin(req) {
+  // Fixes “redirects to localhost:3000” by preferring actual request host/proto.
+  // Works on Koyeb/behind proxies if trust proxy enabled.
+  try {
+    const proto = (req.headers["x-forwarded-proto"] || req.protocol || "http").split(",")[0].trim();
+    const host = (req.headers["x-forwarded-host"] || req.headers.host || "").split(",")[0].trim();
+    if (host) return `${proto}://${host}`;
+  } catch {}
+  return DEPLOYMENT_ORIGIN;
+}
+
+function makeProxyUrl(targetAbs, req) {
+  const origin = getRequestPublicOrigin(req);
+  return `${origin}/proxy?url=${encodeURIComponent(String(targetAbs))}`;
+}
+
+function googleSearchToUrl(q) {
+  const query = String(q || "").trim();
+  if (!query) return "https://www.google.com/";
+  return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
+}
+
+/* ───────────────────────────────────────────── */
+/* Redirect Handler (Keeps you inside /proxy)    */
+/* ───────────────────────────────────────────── */
+
+function handleRedirect(upstreamRes, req, res, requestTarget) {
+  try {
+    const loc = upstreamRes.headers.get("location");
+    if (!loc) return false;
+
+    let abs;
+    try {
+      abs = new URL(loc, upstreamRes.url || requestTarget).href;
+    } catch {
+      abs = loc;
+    }
+
+    // Trap redirect back into proxy
+    const prox = makeProxyUrl(abs, req);
+
+    // Do NOT pass upstream Location; set ours
+    try {
+      res.status(upstreamRes.status || 302);
+      res.setHeader("Location", prox);
+      // some clients like a body for 302/303
+      res.setHeader("Content-Type", "text/plain; charset=utf-8");
+      res.end(`Redirecting to ${prox}`);
+      return true;
+    } catch {
+      return false;
+    }
   } catch {
     return false;
   }
 }
 
-function buildCookieHeaderForUrl(sessionPayload, urlStr) {
-  const pairs = [];
-  for (const [name, value] of sessionPayload.cookies.entries()) {
-    const attrs = sessionPayload.cookieAttrs.get(name) || { domain: null, path: "/" };
-    if (!cookieMatches(urlStr, attrs)) continue;
-    pairs.push(`${name}=${value}`);
-  }
-  return pairs.join("; ");
-}
+/* ───────────────────────────────────────────── */
+/* Decompression Helpers (gzip/deflate/br)       */
+/* ───────────────────────────────────────────── */
 
-// session cleanup
-setInterval(() => {
-  const cutoff = now() - SESSION_TTL_MS;
-  for (const [sid, p] of SESSIONS.entries()) {
-    if (p.last < cutoff) SESSIONS.delete(sid);
-  }
-}, 1000 * 60 * 10);
+import zlib from "zlib";
 
-// SECTION: Public Origin (fix “localhost” bug)
-
-function getPublicOrigin(req) {
-  const proto = (req.headers["x-forwarded-proto"] || req.protocol || "http").toString().split(",")[0].trim();
-  const host = (req.headers["x-forwarded-host"] || req.headers.host || "").toString().split(",")[0].trim();
-  if (!host) return `${proto}://localhost:${PORT}`;
-  return `${proto}://${host}`;
-}
-
-// SECTION: Helpers (URL + content)
-
-function isAlreadyProxiedHref(href) {
-  if (!href) return false;
-  return href.includes("/proxy?url=") || href.includes("/proxy/");
-}
-
-function toAbsolute(href, base) {
-  try { return new URL(href, base).href; } catch { return null; }
-}
-
-function proxyizeAbsoluteUrl(publicOrigin, abs) {
+function maybeDecompress(bodyBuf, headers) {
+  const enc = String(headers?.get?.("content-encoding") || "").toLowerCase().trim();
+  if (!enc) return bodyBuf;
   try {
-    const u = new URL(abs);
-    return `${publicOrigin}/proxy?url=${encodeURIComponent(u.href)}`;
-  } catch {
-    try {
-      const u2 = new URL("https://" + abs);
-      return `${publicOrigin}/proxy?url=${encodeURIComponent(u2.href)}`;
-    } catch {
-      return abs;
+    if (enc.includes("br") && zlib.brotliDecompressSync) {
+      return zlib.brotliDecompressSync(bodyBuf);
     }
-  }
-}
-
-function looksLikeAsset(urlStr) {
-  if (!urlStr) return false;
-  try {
-    const p = new URL(urlStr).pathname.toLowerCase();
-    if (SPECIAL_FILES.some((s) => p.endsWith(s))) return true;
-    return ASSET_EXTENSIONS.some((ext) => p.endsWith(ext));
-  } catch {
-    const lower = urlStr.toLowerCase();
-    if (SPECIAL_FILES.some((s) => lower.endsWith(s))) return true;
-    return ASSET_EXTENSIONS.some((ext) => lower.endsWith(ext));
-  }
-}
-
-function stripSecurityHeaders(headers) {
-  const out = new Map();
-  for (const [k, v] of headers.entries()) {
-    const lk = k.toLowerCase();
-    if (HOP_BY_HOP.has(lk)) continue;
-    if (DROP_HEADERS.has(lk)) continue;
-    out.set(k, v);
-  }
-  return out;
-}
-
-function sanitizeHtml(html) {
-  try {
-    html = html.replace(/<meta[^>]*http-equiv=["']?content-security-policy["']?[^>]*>/gi, "");
-    html = html.replace(/\s+integrity=(["'])(.*?)\1/gi, "");
-    html = html.replace(/\s+nonce=(["'])(.*?)\1/gi, "");
-    html = html.replace(/\s+crossorigin=(["'])(.*?)\1/gi, "");
+    if (enc.includes("gzip")) {
+      return zlib.gunzipSync(bodyBuf);
+    }
+    if (enc.includes("deflate")) {
+      return zlib.inflateSync(bodyBuf);
+    }
   } catch {}
-  return html;
+  return bodyBuf;
 }
 
-function rewriteCssUrls(cssText, baseUrl, publicOrigin) {
-  let out = cssText || "";
-  out = out.replace(/@import\s+(url\()?\s*(['"]?)([^'")]+)\2\s*\)?/gi, (m, _u, _q, url) => {
-    if (!url || /^data:/i.test(url)) return m;
-    if (isAlreadyProxiedHref(url)) return m;
-    const abs = toAbsolute(url, baseUrl) || url;
-    return m.replace(url, proxyizeAbsoluteUrl(publicOrigin, abs));
-  });
-  out = out.replace(/url\(\s*(['"]?)([^'")]+)\1\s*\)/gi, (m, q, url) => {
-    if (!url || /^data:/i.test(url)) return m;
-    if (isAlreadyProxiedHref(url)) return m;
-    const abs = toAbsolute(url, baseUrl) || url;
-    return `url("${proxyizeAbsoluteUrl(publicOrigin, abs)}")`;
-  });
-  return out;
-}
+/* ───────────────────────────────────────────── */
+/* HTML Processing Pipeline                       */
+/* ───────────────────────────────────────────── */
 
-// SECTION: Aggressive DOM rewrite
+function injectClientRuntime(html, baseUrl, req) {
+  // More aggressive “browser-like” runtime:
+  // - traps navigation APIs (location, open, assign/replace)
+  // - patches fetch/XHR to proxy
+  // - patches History API (pushState/replaceState)
+  // - patches form submits at runtime
+  // - attempts to keep top-level navigation inside proxy
+  // NOTE: Some sites (Xbox/MS) have heavy anti-bot/service-worker flows;
+  // this helps buttons/redirects not “escape”.
 
-function jsdomTransform(html, baseUrl, publicOrigin) {
-  try {
-    const dom = new JSDOM(html, { url: baseUrl, contentType: "text/html" });
-    const document = dom.window.document;
-
-    // Ensure <base>
-    if (!document.querySelector("base")) {
-      const head = document.querySelector("head");
-      if (head) {
-        const b = document.createElement("base");
-        b.setAttribute("href", baseUrl);
-        head.insertBefore(b, head.firstChild);
-      }
-    }
-
-    // Rewrite meta refresh
-    for (const m of Array.from(document.querySelectorAll('meta[http-equiv="refresh"], meta[http-equiv="REFRESH"]'))) {
-      try {
-        const c = m.getAttribute("content") || "";
-        const parts = c.split(";");
-        if (parts.length < 2) continue;
-        const match = parts.slice(1).join(";").match(/url=(.*)/i);
-        if (!match) continue;
-        const dest = match[1].replace(/['"]/g, "").trim();
-        const abs = toAbsolute(dest, baseUrl) || dest;
-        m.setAttribute("content", parts[0] + ";url=" + proxyizeAbsoluteUrl(publicOrigin, abs));
-      } catch {}
-    }
-
-    // Rewrite all href/src/action/poster/data
-    const urlAttrs = ["href", "src", "action", "poster", "data"];
-    const all = Array.from(document.querySelectorAll("*"));
-    for (const el of all) {
-      for (const attr of urlAttrs) {
-        try {
-          if (!el.hasAttribute(attr)) continue;
-          const v = el.getAttribute(attr);
-          if (!v) continue;
-          if (/^(javascript:|mailto:|tel:|#)/i.test(v)) continue;
-          if (/^data:/i.test(v)) continue;
-          if (isAlreadyProxiedHref(v)) continue;
-          const abs = toAbsolute(v, baseUrl) || v;
-          el.setAttribute(attr, proxyizeAbsoluteUrl(publicOrigin, abs));
-        } catch {}
-      }
-
-      // srcset
-      try {
-        if (el.hasAttribute("srcset")) {
-          const ss = el.getAttribute("srcset") || "";
-          const parts = ss.split(",").map((p) => {
-            const [u, rest] = p.trim().split(/\s+/, 2);
-            if (!u) return p;
-            if (/^data:/i.test(u)) return p;
-            if (isAlreadyProxiedHref(u)) return p;
-            const abs = toAbsolute(u, baseUrl) || u;
-            return proxyizeAbsoluteUrl(publicOrigin, abs) + (rest ? " " + rest : "");
-          });
-          el.setAttribute("srcset", parts.join(", "));
-        }
-      } catch {}
-
-      // inline style url(...)
-      try {
-        if (el.hasAttribute("style")) {
-          const s = el.getAttribute("style") || "";
-          el.setAttribute("style", rewriteCssUrls(s, baseUrl, publicOrigin));
-        }
-      } catch {}
-
-      // iframe srcdoc: make inside doc "proxy-aware" by injecting hook
-      try {
-        if (el.tagName?.toLowerCase() === "iframe" && el.hasAttribute("srcdoc")) {
-          const srcdoc = el.getAttribute("srcdoc") || "";
-          const patched = injectClientShim(sanitizeHtml(srcdoc), publicOrigin, baseUrl);
-          el.setAttribute("srcdoc", patched);
-        }
-      } catch {}
-    }
-
-    // Rewrite <style> blocks
-    for (const st of Array.from(document.querySelectorAll("style"))) {
-      try {
-        const txt = st.textContent || "";
-        st.textContent = rewriteCssUrls(txt, baseUrl, publicOrigin);
-      } catch {}
-    }
-
-    // Remove noscript (often breaks UX)
-    for (const ns of Array.from(document.getElementsByTagName("noscript"))) {
-      try { ns.remove(); } catch {}
-    }
-
-    return dom.serialize();
-  } catch (err) {
-    console.warn("jsdom transform failed:", err?.message || err);
-    return html;
-  }
-}
-
-// SECTION: Client shim (browser-like network + nav hooks)
-
-function injectClientShim(html, publicOrigin, pageBase) {
-  const marker = "/* EUPHORIA_CLIENT_V3 */";
+  const origin = getRequestPublicOrigin(req);
+  const marker = "/* EUPHORIA_CLIENT_RUNTIME_V4 */";
   if (html.includes(marker)) return html;
 
-  // NOTE: keep it compact, but wide coverage.
-  const script = `
-<script>${marker}
-(() => {
-  const PUBLIC_ORIGIN = ${JSON.stringify(publicOrigin)};
-  const PAGE_BASE = ${JSON.stringify(pageBase || "")};
+  const js = `
+<script>
+${marker}
+(function(){
+  const ORIGIN = ${JSON.stringify(origin)};
+  const PROXY_PATH = "/proxy?url=";
 
-  const isAbs = (u) => { try { new URL(u); return true; } catch { return false; } };
-  const isBad = (u) => !u || /^(data:|blob:|about:|javascript:|mailto:|tel:|#)/i.test(u);
-  const isProx = (u) => typeof u === 'string' && (u.includes('/proxy?url=') || u.includes('/proxy/'));
-  const abs = (u) => { try { return new URL(u, document.baseURI || PAGE_BASE || location.href).href; } catch { return u; } };
-  const prox = (u) => {
-    try {
-      if (isBad(u)) return u;
-      if (typeof u !== 'string') return u;
-      if (isProx(u)) return u;
+  function isProxied(u){ return typeof u === "string" && u.includes(PROXY_PATH); }
+  function abs(u){
+    try { return new URL(u, document.baseURI).href; } catch(e){ return u; }
+  }
+  function prox(u){
+    try{
+      if(!u) return u;
+      if(typeof u !== "string") return u;
+      if(isProxied(u)) return u;
+      if(/^(data:|blob:|about:|javascript:|mailto:|tel:)/i.test(u)) return u;
       const a = abs(u);
-      return PUBLIC_ORIGIN + '/proxy?url=' + encodeURIComponent(a);
-    } catch { return u; }
-  };
-
-  // fetch
-  const origFetch = window.fetch;
-  window.fetch = function(resource, init) {
-    try {
-      if (typeof resource === 'string') resource = prox(resource);
-      else if (resource && resource.url && resource instanceof Request) resource = new Request(prox(resource.url), resource);
-    } catch {}
-    return origFetch.call(this, resource, init);
-  };
-
-  // XHR
-  const OrigXHR = window.XMLHttpRequest;
-  window.XMLHttpRequest = function() {
-    const xhr = new OrigXHR();
-    const open = xhr.open;
-    xhr.open = function(method, url, ...rest) {
-      try { url = prox(url); } catch {}
-      return open.call(this, method, url, ...rest);
-    };
-    return xhr;
-  };
-
-  // sendBeacon
-  if (navigator.sendBeacon) {
-    const origBeacon = navigator.sendBeacon.bind(navigator);
-    navigator.sendBeacon = function(url, data) {
-      try { url = prox(url); } catch {}
-      return origBeacon(url, data);
-    };
+      return ORIGIN + PROXY_PATH + encodeURIComponent(a);
+    }catch(e){ return u; }
   }
 
-  // WebSocket
-  const OrigWS = window.WebSocket;
-  window.WebSocket = function(url, protocols) {
-    try {
-      // If it's ws(s) and absolute: tunnel via server ws proxy endpoint
-      const u = typeof url === 'string' ? url : (url && url.toString ? url.toString() : '');
-      if (/^wss?:/i.test(u) && !isProx(u)) {
-        const wsurl = PUBLIC_ORIGIN.replace(/^http/i, 'ws') + '/_wsproxy?url=' + encodeURIComponent(u);
-        return protocols ? new OrigWS(wsurl, protocols) : new OrigWS(wsurl);
-      }
-    } catch {}
-    return protocols ? new OrigWS(url, protocols) : new OrigWS(url);
-  };
-  window.WebSocket.prototype = OrigWS.prototype;
-
-  // EventSource
-  if (window.EventSource) {
-    const OrigES = window.EventSource;
-    window.EventSource = function(url, cfg) {
-      try { url = prox(url); } catch {}
-      return new OrigES(url, cfg);
+  // Patch fetch
+  try{
+    const ofetch = window.fetch;
+    window.fetch = function(resource, init){
+      try{
+        if(typeof resource === "string"){
+          resource = prox(resource);
+        }else if(resource && resource.url && resource instanceof Request){
+          if(!isProxied(resource.url)){
+            resource = new Request(prox(resource.url), resource);
+          }
+        }
+      }catch(e){}
+      return ofetch.call(this, resource, init);
     };
-    window.EventSource.prototype = OrigES.prototype;
-  }
+  }catch(e){}
 
-  // Worker / SharedWorker
-  if (window.Worker) {
-    const OrigW = window.Worker;
-    window.Worker = function(url, opts) {
-      try { url = prox(url); } catch {}
-      return new OrigW(url, opts);
+  // Patch XHR
+  try{
+    const OXHR = window.XMLHttpRequest;
+    window.XMLHttpRequest = function(){
+      const x = new OXHR();
+      const open = x.open;
+      x.open = function(method, url){
+        try{
+          if(typeof url === "string") url = prox(url);
+        }catch(e){}
+        return open.apply(this, arguments);
+      };
+      return x;
     };
-    window.Worker.prototype = OrigW.prototype;
-  }
-  if (window.SharedWorker) {
-    const OrigSW = window.SharedWorker;
-    window.SharedWorker = function(url, nameOrOpts) {
-      try { url = prox(url); } catch {}
-      return new OrigSW(url, nameOrOpts);
+  }catch(e){}
+
+  // Patch History API
+  try{
+    const p = history.pushState;
+    history.pushState = function(state, title, url){
+      try{
+        if(typeof url === "string") url = prox(url);
+      }catch(e){}
+      return p.apply(this, arguments);
     };
-    window.SharedWorker.prototype = OrigSW.prototype;
+    const r = history.replaceState;
+    history.replaceState = function(state, title, url){
+      try{
+        if(typeof url === "string") url = prox(url);
+      }catch(e){}
+      return r.apply(this, arguments);
+    };
+  }catch(e){}
+
+  // Trap window.open
+  try{
+    const o = window.open;
+    window.open = function(url, name, specs){
+      try{ if(typeof url === "string") url = prox(url); }catch(e){}
+      return o.call(this, url, name, specs);
+    };
+  }catch(e){}
+
+  // Trap location navigation
+  try{
+    const loc = window.location;
+    const assign = loc.assign.bind(loc);
+    const replace = loc.replace.bind(loc);
+    loc.assign = function(u){ return assign(prox(u)); };
+    loc.replace = function(u){ return replace(prox(u)); };
+
+    // If someone sets window.location = "https://..."
+    // we can’t fully replace the setter safely across browsers, but we can intercept common patterns:
+    window.__euph_setLocation = function(u){
+      try{ window.location.href = prox(u); }catch(e){ window.location.href = u; }
+    };
+  }catch(e){}
+
+  // Patch forms on submit
+  function patchForms(){
+    try{
+      const forms = document.querySelectorAll("form[action]");
+      forms.forEach(f=>{
+        try{
+          const a = f.getAttribute("action");
+          if(a && !isProxied(a)) f.setAttribute("action", prox(a));
+        }catch(e){}
+      });
+    }catch(e){}
   }
-
-  // history + location
-  const origPush = history.pushState;
-  const origReplace = history.replaceState;
-  history.pushState = function(state, title, url) {
-    try { if (typeof url === 'string') url = prox(url); } catch {}
-    return origPush.call(this, state, title, url);
-  };
-  history.replaceState = function(state, title, url) {
-    try { if (typeof url === 'string') url = prox(url); } catch {}
-    return origReplace.call(this, state, title, url);
-  };
-
-  const locAssign = location.assign.bind(location);
-  const locReplace = location.replace.bind(location);
-  location.assign = function(url) { try { url = prox(url); } catch {} return locAssign(url); };
-  location.replace = function(url) { try { url = prox(url); } catch {} return locReplace(url); };
-
-  // Intercept clicks so navigations stay inside proxy
-  document.addEventListener('click', (e) => {
-    try {
-      const a = e.target && e.target.closest ? e.target.closest('a[href]') : null;
-      if (!a) return;
-      const href = a.getAttribute('href');
-      if (!href || isBad(href) || isProx(href)) return;
-      e.preventDefault();
-      const next = prox(href);
-      locAssign(next);
-    } catch {}
+  patchForms();
+  document.addEventListener("submit", function(ev){
+    try{ patchForms(); }catch(e){}
   }, true);
 
-  // forms: ensure action is proxied, even if script changes it later
-  const origSubmit = HTMLFormElement.prototype.submit;
-  HTMLFormElement.prototype.submit = function() {
-    try {
-      const a = this.getAttribute('action') || '';
-      if (a && !isBad(a) && !isProx(a)) this.setAttribute('action', prox(a));
-    } catch {}
-    return origSubmit.call(this);
-  };
-
-  // Patch setAttribute for src/href/action on the fly
-  const origSetAttr = Element.prototype.setAttribute;
-  Element.prototype.setAttribute = function(name, value) {
-    try {
-      const n = String(name || '').toLowerCase();
-      if ((n === 'src' || n === 'href' || n === 'action' || n === 'poster' || n === 'data') && typeof value === 'string') {
-        if (!isBad(value) && !isProx(value)) value = prox(value);
-      }
-      if (n === 'srcset' && typeof value === 'string') {
-        value = value.split(',').map(p => {
-          const parts = p.trim().split(/\\s+/, 2);
-          const u = parts[0]; const rest = parts[1] || '';
-          if (!u || isBad(u) || isProx(u)) return p;
-          return prox(u) + (rest ? ' ' + rest : '');
-        }).join(', ');
-      }
-    } catch {}
-    return origSetAttr.call(this, name, value);
-  };
+  // Patch anchor clicks (in case some remain un-rewritten)
+  document.addEventListener("click", function(ev){
+    try{
+      const a = ev.target && (ev.target.closest ? ev.target.closest("a[href]") : null);
+      if(!a) return;
+      const href = a.getAttribute("href");
+      if(!href) return;
+      if(/^(javascript:|mailto:|tel:|#)/i.test(href)) return;
+      if(isProxied(href)) return;
+      a.setAttribute("href", prox(href));
+      a.removeAttribute("target");
+    }catch(e){}
+  }, true);
 
 })();
-</script>`;
+</script>`.trim();
 
-  if (/<\/body>/i.test(html)) return html.replace(/<\/body>/i, script + "</body>");
-  return html + script;
+  if (/<\/body>/i.test(html)) return html.replace(/<\/body>/i, js + "\n</body>");
+  return html + "\n" + js;
 }
 
-// SECTION: Upstream fetch (decompress, range, headers)
+function rewriteHtmlWithBaseAndUrls(html, baseUrl, req) {
+  // Uses your existing jsdomTransform + extra hardening:
+  // - ensure base tag
+  // - rewrite iframe/src/href/srcset/style url() via jsdomTransform
+  // - inject runtime
+  let out = sanitizeHtml(html);
+  out = jsdomTransform(out, baseUrl);
 
-const httpAgent = new http.Agent({ keepAlive: true, maxSockets: 128 });
-const httpsAgent = new https.Agent({ keepAlive: true, maxSockets: 128 });
-
-function withTimeout(ms) {
-  const c = new AbortController();
-  const t = setTimeout(() => c.abort(), ms);
-  return { signal: c.signal, cancel: () => clearTimeout(t) };
-}
-
-async function upstreamFetch(url, opts = {}) {
-  const u = new URL(url);
-  const isHttps = u.protocol === "https:";
-  const { signal, cancel } = withTimeout(FETCH_TIMEOUT_MS);
-
-  const headers = new Headers(opts.headers || {});
-  if (!headers.has("user-agent")) headers.set("user-agent", USER_AGENT_DEFAULT);
-  if (!headers.has("accept")) headers.set("accept", "*/*");
-  if (!headers.has("accept-language")) headers.set("accept-language", "en-US,en;q=0.9");
-  // NOTE: let Node fetch do encoding; we can still accept br/gzip
-  if (!headers.has("accept-encoding")) headers.set("accept-encoding", "gzip, deflate, br");
-
-  const fetchOpts = {
-    method: opts.method || "GET",
-    headers,
-    redirect: opts.redirect || "manual",
-    body: opts.body,
-    signal,
-    // Node 20: "dispatcher" is undici-specific; do NOT use it to avoid missing deps.
-  };
-
-  // Agent support via global undici is not the same; Node fetch ignores node:http agent.
-  // We'll still keep keep-alive by relying on undici internal pooling.
-  // (Do not import undici; Koyeb error shows it wasn't installed.)
-
+  // Ensure any absolute links that are still raw get proxied (extra safety)
   try {
-    const res = await fetch(url, fetchOpts);
-    cancel();
-    return res;
-  } catch (e) {
-    cancel();
-    throw e;
-  }
-}
-
-async function readBodyMaybeDecompress(res) {
-  // Node fetch will typically auto-decompress; but on some platforms it may not.
-  // We'll handle common encodings if they still appear.
-  const enc = (res.headers.get("content-encoding") || "").toLowerCase();
-  const buf = Buffer.from(await res.arrayBuffer());
-  if (!enc || enc === "identity") return buf;
-  try {
-    if (enc.includes("gzip")) return zlib.gunzipSync(buf);
-    if (enc.includes("deflate")) return zlib.inflateSync(buf);
-    if (enc.includes("br")) return zlib.brotliDecompressSync(buf);
-  } catch {}
-  return buf;
-}
-
-// SECTION: WS proxy (tunnel ws/wss)
-
-function setupWsProxy(server, getOriginFn) {
-  const wssProxy = new WebSocketServer({ noServer: true, clientTracking: false });
-
-  server.on("upgrade", (request, socket, head) => {
-    try {
-      const origin = getOriginFn({
-        headers: request.headers,
-        protocol: "http",
-        host: request.headers.host
-      });
-
-      const url = new URL(request.url, origin);
-      if (url.pathname !== "/_wsproxy") return;
-
-      const target = url.searchParams.get("url");
-      if (!target) {
-        socket.write("HTTP/1.1 400 Bad Request\r\n\r\n");
-        socket.destroy();
-        return;
-      }
-
-      wssProxy.handleUpgrade(request, socket, head, (clientWs) => {
-        const upstreamWs = new WebSocket(target, {
-          headers: {
-            origin: request.headers.origin || origin,
-            "user-agent": USER_AGENT_DEFAULT
-          }
-        });
-
-        upstreamWs.on("open", () => {
-          clientWs.on("message", (msg) => {
-            try { upstreamWs.send(msg); } catch {}
-          });
-
-          upstreamWs.on("message", (msg) => {
-            try { clientWs.send(msg); } catch {}
-          });
-        });
-
-        const closeBoth = () => {
-          try { clientWs.close(); } catch {}
-          try { upstreamWs.close(); } catch {}
-        };
-
-        clientWs.on("close", closeBoth);
-        upstreamWs.on("close", closeBoth);
-        clientWs.on("error", closeBoth);
-        upstreamWs.on("error", closeBoth);
-      });
-    } catch {
-      try { socket.destroy(); } catch {}
-    }
-  });
-}
-
-// SECTION: Proxy routes
-
-function extractTargetUrl(req) {
-  // Supports:
-  // 1) /proxy?url=https://example.com
-  // 2) /proxy/:host/*  (e.g. /proxy/xbox.com/en-US/)
-  // 3) /proxy/https://example.com (rare)
-  const q = req.query?.url;
-  if (typeof q === "string" && q.length) return q;
-
-  const p = req.path || "";
-  if (p.startsWith("/proxy/")) {
-    const rest = p.slice("/proxy/".length);
-    if (!rest) return null;
-
-    // /proxy/https://...
-    if (/^https?:\/\//i.test(rest)) return rest;
-
-    // /proxy/:host/...
-    const parts = rest.split("/").filter(Boolean);
-    if (parts.length >= 1) {
-      const host = parts[0];
-      const tail = rest.slice(host.length);
-      const u = `https://${host}${tail.startsWith("/") ? tail : "/" + tail}`;
-      return u;
-    }
-  }
-  return null;
-}
-
-function normalizeUrl(raw) {
-  if (!raw) return null;
-  let u = raw.trim();
-  if (!/^https?:\/\//i.test(u)) u = "https://" + u;
-  return u;
-}
-
-function isHtmlRequest(req) {
-  const accept = String(req.headers.accept || "").toLowerCase();
-  if (accept.includes("text/html")) return true;
-  if (req.query.force_html === "1") return true;
-  if (req.headers["x-euphoria-client"] === "bc-hybrid") return true;
-  return false;
-}
-
-app.get("/proxy", handleProxy);
-app.get("/proxy/*", handleProxy);
-
-async function handleProxy(req, res) {
-  const publicOrigin = getPublicOrigin(req);
-  let raw = extractTargetUrl(req);
-  if (!raw) return res.status(400).send("Missing url (use /proxy?url=https://example.com or /proxy/<host>/...)");
-  raw = normalizeUrl(raw);
-
-  const session = getSessionFromReq(req);
-  try { setSessionCookieHeader(res, session.sid); } catch {}
-
-  const wantHtml = isHtmlRequest(req);
-  const host = (() => { try { return new URL(raw).hostname; } catch { return null; } })();
-  const hostCfg = PER_HOST_CACHE_CONTROLS[host] || {};
-  const ttlMs = typeof hostCfg.ttlMs === "number" ? hostCfg.ttlMs : CACHE_TTL_MS;
-
-  const cacheKeyBase = raw + (wantHtml ? "::html" : "::asset");
-  const memHit = MEM_CACHE.get(cacheKeyBase);
-  if (memHit) {
-    try {
-      if (wantHtml) {
-        res.setHeader("Content-Type", "text/html; charset=utf-8");
-        return res.send(memHit);
-      }
-      if (memHit.headers) for (const [k, v] of Object.entries(memHit.headers)) res.setHeader(k, v);
-      return res.send(Buffer.from(memHit.body, "base64"));
-    } catch {}
-  }
-  const diskHit = await diskGet(cacheKeyBase, ttlMs);
-  if (diskHit) {
-    try {
-      if (wantHtml) {
-        res.setHeader("Content-Type", "text/html; charset=utf-8");
-        return res.send(diskHit);
-      }
-      if (diskHit.headers) for (const [k, v] of Object.entries(diskHit.headers)) res.setHeader(k, v);
-      return res.send(Buffer.from(diskHit.body, "base64"));
-    } catch {}
-  }
-
-  // Build upstream headers
-  const originHeaders = {};
-  originHeaders["User-Agent"] = session.payload.ua || (req.headers["user-agent"] || USER_AGENT_DEFAULT);
-  originHeaders["Accept"] = req.headers.accept || "*/*";
-  originHeaders["Accept-Language"] = req.headers["accept-language"] || "en-US,en;q=0.9";
-  originHeaders["Accept-Encoding"] = "gzip, deflate, br";
-  if (req.headers["range"]) originHeaders["Range"] = req.headers["range"];
-  if (req.headers["if-none-match"]) originHeaders["If-None-Match"] = req.headers["if-none-match"];
-  if (req.headers["if-modified-since"]) originHeaders["If-Modified-Since"] = req.headers["if-modified-since"];
-
-  // Cookie jar for THIS target URL
-  const cookieHdr = buildCookieHeaderForUrl(session.payload, raw);
-  if (cookieHdr) originHeaders["Cookie"] = cookieHdr;
-
-  // Referer/Origin should be target origin, not proxy origin
-  try { originHeaders["Origin"] = new URL(raw).origin; } catch {}
-  if (req.headers.referer) {
-    // Best effort: if referer was proxied, derive underlying origin url param
-    originHeaders["Referer"] = req.headers.referer;
-  }
-
-  let upstream;
-  try {
-    upstream = await upstreamFetch(raw, { headers: originHeaders, redirect: "manual" });
-  } catch (err) {
-    console.error("fetch error", err?.message || err);
-    return res.status(502).send("Euphoria: failed to fetch target: " + String(err?.message || err));
-  }
-
-  // Collect set-cookie (Node fetch doesn’t provide raw() consistently; use getSetCookie if present)
-  try {
-    const any = upstream.headers;
-    const setCookies = typeof any.getSetCookie === "function" ? any.getSetCookie() : [];
-    if (Array.isArray(setCookies) && setCookies.length) storeSetCookies(setCookies, session.payload, upstream.url || raw);
+    const origin = getRequestPublicOrigin(req);
+    out = out.replace(/(href|src)=["'](https?:\/\/[^"']+)["']/gi, (m, attr, u) => {
+      const prox = `${origin}/proxy?url=${encodeURIComponent(u)}`;
+      return `${attr}="${prox}"`;
+    });
   } catch {}
 
-  const status = upstream.status || 200;
+  out = injectClientRuntime(out, baseUrl, req);
+  return out;
+}
 
-  // Redirect handling: ALWAYS proxy the location
-  if ([301, 302, 303, 307, 308].includes(status)) {
-    const loc = upstream.headers.get("location");
-    if (loc) {
-      let absLoc = loc;
-      try { absLoc = new URL(loc, upstream.url || raw).href; } catch {}
-      const proxied = proxyizeAbsoluteUrl(publicOrigin, absLoc);
-      res.setHeader("Location", proxied);
-      try { setSessionCookieHeader(res, session.sid); } catch {}
-      return res.status(status).send(`Redirecting to ${proxied}`);
-    }
+async function processHtmlResponse(upstreamRes, upstreamBodyBuf, req, baseUrl) {
+  // Decompress if needed (buttons/images often fail when content-encoding mismatched)
+  const dec = maybeDecompress(upstreamBodyBuf, upstreamRes.headers);
+
+  // Decode (best effort)
+  let htmlText;
+  try {
+    htmlText = dec.toString("utf8");
+  } catch {
+    htmlText = Buffer.from(dec).toString("utf8");
   }
 
-  // Copy headers minus security blockers
-  const safeHeaders = stripSecurityHeaders(upstream.headers);
-  for (const [k, v] of safeHeaders.entries()) {
-    try {
-      // We will set our own content-length after transforms
-      if (k.toLowerCase() === "content-length") continue;
-      res.setHeader(k, v);
-    } catch {}
-  }
-  try { setSessionCookieHeader(res, session.sid); } catch {}
+  // Rewrite inline scripts more aggressively inside a second JSDOM pass
+  let rewritten = rewriteHtmlWithBaseAndUrls(htmlText, baseUrl, req);
 
-  const contentType = (upstream.headers.get("content-type") || "").toLowerCase();
-  const isHtml = contentType.includes("text/html");
-  const isCss = contentType.includes("text/css");
-  const treatAsHtml = wantHtml || isHtml;
+  // Post-process scripts: rewriteInlineJs / patchServiceWorker
+  try {
+    const dom = new JSDOM(rewritten, { url: baseUrl, contentType: "text/html" });
+    const doc = dom.window.document;
 
-  // Assets: stream with range support
-  if (!treatAsHtml && !isCss) {
-    try {
-      const ab = await upstream.arrayBuffer();
-      const buf = Buffer.from(ab);
-      if (hostCfg.disable !== true && buf.length <= MAX_ASSET_CACHE_BYTES) {
-        const data = { headers: Object.fromEntries(safeHeaders.entries()), body: buf.toString("base64") };
-        MEM_CACHE.set(cacheKeyBase, data, { ttl: ttlMs });
-        diskSet(cacheKeyBase, data).catch(() => {});
+    // Remove/neutralize Service Worker registration (can break proxied sessions)
+    if (FEATURE_FLAGS?.DISABLE_SERVICE_WORKERS) {
+      const scripts = Array.from(doc.querySelectorAll("script"));
+      for (const s of scripts) {
+        if (s.getAttribute("src")) continue;
+        const code = s.textContent || "";
+        if (!code) continue;
+        // blunt but effective: stop SW register
+        if (/serviceWorker\s*\.\s*register/i.test(code)) {
+          s.textContent = code.replace(/serviceWorker\s*\.\s*register/gi, "/*euph*/null&&serviceWorker.register");
+        }
       }
-      return res.status(status).send(buf);
-    } catch (e) {
-      // fallback to piping when available
+      // also block SW via header meta where possible
+      const meta = doc.createElement("meta");
+      meta.setAttribute("http-equiv", "Service-Worker-Allowed");
+      meta.setAttribute("content", "/");
+      (doc.head || doc.documentElement).appendChild(meta);
+    }
+
+    const scripts2 = Array.from(doc.querySelectorAll("script"));
+    for (const s of scripts2) {
       try {
-        res.statusCode = status;
-        if (upstream.body && upstream.body.pipe) return upstream.body.pipe(res);
+        if (s.getAttribute("src")) continue;
+        let code = s.textContent || "";
+        if (!code.trim()) continue;
+
+        const lower = code.slice(0, 600).toLowerCase();
+        if (lower.includes("importscripts") || lower.includes("caches.open") || lower.includes("self.addeventlistener")) {
+          code = patchServiceWorker(code, baseUrl);
+        }
+        code = rewriteInlineJs(code, baseUrl);
+        s.textContent = code;
       } catch {}
-      return res.status(502).send("Euphoria: asset stream failed");
     }
-  }
 
-  // CSS rewrite
-  if (isCss && !treatAsHtml) {
-    try {
-      const buf = await readBodyMaybeDecompress(upstream);
-      const css = buf.toString("utf8");
-      const rewritten = rewriteCssUrls(css, upstream.url || raw, publicOrigin);
-      if (hostCfg.disable !== true && Buffer.byteLength(rewritten, "utf8") <= MAX_HTML_CACHE_BYTES) {
-        MEM_CACHE.set(cacheKeyBase, rewritten, { ttl: ttlMs });
-        diskSet(cacheKeyBase, rewritten).catch(() => {});
-      }
-      res.setHeader("Content-Type", "text/css; charset=utf-8");
-      return res.status(status).send(rewritten);
-    } catch (e) {
-      return res.status(502).send("Euphoria: failed to rewrite CSS");
-    }
-  }
+    rewritten = dom.serialize();
+  } catch {}
 
-  // HTML rewrite + inject client shim
-  let htmlText = "";
+  // Run extension hooks if your earlier chunks included them
   try {
-    const buf = await readBodyMaybeDecompress(upstream);
-    htmlText = buf.toString("utf8");
-  } catch (e) {
-    console.error("read html error", e?.message || e);
-    return res.status(502).send("Euphoria: failed to read HTML");
-  }
-
-  htmlText = sanitizeHtml(htmlText);
-
-  // Aggressive JSDOM rewrite
-  let transformed = jsdomTransform(htmlText, upstream.url || raw, publicOrigin);
-
-  // Inject client shim that keeps navigations inside proxy and proxies runtime-created resources
-  transformed = injectClientShim(transformed, publicOrigin, upstream.url || raw);
-
-  // Cache HTML
-  try {
-    if (hostCfg.disable !== true && Buffer.byteLength(transformed, "utf8") <= MAX_HTML_CACHE_BYTES) {
-      MEM_CACHE.set(cacheKeyBase, transformed, { ttl: ttlMs });
-      diskSet(cacheKeyBase, transformed).catch(() => {});
+    if (typeof runExtensions === "function") {
+      rewritten = await runExtensions(rewritten, { url: baseUrl, req });
     }
   } catch {}
 
-  res.setHeader("Content-Type", "text/html; charset=utf-8");
-  return res.status(status).send(transformed);
+  return Buffer.from(rewritten, "utf8");
 }
 
-// SECTION: Fallback direct-path (supports in-site relative requests)
+/* ───────────────────────────────────────────── */
+/* Small but critical defaults for “real browser” */
+/* ───────────────────────────────────────────── */
 
-app.use(async (req, res, next) => {
-  const p = req.path || "/";
-  if (
-    p.startsWith("/proxy") ||
-    p.startsWith("/_wsproxy") ||
-    p.startsWith("/_euph_debug") ||
-    p.startsWith("/static") ||
-    p.startsWith("/public")
-  ) return next();
+// These flags should exist earlier; if not, define minimal defaults here:
+const FEATURE_FLAGS = globalThis.FEATURE_FLAGS || {
+  STRICT_SAME_ORIGIN_COOKIES: true,
+  DISABLE_SERVICE_WORKERS: true,
+  ENABLE_DISK_CACHE: true,
+};
+globalThis.FEATURE_FLAGS = FEATURE_FLAGS;
 
-  const ref = String(req.headers.referer || req.headers.referrer || "");
-  const m = ref.match(/[?&]url=([^&]+)/);
-  if (!m) return next();
-
-  let base;
-  try { base = decodeURIComponent(m[1]); } catch { return next(); }
-  if (!base) return next();
-
-  let baseOrigin;
-  try { baseOrigin = new URL(base).origin; } catch { return next(); }
-
-  const attempted = new URL(req.originalUrl, baseOrigin).href;
-
-  // internally redirect to /proxy
-  const publicOrigin = getPublicOrigin(req);
-  const proxied = proxyizeAbsoluteUrl(publicOrigin, attempted);
-  return res.redirect(302, proxied);
-});
-
-// SECTION: SPA
-
-app.get("/", (req, res) => res.sendFile(path.join(__dirname, "public", "index.html")));
-app.get("*", (req, res, next) => {
-  if (req.method === "GET" && String(req.headers.accept || "").includes("text/html")) {
-    return res.sendFile(path.join(__dirname, "public", "index.html"));
-  }
-  next();
-});
-
-// SECTION: Admin
-
-function requireAdmin(req, res, next) {
-  if (ADMIN_TOKEN && req.headers.authorization === `Bearer ${ADMIN_TOKEN}`) return next();
-  if (!ADMIN_TOKEN && (req.ip === "127.0.0.1" || req.ip === "::1")) return next();
-  res.status(403).json({ error: "forbidden" });
+// Make caching “feel faster” while keeping auth safer
+function isAuthyHost(host) {
+  const h = String(host || "").toLowerCase();
+  return (
+    h.includes("accounts.google.") ||
+    h.includes("login.live.") ||
+    h.includes("microsoftonline.") ||
+    h.includes("xbox.") ||
+    h.includes("live.com")
+  );
 }
-
-app.get("/_euph_debug/ping", (req, res) => res.json({ msg: "pong", ts: Date.now() }));
-
-app.get("/_euph_debug/sessions", requireAdmin, (req, res) => {
-  const out = {};
-  for (const [sid, payload] of SESSIONS.entries()) {
-    out[sid] = {
-      last: new Date(payload.last).toISOString(),
-      ua: payload.ua,
-      ip: payload.ip,
-      cookies: Object.fromEntries(payload.cookies.entries()),
-    };
-  }
-  res.json({ sessions: out, count: SESSIONS.size });
-});
-
-app.get("/_euph_debug/cache", requireAdmin, (req, res) => {
-  const mem = {};
-  MEM_CACHE.forEach((v, k) => {
-    mem[k] = { approxSize: MEM_CACHE.sizeCalculation(v) };
-  });
-  res.json({ memoryCount: MEM_CACHE.size, memory: mem });
-});
-
-app.post("/_euph_debug/clear_cache", requireAdmin, async (req, res) => {
-  MEM_CACHE.clear();
-  if (ENABLE_DISK_CACHE) {
-    try {
-      const files = await fsPromises.readdir(CACHE_DIR);
-      for (const f of files) await fsPromises.unlink(path.join(CACHE_DIR, f)).catch(() => {});
-    } catch {}
-  }
-  res.json({ ok: true });
-});
-
-// SECTION: Server + WS
-
-const server = http.createServer(app);
-setupWsProxy(server, (fakeReq) => {
-  const proto = (fakeReq.headers?.["x-forwarded-proto"] || "http").toString().split(",")[0].trim();
-  const host = (fakeReq.headers?.["x-forwarded-host"] || fakeReq.host || fakeReq.headers?.host || "").toString().split(",")[0].trim();
-  return `${proto}://${host || `localhost:${PORT}`}`;
-});
-
-server.listen(PORT, () => console.log(`Euphoria v3 running on port ${PORT}`));
-
-// SECTION: Errors + shutdown
-
-process.on("unhandledRejection", (err) => console.error("unhandledRejection", err?.stack || err));
-process.on("uncaughtException", (err) => console.error("uncaughtException", err?.stack || err));
-process.on("warning", (w) => console.warn("warning", w?.stack || w));
-
-async function shutdown() {
-  try { server.close(); } catch {}
-  process.exit(0);
-}
-process.on("SIGINT", shutdown);
-process.on("SIGTERM", shutdown);
