@@ -1,15 +1,19 @@
 FROM node:20-slim
 
+ENV NODE_ENV=production
 WORKDIR /app
 
-ENV NODE_ENV=production
-ENV PORT=3000
-
+# install deps
 COPY package.json package-lock.json* ./
 RUN npm install --omit=dev --no-audit --no-fund
 
+# copy app
 COPY . .
 
-EXPOSE 3000
+# optional: create cache dir (safe even if not used)
+RUN mkdir -p /app/cache
 
-CMD ["node", "server.js"]
+EXPOSE 3000
+ENV PORT=3000
+
+CMD ["npm", "start"]
