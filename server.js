@@ -1312,7 +1312,7 @@ function makeProxyUrlStrict(targetAbs, req) {
   return `${origin}/proxy?url=${encodeURIComponent(String(targetAbs))}`;
 }
 
-function googleSearchToUrl(q) {
+function googleSearchToUrlStrict(q) {
   const query = String(q || "").trim();
   if (!query) return "https://www.google.com/";
   return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
