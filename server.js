@@ -783,7 +783,7 @@ function normalizePath(p) {
 }
 
 // Very small RFC6265-ish parser (good enough for most sites).
-function parseSetCookie(setCookieValue) {
+function parseSetCookieStrict(setCookieValue) {
   // Returns: { name, value, domain, path, expiresAt, secure, httpOnly, sameSite }
   try {
     const parts = String(setCookieValue).split(";").map(s => s.trim());
