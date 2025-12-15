@@ -1548,7 +1548,7 @@ function rewriteHtmlWithBaseAndUrls(html, baseUrl, req) {
   return out;
 }
 
-async function processHtmlResponse(upstreamRes, upstreamBodyBuf, req, baseUrl) {
+async function processHtmlResponseStrict(upstreamRes, upstreamBodyBuf, req, baseUrl) {
   // Decompress if needed (buttons/images often fail when content-encoding mismatched)
   const dec = maybeDecompress(upstreamBodyBuf, upstreamRes.headers);
 
