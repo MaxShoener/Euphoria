@@ -1322,7 +1322,7 @@ function googleSearchToUrlStrict(q) {
 /* Redirect Handler (Keeps you inside /proxy)    */
 /* ───────────────────────────────────────────── */
 
-function handleRedirect(upstreamRes, req, res, requestTarget) {
+function handleRedirectStrict(upstreamRes, req, res, requestTarget) {
   try {
     const loc = upstreamRes.headers.get("location");
     if (!loc) return false;
