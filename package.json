@@ -1,23 +1,18 @@
 {
   "name": "euphoria-hybrid",
   "version": "3.0.0",
-  "private": true,
   "type": "module",
-  "engines": {
-    "node": ">=20"
-  },
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "@mercuryworkshop/scramjet": "^1.0.0",
     "compression": "^1.7.4",
     "cors": "^2.8.5",
     "express": "^4.19.2",
-    "express-rate-limit": "^7.4.1",
-    "jsdom": "^27.0.0",
-    "lru-cache": "^10.4.3",
+    "express-rate-limit": "^7.5.0",
+    "jsdom": "^24.0.0",
+    "lru-cache": "^11.0.2",
     "morgan": "^1.10.0",
-    "ws": "^8.18.0"
+    "@mercuryworkshop/scramjet": "^1.0.0"
   }
 }
