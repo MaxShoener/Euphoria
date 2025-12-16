@@ -1,253 +1,193 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Euphoria</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="color-scheme" content="dark light" />
-
   <style>
-    :root {
-      --bg: #0e0f12;
-      --panel: rgba(255,255,255,0.08);
-      --panel-strong: rgba(255,255,255,0.14);
-      --text: #eaeaf0;
-      --muted: #9aa0aa;
-      --accent: #4f8cff;
-      --radius: 16px;
-      --blur: blur(18px);
-      --font: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Ubuntu, Cantarell;
+    :root{
+      --bg:#0b0c10;
+      --panel:rgba(255,255,255,.08);
+      --panel2:rgba(255,255,255,.06);
+      --text:#f2f5ff;
+      --muted:rgba(242,245,255,.65);
+      --stroke:rgba(255,255,255,.14);
+      --shadow: 0 10px 30px rgba(0,0,0,.35);
+      --radius:16px;
+      --radius2:12px;
     }
-
-    * { box-sizing: border-box; }
-
-    html, body {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
-      background: var(--bg);
-      color: var(--text);
-      font-family: var(--font);
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--text);font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,Arial}
+    .top{
+      position:sticky;top:0;z-index:10;
+      padding:14px 14px 12px;
+      background:linear-gradient(to bottom, rgba(11,12,16,.92), rgba(11,12,16,.65), rgba(11,12,16,0));
+      backdrop-filter: blur(10px);
     }
-
-    body {
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
+    .bar{
+      display:flex;align-items:center;gap:10px;
+      padding:10px;
+      border:1px solid var(--stroke);
+      background:var(--panel);
+      border-radius:999px;
+      box-shadow:var(--shadow);
     }
-
-    /* ───────────────────────────────
-       Top Navigation Oval
-    ─────────────────────────────── */
-
-    header {
-      position: sticky;
-      top: 0;
-      z-index: 10;
-      padding: 14px;
-      display: flex;
-      justify-content: center;
+    button{
+      border:1px solid var(--stroke);
+      background:var(--panel2);
+      color:var(--text);
+      padding:8px 12px;
+      border-radius:999px;
+      cursor:pointer;
+      font-weight:600;
     }
-
-    .nav {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-      padding: 10px 14px;
-      background: var(--panel);
-      backdrop-filter: var(--blur);
-      border-radius: 999px;
-      border: 1px solid rgba(255,255,255,0.08);
+    button:active{transform:translateY(1px)}
+    .addr{
+      flex:1;
+      border:1px solid var(--stroke);
+      background:rgba(0,0,0,.25);
+      color:var(--text);
+      padding:10px 12px;
+      border-radius:999px;
+      outline:none;
+      font-size:14px;
     }
-
-    .nav input {
-      width: 320px;
-      max-width: 50vw;
-      background: transparent;
-      border: none;
-      outline: none;
-      color: var(--text);
-      font-size: 14px;
+    .hint{margin:10px 6px 0;color:var(--muted);font-size:12px}
+    .content{
+      padding:18px 14px 30px;
+      max-width:1100px;margin:0 auto;
     }
-
-    .nav button, .nav select {
-      background: transparent;
-      color: var(--text);
-      border: none;
-      padding: 6px 10px;
-      border-radius: 999px;
-      cursor: pointer;
-      font-size: 13px;
+    .card{
+      border:1px solid var(--stroke);
+      background:var(--panel);
+      border-radius:var(--radius);
+      box-shadow:var(--shadow);
+      padding:16px;
     }
-
-    .nav button:hover,
-    .nav select:hover {
-      background: var(--panel-strong);
+    .row{display:flex;gap:12px;flex-wrap:wrap}
+    .row > * {flex:1;min-width:220px}
+    .toggle{
+      display:flex;align-items:center;justify-content:space-between;
+      border:1px solid var(--stroke);
+      background:rgba(0,0,0,.18);
+      padding:12px 14px;border-radius:var(--radius2);
     }
-
-    /* ───────────────────────────────
-       Main View
-    ─────────────────────────────── */
-
-    main {
-      flex: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-      text-align: center;
-    }
-
-    .home {
-      max-width: 520px;
-    }
-
-    .home h1 {
-      font-weight: 600;
-      letter-spacing: 0.3px;
-      margin-bottom: 10px;
-    }
-
-    .home p {
-      color: var(--muted);
-      font-size: 14px;
-      line-height: 1.5;
-    }
-
-    /* ───────────────────────────────
-       Settings Drawer
-    ─────────────────────────────── */
-
-    .settings {
-      position: fixed;
-      right: 20px;
-      bottom: 20px;
-      background: var(--panel);
-      backdrop-filter: var(--blur);
-      border-radius: var(--radius);
-      border: 1px solid rgba(255,255,255,0.08);
-      padding: 14px;
-      width: 260px;
-      display: none;
-    }
-
-    .settings h3 {
-      margin: 0 0 10px 0;
-      font-size: 14px;
-      font-weight: 600;
-    }
-
-    .setting {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 8px;
-      font-size: 13px;
-    }
-
-    .setting select,
-    .setting input[type="checkbox"] {
-      cursor: pointer;
-    }
-
-    footer {
-      text-align: center;
-      font-size: 11px;
-      color: var(--muted);
-      padding: 8px;
-    }
+    .toggle input{transform:scale(1.15)}
+    .small{font-size:12px;color:var(--muted);line-height:1.35}
+    .k{font-variant-numeric: tabular-nums;}
+    a{color:#9cc5ff}
   </style>
 </head>
-
 <body>
-
-<header>
-  <div class="nav">
-    <input id="address" placeholder="Enter URL or search…" autocomplete="off" />
-    <button id="go">Go</button>
-
-    <select id="engine">
-      <option value="auto">Auto</option>
-      <option value="proxy">Basic</option>
-      <option value="sj">Scramjet</option>
-    </select>
-
-    <button id="settingsBtn">⚙</button>
-  </div>
-</header>
-
-<main>
-  <div class="home">
-    <h1>Euphoria</h1>
-    <p>
-      A lightweight, browser-like environment.<br />
-      Enter a URL or search term to begin.
-    </p>
-  </div>
-</main>
-
-<div class="settings" id="settings">
-  <h3>Settings</h3>
-
-  <div class="setting">
-    <span>Rewrite mode</span>
-    <select id="rewrite">
-      <option value="auto">Auto</option>
-      <option value="fast">Fast</option>
-      <option value="dom">DOM</option>
-      <option value="strict">Strict</option>
-    </select>
+  <div class="top">
+    <div class="bar">
+      <button id="backBtn" title="Back">←</button>
+      <button id="fwdBtn" title="Forward">→</button>
+      <button id="homeBtn" title="Home">⌂</button>
+      <input id="addr" class="addr" placeholder="Search or enter a URL (example.com or 'cats')" autocomplete="off" />
+      <button id="goBtn">Go</button>
+    </div>
+    <div class="hint" id="hint"></div>
   </div>
 
-  <div class="setting">
-    <span>Strict cookies</span>
-    <input type="checkbox" id="strictCookies" checked />
-  </div>
-</div>
+  <div class="content" id="home">
+    <div class="card">
+      <div style="font-weight:800;font-size:18px;margin-bottom:10px;">Euphoria</div>
+      <div class="small" style="margin-bottom:14px;">
+        Enter a URL or a search. Pages open <span class="k">inside</span> Euphoria at <span class="k">/proxy</span>.
+      </div>
 
-<footer>
-  Euphoria
-</footer>
+      <div class="row">
+        <div class="toggle">
+          <div>
+            <div style="font-weight:700;">Strict cookies</div>
+            <div class="small">Helps logins by isolating cookies per-origin.</div>
+          </div>
+          <input id="strictCookies" type="checkbox" checked />
+        </div>
+
+        <div class="toggle">
+          <div>
+            <div style="font-weight:700;">Mode</div>
+            <div class="small">Basic is fastest. Scramjet is optional fallback.</div>
+          </div>
+          <select id="mode" style="border-radius:10px;padding:10px;background:rgba(0,0,0,.25);border:1px solid var(--stroke);color:var(--text);">
+            <option value="proxy">Basic</option>
+            <option value="sj">Scramjet</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="margin-top:14px" class="small">
+        If a site loops or breaks, try switching <span class="k">Mode</span> and/or disabling strict cookies.
+      </div>
+    </div>
+  </div>
 
 <script>
 (function(){
-  const address = document.getElementById("address");
-  const go = document.getElementById("go");
-  const engine = document.getElementById("engine");
-  const rewrite = document.getElementById("rewrite");
+  const addr = document.getElementById("addr");
+  const hint = document.getElementById("hint");
+  const home = document.getElementById("home");
+
+  const backBtn = document.getElementById("backBtn");
+  const fwdBtn  = document.getElementById("fwdBtn");
+  const homeBtn = document.getElementById("homeBtn");
+  const goBtn   = document.getElementById("goBtn");
+
   const strictCookies = document.getElementById("strictCookies");
-  const settingsBtn = document.getElementById("settingsBtn");
-  const settings = document.getElementById("settings");
+  const modeSel = document.getElementById("mode");
 
-  function navigate() {
-    const raw = address.value.trim();
-    if (!raw) return;
-
-    const base =
-      engine.value === "sj" ? "/sj" :
-      engine.value === "proxy" ? "/proxy" :
-      "/proxy";
-
-    const params = new URLSearchParams();
-    params.set("url", raw);
-    params.set("rewrite", rewrite.value);
-    params.set("strictCookies", strictCookies.checked ? "1" : "0");
-
-    location.href = base + "?" + params.toString();
+  function qs(key){
+    const u = new URL(location.href);
+    return u.searchParams.get(key);
   }
 
-  go.onclick = navigate;
-  address.addEventListener("keydown", e => {
-    if (e.key === "Enter") navigate();
+  function setHint(text){
+    hint.textContent = text || "";
+  }
+
+  function buildProxyUrl(input){
+    const mode = modeSel.value === "sj" ? "sj" : "proxy";
+    const strict = strictCookies.checked ? "1" : "0";
+
+    const p = mode === "sj" ? "/sj" : "/proxy";
+    // server supports url=search terms too
+    return `${p}?url=${encodeURIComponent(input)}&strictCookies=${strict}`;
+  }
+
+  function navigateTo(input){
+    if(!input || !String(input).trim()) return;
+    const url = buildProxyUrl(String(input).trim());
+    location.href = url;
+  }
+
+  function syncFromLocation(){
+    const isProxy = location.pathname === "/proxy" || location.pathname === "/sj";
+    if(!isProxy){
+      home.style.display = "";
+      setHint("Tip: enter a URL like example.com or type a search like “cats”.");
+      return;
+    }
+    home.style.display = "none";
+
+    const raw = qs("url") || "";
+    addr.value = raw ? decodeURIComponent(raw) : "";
+    setHint("You’re viewing through " + (location.pathname === "/sj" ? "Scramjet" : "Basic") + " mode.");
+  }
+
+  goBtn.onclick = () => navigateTo(addr.value);
+  addr.addEventListener("keydown", (e)=>{
+    if(e.key === "Enter") navigateTo(addr.value);
   });
 
-  settingsBtn.onclick = () => {
-    settings.style.display =
-      settings.style.display === "block" ? "none" : "block";
-  };
+  backBtn.onclick = ()=> history.back();
+  fwdBtn.onclick = ()=> history.forward();
+  homeBtn.onclick = ()=> location.href = "/";
+
+  window.addEventListener("popstate", syncFromLocation);
+  syncFromLocation();
 })();
 </script>
-
 </body>
 </html>
