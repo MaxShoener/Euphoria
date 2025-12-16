@@ -134,7 +134,23 @@ function log(...args) {
 /* ───────────────────────────────────────────── */
 
 const app = express();
-app.set("trust proxy", TRUST_PROXY);
+app.use(
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: Number(process.env.RATE_LIMIT_GLOBAL || 900),
+    standardHeaders: true,
+    legacyHeaders: false,
+
+    // 👇 REQUIRED when trust proxy is enabled
+    keyGenerator: (req) => {
+      return (
+        req.headers["x-forwarded-for"]?.split(",")[0]?.trim() ||
+        req.socket.remoteAddress ||
+        "unknown"
+      );
+    },
+  })
+);
 
 app.use(cors({ origin: true, credentials: true }));
 app.use(morgan("tiny"));
@@ -1085,7 +1101,7 @@ app.get("/proxy", async (req, res) => {
   }
   if (!target) return res.status(400).send("Missing url (use /proxy?url=https://example.com)");
 
-  const session = getSessionFromReq(req);
+const { sid, s: session } = getSession(req, res);
   try { setSessionCookieHeader(res, session.sid); } catch {}
 
   // caching keys
