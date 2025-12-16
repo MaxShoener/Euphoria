@@ -1167,32 +1167,6 @@ app.post("/_euph_debug/clear_cache", requireAdmin, async (req,res)=>{
   res.json({ ok:true });
 });
 
-// Optional WS tunnel endpoint (for sites that use ws/wss) — keeps it simple.
-function setupWsProxy(server){
-  const wss = new WebSocketServer({ noServer:true, clientTracking:false });
-
-  server.on("upgrade", (request, socket, head)=>{
-    try{
-      const url = new URL(request.url, `http://${request.headers.host}`);
-      if(url.pathname !== "/_wsproxy") return;
-      const target = url.searchParams.get("url");
-      if(!target){
-        socket.write("HTTP/1.1 400 Bad Request\r\n\r\n");
-        socket.destroy();
-        return;
-      }
-      wss.handleUpgrade(request, socket, head, (ws)=>{
-        const outbound = new (WebSocketServer.WebSocket || (await import("ws")).WebSocket)(); // not used
-        ws.close();
-      });
-    }catch{
-      try{ socket.destroy(); }catch{}
-    }
-  });
-
-  return wss;
-}
-
 // Create HTTP server + telemetry websocket
 const server = http.createServer(app);
 
