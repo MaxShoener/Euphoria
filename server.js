@@ -113,6 +113,12 @@ const FEATURE_FLAGS = {
   ENABLE_JS_REWRITE: process.env.ENABLE_JS_REWRITE !== "0",
   ENABLE_SW_PATCH: process.env.ENABLE_SW_PATCH !== "0",
   STRICT_COOKIE_ORIGIN: process.env.STRICT_COOKIE_ORIGIN !== "0",
+
+  // add these because your code uses them:
+  STRICT_SAME_ORIGIN_COOKIES: process.env.STRICT_SAME_ORIGIN_COOKIES !== "0",
+  DISABLE_SERVICE_WORKERS: process.env.DISABLE_SERVICE_WORKERS !== "0",
+  ENABLE_DISK_CACHE: process.env.ENABLE_DISK_CACHE !== "0",
+
   ENABLE_WS_TUNNEL: process.env.ENABLE_WS_TUNNEL !== "0",
   ENABLE_RANGE: process.env.ENABLE_RANGE !== "0",
   ENABLE_BROTLI: process.env.ENABLE_BROTLI !== "0",
@@ -127,10 +133,6 @@ function log(...args) {
 /* Init                                          */
 /* ───────────────────────────────────────────── */
 
-if (ENABLE_DISK_CACHE) {
-  await fsPromises.mkdir(CACHE_DIR, { recursive: true }).catch(() => {});
-}
-
 const app = express();
 app.set("trust proxy", TRUST_PROXY);
 
@@ -139,7 +141,6 @@ app.use(morgan("tiny"));
 app.use(compression());
 app.use(express.json({ limit: "2mb" }));
 app.use(express.urlencoded({ extended: false }));
-
 app.use(express.static(PUBLIC_DIR, { index: false }));
 
 app.use(
@@ -150,6 +151,29 @@ app.use(
     legacyHeaders: false,
   })
 );
+
+/* ───────────────────────────────────────────── */
+/* Start listening FIRST (Koyeb-safe)            */
+/* ───────────────────────────────────────────── */
+
+const server = http.createServer(app);
+
+server.listen(PORT, "0.0.0.0", () => {
+  log("[BOOT] listening on", PORT);
+});
+
+/* ───────────────────────────────────────────── */
+/* Deferred async init AFTER listen               */
+/* ───────────────────────────────────────────── */
+
+setImmediate(async () => {
+  log("[BOOT] deferred init start");
+  try {
+    log("[BOOT] deferred init done");
+  } catch (e) {
+    console.error("[BOOT] deferred init error:", e);
+  }
+});
 
 /* ───────────────────────────────────────────── */
 /* Public Origin Resolver                        */
