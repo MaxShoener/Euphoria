@@ -2,252 +2,120 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Euphoria</title>
   <style>
     :root{
-      --bg:#0b0f14; --panel:rgba(255,255,255,.06); --border:rgba(255,255,255,.12);
-      --text:rgba(255,255,255,.92); --muted:rgba(255,255,255,.62);
-      --accent:#6aa6ff; --danger:#ff6a6a;
-      --shadow: 0 10px 30px rgba(0,0,0,.35);
+      --bg:#0e0f14;
+      --panel:rgba(18,20,28,.86);
+      --border:rgba(255,255,255,.10);
+      --text:#f1f3ff;
+      --muted:rgba(241,243,255,.65);
+      --accent:#7aa2ff;
+      --field:rgba(255,255,255,.06);
     }
-    @media (prefers-color-scheme: light){
-      :root{ --bg:#f6f7fb; --panel:rgba(0,0,0,.05); --border:rgba(0,0,0,.12); --text:#121826; --muted:rgba(0,0,0,.55); --shadow: 0 10px 30px rgba(0,0,0,.12); }
-    }
-    html,body{height:100%;}
-    body{
-      margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
-      background: radial-gradient(1200px 800px at 10% 10%, rgba(106,166,255,.20), transparent 50%),
-                  radial-gradient(900px 600px at 90% 20%, rgba(255,106,106,.12), transparent 50%),
-                  var(--bg);
-      color:var(--text);
-    }
-    .wrap{min-height:100%; display:flex; align-items:center; justify-content:center; padding:28px;}
-    .card{
-      width:min(880px, 100%);
-      background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.06));
-      border:1px solid var(--border);
-      border-radius:18px;
-      box-shadow: var(--shadow);
-      overflow:hidden;
-    }
-    .top{
-      display:flex; align-items:center; justify-content:space-between;
-      padding:16px 18px; gap:12px;
-      background: rgba(255,255,255,.04);
+    body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial;}
+    .bar{
+      position:sticky;top:0;z-index:50;
+      display:flex;gap:10px;align-items:center;
+      padding:10px 12px;
+      background:var(--panel);
       border-bottom:1px solid var(--border);
-    }
-    .brand{display:flex; gap:10px; align-items:center;}
-    .dot{width:10px;height:10px;border-radius:50%;background:var(--accent); box-shadow: 0 0 0 4px rgba(106,166,255,.18);}
-    .title{font-weight:650; letter-spacing:.2px;}
-    .sub{font-size:12px; color:var(--muted); margin-top:2px;}
-    .body{padding:18px;}
-    .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
-    .field{
-      flex:1 1 420px;
-      display:flex; align-items:center; gap:10px;
-      background: var(--panel);
-      border:1px solid var(--border);
-      border-radius:14px;
-      padding:12px 12px;
-    }
-    input{
-      width:100%;
-      border:0; outline:0; background:transparent; color:var(--text);
-      font-size:14px;
+      backdrop-filter: blur(14px);
     }
     .pill{
+      display:flex;gap:8px;align-items:center;
+      padding:10px 12px;border-radius:999px;
+      background:rgba(255,255,255,.05);
       border:1px solid var(--border);
-      background: rgba(255,255,255,.06);
-      color:var(--text);
-      padding:10px 12px;
-      border-radius:12px;
-      font-size:13px;
+      flex:1;
+      min-width:280px;
+    }
+    input,select,button{
+      font:inherit;color:var(--text);
+      background:var(--field);
+      border:1px solid var(--border);
+      border-radius:10px;
+      padding:10px 10px;
+      outline:none;
+    }
+    input{width:100%;}
+    select{background:rgba(255,255,255,.08);}
+    button{
+      background:rgba(122,162,255,.18);
+      border:1px solid rgba(122,162,255,.35);
       cursor:pointer;
     }
-    .pill:hover{border-color: rgba(255,255,255,.22);}
-    .pill.primary{background: rgba(106,166,255,.18); border-color: rgba(106,166,255,.35);}
-    .pill.primary:hover{background: rgba(106,166,255,.24);}
-    .pill.ghost{background: transparent;}
-    .toggle{
-      display:flex; align-items:center; gap:8px; user-select:none;
-      color:var(--muted); font-size:13px;
-    }
-    .toggle input{width:auto;}
-    .help{
-      margin-top:14px; color:var(--muted); font-size:12px; line-height:1.45;
-      display:flex; gap:10px; flex-wrap:wrap; align-items:center; justify-content:space-between;
-    }
-    .hint{display:flex; gap:10px; align-items:center; flex-wrap:wrap;}
-    code{
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-      background: rgba(255,255,255,.07);
-      border:1px solid var(--border);
-      padding:2px 6px; border-radius:8px;
-      color: var(--text);
-    }
-    .bad{color: var(--danger);}
-    .small{font-size:12px;color:var(--muted);}
-    .footer{
-      padding:14px 18px;
-      border-top:1px solid var(--border);
-      background: rgba(255,255,255,.03);
-      display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
-    }
+    button:hover{background:rgba(122,162,255,.24);}
+    .small{font-size:12px;color:var(--muted);padding:10px 12px;}
+    .row{display:flex;gap:10px;align-items:center;}
+    .right{margin-left:auto;display:flex;gap:10px;align-items:center;}
+    .badge{font-size:12px;color:var(--muted);border:1px solid var(--border);border-radius:999px;padding:6px 10px;background:rgba(255,255,255,.04);}
+    a{color:var(--accent);text-decoration:none;}
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="card">
-      <div class="top">
-        <div class="brand">
-          <div class="dot"></div>
-          <div>
-            <div class="title">Euphoria</div>
-            <div class="sub">Canonical rewrite proxy + optional Scramjet transport</div>
-          </div>
-        </div>
-        <button class="pill ghost" id="btnPing" title="Backend health check">Ping</button>
-      </div>
 
-      <div class="body">
-        <div class="row">
-          <div class="field" title="Enter a URL or search terms">
-            <span class="small">Go</span>
-            <input id="omnibox" autocomplete="off" spellcheck="false" placeholder="example.com or search terms" />
-          </div>
+  <div class="bar">
+    <div class="pill">
+      <input id="omnibox" placeholder="Search or enter URL (example.com or https://example.com)" autocomplete="off" />
+    </div>
 
-          <button class="pill primary" id="btnGo">Open</button>
+    <div class="row">
+      <select id="mode" title="Engine">
+        <option value="proxy">Basic</option>
+        <option value="sj">Scramjet</option>
+      </select>
 
-          <button class="pill" id="btnMode" title="Toggle transport">
-            Mode: <span id="modeLabel">Proxy</span>
-          </button>
-        </div>
+      <input id="wisp" placeholder="WISP server (optional)" style="width:210px" />
 
-        <div class="row" style="margin-top:10px;">
-          <label class="toggle" title="Host-only cookies can reduce leakage but may break some logins">
-            <input type="checkbox" id="strictCookies">
-            Strict cookies
-          </label>
+      <select id="cookies" title="Cookie mode">
+        <option value="1">Strict cookies</option>
+        <option value="0">Loose cookies</option>
+      </select>
 
-          <div class="small" id="status"></div>
-        </div>
+      <button id="go">Go</button>
+    </div>
 
-        <div class="help">
-          <div class="hint">
-            <span>Tip:</span>
-            <span>Use <code>?q=</code> via the bar (search works without URLs).</span>
-            <span class="small">Examples: <code>cats</code>, <code>google.com</code>, <code>https://example.com/path</code></span>
-          </div>
-          <div class="hint">
-            <span class="small">If Scramjet is enabled, Mode=Scramjet uses <code>/sj</code>. Otherwise it falls back to Proxy.</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="footer">
-        <div class="small">
-          Buttons, redirects, and in-site navigation should stay inside Euphoria.
-        </div>
-        <button class="pill ghost" id="btnClear">Clear</button>
-      </div>
+    <div class="right">
+      <span class="badge" id="status">WISP: self</span>
     </div>
   </div>
 
+  <div class="small">
+    Tip: enter a URL or any search text. Euphoria keeps navigation inside <code>/proxy</code> or <code>/sj</code>.
+    <span style="margin-left:10px">Discovery: <a href="/.well-known/wisp.json" target="_blank" rel="noreferrer">/.well-known/wisp.json</a></span>
+  </div>
+
   <script>
-    (function(){
-      const $ = (id)=>document.getElementById(id);
-      const omnibox = $("omnibox");
-      const btnGo = $("btnGo");
-      const btnMode = $("btnMode");
-      const modeLabel = $("modeLabel");
-      const strictCookies = $("strictCookies");
-      const status = $("status");
-      const btnPing = $("btnPing");
-      const btnClear = $("btnClear");
+    const omnibox = document.getElementById("omnibox");
+    const mode = document.getElementById("mode");
+    const wisp = document.getElementById("wisp");
+    const cookies = document.getElementById("cookies");
+    const status = document.getElementById("status");
+    const go = document.getElementById("go");
 
-      const state = {
-        mode: localStorage.getItem("euph_mode") || "proxy", // proxy | sj
-        strict: localStorage.getItem("euph_strict") === "1",
-      };
+    function goNow(){
+      const q = omnibox.value.trim();
+      if(!q) return;
+      const base = mode.value === "sj" ? "/sj" : "/proxy";
+      const p = new URLSearchParams();
+      p.set("url", q);
+      p.set("strictCookies", cookies.value);
+      if(wisp.value.trim()) p.set("wisp", wisp.value.trim());
+      location.href = base + "?" + p.toString();
+    }
 
-      function setStatus(msg, bad){
-        status.textContent = msg || "";
-        status.className = bad ? "small bad" : "small";
-      }
+    go.onclick = goNow;
+    omnibox.addEventListener("keydown", (e)=>{ if(e.key === "Enter") goNow(); });
 
-      function setMode(m){
-        state.mode = (m === "sj") ? "sj" : "proxy";
-        localStorage.setItem("euph_mode", state.mode);
-        modeLabel.textContent = (state.mode === "sj") ? "Scramjet" : "Proxy";
-      }
-
-      function setStrict(v){
-        state.strict = !!v;
-        localStorage.setItem("euph_strict", state.strict ? "1" : "0");
-        strictCookies.checked = state.strict;
-      }
-
-      function buildUrl(input){
-        const q = (input || "").trim();
-        const base = (state.mode === "sj") ? "/sj" : "/proxy";
-
-        // If it looks like a URL -> url=...
-        // Else treat as search -> url=<text> (server converts to google search)
-        const params = new URLSearchParams();
-        params.set("url", q);
-
-        if(state.strict) params.set("strictCookies", "1");
-        return base + "?" + params.toString();
-      }
-
-      function go(){
-        const q = omnibox.value.trim();
-        if(!q){
-          setStatus("Enter a URL or search terms.", true);
-          return;
-        }
-        const dest = buildUrl(q);
-        location.href = dest;
-      }
-
-      // init
-      setMode(state.mode);
-      setStrict(state.strict);
-
-      btnGo.addEventListener("click", go);
-      omnibox.addEventListener("keydown", (e)=>{
-        if(e.key === "Enter") go();
-      });
-
-      btnMode.addEventListener("click", ()=>{
-        setMode(state.mode === "proxy" ? "sj" : "proxy");
-      });
-
-      strictCookies.addEventListener("change", ()=>{
-        setStrict(strictCookies.checked);
-      });
-
-      btnPing.addEventListener("click", async ()=>{
-        setStatus("Pinging…");
-        try{
-          const r = await fetch("/_euph_debug/ping");
-          if(!r.ok) throw new Error("HTTP " + r.status);
-          const j = await r.json();
-          setStatus("OK • " + new Date(j.ts).toLocaleTimeString());
-        }catch(e){
-          setStatus("Ping failed: " + (e && e.message ? e.message : String(e)), true);
-        }
-      });
-
-      btnClear.addEventListener("click", ()=>{
-        omnibox.value = "";
-        omnibox.focus();
-        setStatus("");
-      });
-
-      omnibox.focus();
-    })();
+    function updateStatus(){
+      const v = wisp.value.trim();
+      status.textContent = v ? ("WISP: " + v) : "WISP: self";
+    }
+    wisp.addEventListener("input", updateStatus);
+    updateStatus();
   </script>
+
 </body>
 </html>
