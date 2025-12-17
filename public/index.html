@@ -1,338 +1,206 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Euphoria</title>
+  <meta charset="UTF-8" />
+  <title>Euphoria</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-<style>
-/* ─────────────────────────────
-   Reset & base
-───────────────────────────── */
-* {
-  box-sizing: border-box;
-}
-html, body {
-  margin: 0;
-  padding: 0;
-  height: 100%;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-}
-body {
-  background: #0f1115;
-  color: #e6e6e6;
-  overflow: hidden;
-}
+  <style>
+    :root {
+      --bg: #0b0e14;
+      --panel: rgba(255,255,255,0.08);
+      --panel-strong: rgba(255,255,255,0.14);
+      --text: #e6e6eb;
+      --muted: #9aa0aa;
+      --accent: #6ea8ff;
+      --radius: 18px;
+    }
 
-/* ─────────────────────────────
-   Top Bar (translucent oval)
-───────────────────────────── */
-#topbar {
-  position: fixed;
-  top: 12px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  background: rgba(25, 28, 35, 0.75);
-  backdrop-filter: blur(14px);
-  border-radius: 999px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.35);
-  z-index: 1000;
-}
+    * {
+      box-sizing: border-box;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    }
 
-/* Buttons */
-.top-btn {
-  background: rgba(255,255,255,0.06);
-  border: none;
-  border-radius: 999px;
-  padding: 8px 10px;
-  color: #e6e6e6;
-  cursor: pointer;
-}
-.top-btn:hover {
-  background: rgba(255,255,255,0.12);
-}
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: radial-gradient(1200px 600px at 50% -200px, #1a2040, var(--bg));
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
 
-/* Address bar */
-#address {
-  width: 360px;
-  max-width: 60vw;
-  background: rgba(0,0,0,0.35);
-  border: none;
-  outline: none;
-  color: #fff;
-  padding: 8px 12px;
-  border-radius: 999px;
-  font-size: 14px;
-}
+    .card {
+      width: 100%;
+      max-width: 520px;
+      background: var(--panel);
+      backdrop-filter: blur(14px);
+      border-radius: var(--radius);
+      padding: 26px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.45);
+    }
 
-/* ─────────────────────────────
-   Content
-───────────────────────────── */
-#content {
-  position: absolute;
-  inset: 0;
-  padding-top: 72px;
-}
-#frame {
-  width: 100%;
-  height: 100%;
-  border: none;
-  background: #fff;
-}
+    h1 {
+      margin: 0 0 6px;
+      font-size: 1.8rem;
+      font-weight: 600;
+      text-align: center;
+    }
 
-/* ─────────────────────────────
-   Home / Overlay
-───────────────────────────── */
-#home {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-#home-card {
-  background: rgba(25,28,35,0.9);
-  backdrop-filter: blur(16px);
-  border-radius: 20px;
-  padding: 28px 32px;
-  width: 420px;
-  max-width: 90vw;
-  box-shadow: 0 20px 50px rgba(0,0,0,0.5);
-}
-#home-card h1 {
-  margin-top: 0;
-  font-size: 28px;
-}
-.home-input {
-  width: 100%;
-  margin-top: 14px;
-  padding: 12px 14px;
-  border-radius: 12px;
-  border: none;
-  outline: none;
-  font-size: 14px;
-}
-.home-btn {
-  width: 100%;
-  margin-top: 16px;
-  padding: 12px;
-  border-radius: 12px;
-  border: none;
-  background: #3a7afe;
-  color: #fff;
-  font-size: 15px;
-  cursor: pointer;
-}
-.home-btn:hover {
-  background: #4a86ff;
-}
+    .subtitle {
+      text-align: center;
+      font-size: 0.95rem;
+      color: var(--muted);
+      margin-bottom: 20px;
+    }
 
-/* ─────────────────────────────
-   Settings panel
-───────────────────────────── */
-#settings {
-  position: fixed;
-  right: 20px;
-  top: 80px;
-  background: rgba(25,28,35,0.95);
-  backdrop-filter: blur(16px);
-  border-radius: 16px;
-  padding: 16px 18px;
-  width: 260px;
-  display: none;
-  z-index: 1001;
-}
-.setting {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin: 10px 0;
-}
-.setting label {
-  font-size: 13px;
-}
-.setting input, .setting select {
-  background: rgba(0,0,0,0.4);
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  padding: 4px 8px;
-}
-</style>
+    .field {
+      margin-bottom: 14px;
+    }
+
+    label {
+      display: block;
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    input, select {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 12px;
+      border: none;
+      outline: none;
+      background: var(--panel-strong);
+      color: var(--text);
+      font-size: 0.95rem;
+    }
+
+    input::placeholder {
+      color: #7f8696;
+    }
+
+    .row {
+      display: flex;
+      gap: 10px;
+    }
+
+    .row > * {
+      flex: 1;
+    }
+
+    button {
+      margin-top: 18px;
+      width: 100%;
+      padding: 14px;
+      border-radius: 14px;
+      border: none;
+      background: linear-gradient(135deg, #6ea8ff, #8f7bff);
+      color: #000;
+      font-weight: 600;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+
+    button:hover {
+      filter: brightness(1.05);
+    }
+
+    .footer {
+      margin-top: 14px;
+      font-size: 0.75rem;
+      text-align: center;
+      color: var(--muted);
+    }
+  </style>
 </head>
-
 <body>
 
-<!-- ───────────── Top Bar ───────────── -->
-<div id="topbar">
-  <button class="top-btn" id="backBtn">◀</button>
-  <button class="top-btn" id="forwardBtn">▶</button>
-  <button class="top-btn" id="homeBtn">⌂</button>
-  <input id="address" placeholder="Search or enter URL" />
-  <button class="top-btn" id="goBtn">Go</button>
-  <button class="top-btn" id="settingsBtn">⚙</button>
-</div>
-
-<!-- ───────────── Content ───────────── -->
-<div id="content">
-  <iframe id="frame" sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-downloads"></iframe>
-</div>
-
-<!-- ───────────── Home ───────────── -->
-<div id="home">
-  <div id="home-card">
+  <div class="card">
     <h1>Euphoria</h1>
+    <div class="subtitle">
+      Private document-level web access
+    </div>
 
-    <input class="home-input" id="homeTarget" placeholder="Search or enter URL" />
-    <input class="home-input" id="homeWisp" placeholder="WISP server (leave empty for this deployment)" />
+    <div class="field">
+      <label for="address">URL or search</label>
+      <input
+        id="address"
+        type="text"
+        placeholder="example.com or search terms"
+        autocomplete="off"
+      />
+    </div>
 
-    <button class="home-btn" id="homeGo">Start</button>
+    <div class="row">
+      <div class="field">
+        <label for="mode">Engine</label>
+        <select id="mode">
+          <option value="proxy">Standard</option>
+          <option value="sj">Scramjet</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="wisp">WISP server</label>
+        <input
+          id="wisp"
+          type="text"
+          placeholder="(leave blank for this server)"
+        />
+      </div>
+    </div>
+
+    <button id="go">Open</button>
+
+    <div class="footer">
+      Navigation replaces this page · No iframes · Full document context
+    </div>
   </div>
-</div>
 
-<!-- ───────────── Settings ───────────── -->
-<div id="settings">
-  <div class="setting">
-    <label>Proxy mode</label>
-    <select id="modeSelect">
-      <option value="proxy">Proxy</option>
-      <option value="sj">Scramjet</option>
-    </select>
-  </div>
-  <div class="setting">
-    <label>Strict cookies</label>
-    <input type="checkbox" id="strictCookies" checked />
-  </div>
-  <div class="setting">
-    <label>Dark mode</label>
-    <input type="checkbox" id="darkMode" checked />
-  </div>
-</div>
+  <script>
+    const address = document.getElementById("address");
+    const mode = document.getElementById("mode");
+    const wisp = document.getElementById("wisp");
+    const go = document.getElementById("go");
 
-<script>
-/* ─────────────────────────────
-   State
-───────────────────────────── */
-const frame = document.getElementById("frame");
-const address = document.getElementById("address");
-const home = document.getElementById("home");
-const settings = document.getElementById("settings");
+    // restore settings
+    address.value = localStorage.getItem("euph:lastAddress") || "";
+    mode.value = localStorage.getItem("euph:mode") || "proxy";
+    wisp.value = localStorage.getItem("euph:wisp") || "";
 
-let currentMode = localStorage.getItem("mode") || "proxy";
-let strictCookies = localStorage.getItem("strictCookies") !== "0";
-let wispServer = localStorage.getItem("wisp") || "";
-let historyStack = [];
-let historyIndex = -1;
-let navigating = false;
+    function navigate() {
+      const raw = address.value.trim();
+      if (!raw) return;
 
-/* ─────────────────────────────
-   Helpers
-───────────────────────────── */
-function normalizeInput(input) {
-  input = input.trim();
-  if (!input) return null;
+      localStorage.setItem("euph:lastAddress", raw);
+      localStorage.setItem("euph:mode", mode.value);
+      localStorage.setItem("euph:wisp", wisp.value);
 
-  if (/^https?:\/\//i.test(input)) return input;
-  if (/^[a-z0-9.-]+\.[a-z]{2,}/i.test(input)) return "https://" + input;
+      const base = wisp.value.trim() || window.location.origin;
+      const path = mode.value === "sj" ? "/sj" : "/proxy";
 
-  return "https://www.google.com/search?q=" + encodeURIComponent(input);
-}
+      const isUrl = /^(https?:\/\/|[\w-]+\.[a-z]{2,})/i.test(raw);
+      const param = isUrl ? "url" : "q";
 
-function buildUrl(target) {
-  const base = wispServer || "";
-  const prefix = currentMode === "sj" ? "/sj?url=" : "/proxy?url=";
-  return base + prefix + encodeURIComponent(target);
-}
+      const target =
+        base.replace(/\/$/, "") +
+        path +
+        "?" +
+        param +
+        "=" +
+        encodeURIComponent(raw);
 
-function navigate(target, push = true) {
-  if (navigating) return;
-  navigating = true;
+      // FULL DOCUMENT NAVIGATION — NO IFRAME
+      window.location.assign(target);
+    }
 
-  const url = buildUrl(target);
-  address.value = target;
-
-  if (push) {
-    historyStack = historyStack.slice(0, historyIndex + 1);
-    historyStack.push(target);
-    historyIndex++;
-  }
-
-  frame.src = url;
-
-  setTimeout(() => navigating = false, 150);
-}
-
-/* ─────────────────────────────
-   Events
-───────────────────────────── */
-document.getElementById("goBtn").onclick = () => {
-  const t = normalizeInput(address.value);
-  if (t) navigate(t);
-};
-
-address.addEventListener("keydown", e => {
-  if (e.key === "Enter") {
-    const t = normalizeInput(address.value);
-    if (t) navigate(t);
-  }
-});
-
-document.getElementById("homeGo").onclick = () => {
-  const t = normalizeInput(document.getElementById("homeTarget").value);
-  const w = document.getElementById("homeWisp").value.trim();
-
-  if (!t) return;
-
-  wispServer = w;
-  localStorage.setItem("wisp", wispServer);
-
-  home.style.display = "none";
-  navigate(t);
-};
-
-document.getElementById("homeBtn").onclick = () => {
-  home.style.display = "flex";
-};
-
-document.getElementById("backBtn").onclick = () => {
-  if (historyIndex > 0) {
-    historyIndex--;
-    navigate(historyStack[historyIndex], false);
-  }
-};
-
-document.getElementById("forwardBtn").onclick = () => {
-  if (historyIndex < historyStack.length - 1) {
-    historyIndex++;
-    navigate(historyStack[historyIndex], false);
-  }
-};
-
-document.getElementById("settingsBtn").onclick = () => {
-  settings.style.display = settings.style.display === "block" ? "none" : "block";
-};
-
-document.getElementById("modeSelect").value = currentMode;
-document.getElementById("modeSelect").onchange = e => {
-  currentMode = e.target.value;
-  localStorage.setItem("mode", currentMode);
-};
-
-document.getElementById("strictCookies").checked = strictCookies;
-document.getElementById("strictCookies").onchange = e => {
-  strictCookies = e.target.checked;
-  localStorage.setItem("strictCookies", strictCookies ? "1" : "0");
-};
-
-/* ─────────────────────────────
-   Init
-───────────────────────────── */
-address.value = "";
-</script>
+    go.addEventListener("click", navigate);
+    address.addEventListener("keydown", e => {
+      if (e.key === "Enter") navigate();
+    });
+  </script>
 
 </body>
 </html>
